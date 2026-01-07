@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Jaime Notes (MVP)
 
-## Getting Started
+App web tipo Google Keep, enfocada a **notas/expedientes con plantillas** y **adjuntos (fotos/PDFs/escaneos)**. Funciona en celular/tablet/PC y sincroniza en la nube usando **Supabase** (Auth + Postgres + Storage).
 
-First, run the development server:
+## Requisitos
+
+- Node.js 20+
+- Una cuenta de Supabase (gratis sirve para empezar)
+- Opcional: Vercel para deploy
+
+## 1) Crear Supabase (DB + Auth + Storage)
+
+1. En Supabase crea un proyecto nuevo.
+2. En **SQL Editor**, pega y ejecuta `supabase/schema.sql`.
+3. En **Storage**, crea un bucket llamado `attachments` (privado).
+4. En **Authentication**, crea tu usuario admin (email + contraseña).
+
+## 2) Variables de entorno (local)
+
+1. Copia `env.example` a `.env.local`
+2. Completa:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+Los encuentras en Supabase → **Project Settings → API**.
+
+## 3) Ejecutar local
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 4) Deploy (Vercel) para “nube” real
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Sube este repo a GitHub.
+2. En Vercel: **New Project** → importa el repo.
+3. Agrega las mismas variables en Vercel (Environment Variables).
+4. Deploy.
 
-## Learn More
+## Notas
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- La sincronización entre dispositivos la hace Supabase (Auth + DB + Storage).
+- El bucket `attachments` se protege por policies: cada usuario sólo ve sus archivos en su carpeta.

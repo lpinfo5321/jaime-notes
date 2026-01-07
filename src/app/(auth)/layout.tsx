@@ -1,0 +1,12 @@
+export default function AuthLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <div className="min-h-dvh bg-zinc-50 text-zinc-900">
+      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-6 py-10">
+        {children}
+      </div>
+    </div>
+  );
+}
+
