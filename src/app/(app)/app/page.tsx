@@ -49,7 +49,7 @@ export default async function NotesPage({
     .slice(0, 12)
     .map(([t]) => t);
 
-  // Adjuntos: para mostrar miniatura/contador en las tarjetas
+  // Adjuntos: para mostrar miniaturas/contador en las tarjetas
   const noteIds = safeNotes.map((n: any) => String(n.id));
   const attachmentMetaByNoteId: Record<
     string,
@@ -66,6 +66,12 @@ export default async function NotesPage({
     : { data: [] as any[] };
 
   const firstImagePathByNoteId: Record<string, string> = {};
+  const imageThumbPathsByNoteId: Record<string, string[]> = {};
+  const firstDocByNoteId: Record<
+    string,
+    { path: string; filename: string; mime: string }
+  > = {};
+
   for (const a of (attachments ?? []) as any[]) {
     const nid = String(a.note_id);
     const mime = String(a.mime_type ?? "");
@@ -86,6 +92,24 @@ export default async function NotesPage({
 
     if (isImg && !firstImagePathByNoteId[nid] && typeof a.path === "string") {
       firstImagePathByNoteId[nid] = a.path;
+    }
+
+    if (isImg && typeof a.path === "string") {
+      const arr = (imageThumbPathsByNoteId[nid] ??= []);
+      if (arr.length < 3) arr.push(a.path);
+    }
+
+    if (
+      isDoc &&
+      !firstDocByNoteId[nid] &&
+      typeof a.path === "string" &&
+      typeof a.filename === "string"
+    ) {
+      firstDocByNoteId[nid] = {
+        path: a.path,
+        filename: a.filename,
+        mime,
+      };
     }
   }
 
@@ -113,6 +137,45 @@ export default async function NotesPage({
       }),
   );
 
+  // Miniaturas (hasta 3 imágenes por nota)
+  const thumbUrlsByNoteId: Record<string, string[]> = {};
+  await Promise.all(
+    Object.entries(imageThumbPathsByNoteId)
+      .slice(0, 80)
+      .map(async ([noteId, paths]) => {
+        const urls: string[] = [];
+        for (const p of paths) {
+          const { data } = await supabase.storage
+            .from("attachments")
+            .createSignedUrl(p, 60 * 10);
+          if (data?.signedUrl) urls.push(data.signedUrl);
+        }
+        if (urls.length) thumbUrlsByNoteId[noteId] = urls;
+      }),
+  );
+
+  // Primer documento (link directo desde la tarjeta)
+  const firstDocUrlsByNoteId: Record<
+    string,
+    { url: string; filename: string; mime: string }
+  > = {};
+  await Promise.all(
+    Object.entries(firstDocByNoteId)
+      .slice(0, 120)
+      .map(async ([noteId, doc]) => {
+        const { data } = await supabase.storage
+          .from("attachments")
+          .createSignedUrl(doc.path, 60 * 10);
+        if (data?.signedUrl) {
+          firstDocUrlsByNoteId[noteId] = {
+            url: data.signedUrl,
+            filename: doc.filename,
+            mime: doc.mime,
+          };
+        }
+      }),
+  );
+
   return (
     <div className="space-y-4">
       <NotesToolbar
@@ -135,6 +198,8 @@ export default async function NotesPage({
           view={view}
           coverUrls={coverUrls}
           attachmentMetaByNoteId={attachmentMetaByNoteId}
+          thumbUrlsByNoteId={thumbUrlsByNoteId}
+          firstDocUrlsByNoteId={firstDocUrlsByNoteId}
         />
       )}
     </div>

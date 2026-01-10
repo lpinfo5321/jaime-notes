@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { Copy, FileText, Image as ImageIcon, Paperclip, Star, Trash2 } from "lucide-react";
+import {
+  Copy,
+  FileText,
+  Image as ImageIcon,
+  Paperclip,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type NoteListItem = {
@@ -27,6 +34,11 @@ type Props = {
     string,
     { total: number; images: number; docs: number; firstDocName?: string }
   >;
+  thumbUrlsByNoteId: Record<string, string[]>;
+  firstDocUrlsByNoteId: Record<
+    string,
+    { url: string; filename: string; mime: string }
+  >;
 };
 
 function pastelFromKey(key: string) {
@@ -41,6 +53,8 @@ export default function NotesList({
   view,
   coverUrls,
   attachmentMetaByNoteId,
+  thumbUrlsByNoteId,
+  firstDocUrlsByNoteId,
 }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -118,6 +132,8 @@ export default function NotesList({
             ? note.template_snapshot.name
             : null;
         const meta = attachmentMetaByNoteId[String(note.id)];
+        const thumbs = thumbUrlsByNoteId[String(note.id)] ?? [];
+        const firstDoc = firstDocUrlsByNoteId[String(note.id)] ?? null;
         return (
           <div
             key={note.id}
@@ -128,7 +144,27 @@ export default function NotesList({
             )}
             style={view === "grid" ? { background: bg } : undefined}
           >
-            {coverUrls[note.id] ? (
+            {/* Miniaturas estilo Keep (1–3) */}
+            {thumbs.length ? (
+              <div className="mb-3 overflow-hidden rounded-xl border border-zinc-200 bg-white/70">
+                <div className="grid grid-cols-3 gap-[1px] bg-zinc-200">
+                  {thumbs.slice(0, 3).map((u) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={u}
+                      alt="Miniatura"
+                      src={u}
+                      className="h-20 w-full object-cover"
+                      loading="lazy"
+                    />
+                  ))}
+                  {thumbs.length === 1 ? (
+                    <div className="col-span-2 bg-white/70" />
+                  ) : null}
+                  {thumbs.length === 2 ? <div className="bg-white/70" /> : null}
+                </div>
+              </div>
+            ) : coverUrls[note.id] ? (
               <Link
                 href={`/app/n/${note.id}`}
                 prefetch={false}
@@ -205,10 +241,20 @@ export default function NotesList({
                     {meta.docs}
                   </span>
                 ) : null}
-                {meta.firstDocName ? (
-                  <span className="truncate text-zinc-500">
-                    {meta.firstDocName}
-                  </span>
+                {firstDoc ? (
+                  <a
+                    href={firstDoc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex max-w-[260px] items-center gap-1 truncate rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-zinc-700 hover:bg-white"
+                    title={`Abrir: ${firstDoc.filename}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    {firstDoc.filename}
+                  </a>
+                ) : meta.firstDocName ? (
+                  <span className="truncate text-zinc-500">{meta.firstDocName}</span>
                 ) : null}
               </div>
             ) : null}
