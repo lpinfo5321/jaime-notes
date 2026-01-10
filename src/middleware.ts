@@ -8,21 +8,9 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const hasEnv = !!tryGetPublicEnv();
 
-  // Si todavía no configuraste Supabase, no crashees: manda a /setup
-  if (!hasEnv) {
-    if (pathname === "/setup") return NextResponse.next();
-    if (
-      pathname.startsWith("/_next") ||
-      pathname.startsWith("/favicon") ||
-      pathname.startsWith("/public")
-    ) {
-      return NextResponse.next();
-    }
-    const url = request.nextUrl.clone();
-    url.pathname = "/setup";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
+  // Nota: en Vercel (Edge/Middleware) algunas veces las env vars no se leen como esperas.
+  // Por eso NO redirigimos a /setup desde aquí. La verificación se hace en server layouts.
+  if (!hasEnv) return NextResponse.next();
 
   const { supabase, response } = updateSession(request);
 

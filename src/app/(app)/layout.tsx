@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { tryGetPublicEnv } from "@/lib/env";
 
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Si faltan env vars (o no están en Vercel), manda a /setup desde runtime Node.
+  if (!tryGetPublicEnv()) redirect("/setup");
+
   const supabase = await createClient();
   const {
     data: { user },
