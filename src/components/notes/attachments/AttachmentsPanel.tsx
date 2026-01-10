@@ -34,7 +34,20 @@ function prettySize(bytes: number) {
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-export default function AttachmentsPanel({ noteId }: { noteId: string }) {
+export default function AttachmentsPanel({
+  noteId,
+  cover,
+  onSetCover,
+}: {
+  noteId: string;
+  cover: null | { id: string; path: string; filename: string; mime_type: string };
+  onSetCover: (a: null | {
+    id: string;
+    path: string;
+    filename: string;
+    mime_type: string;
+  }) => void;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -43,6 +56,10 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<
+    | null
+    | { kind: "image" | "pdf" | "other"; url: string; filename: string }
+  >(null);
 
   async function refresh() {
     setError(null);
@@ -105,15 +122,29 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
           });
         if (upErr) throw upErr;
 
-        const { error: dbErr } = await supabase.from("attachments").insert({
+        const { data: inserted, error: dbErr } = await supabase
+          .from("attachments")
+          .insert({
           user_id: user.id,
           note_id: noteId,
           path,
           filename: safeName,
           mime_type: file.type || "application/octet-stream",
           size: file.size,
-        });
+        })
+          .select("id,path,filename,mime_type")
+          .single();
         if (dbErr) throw dbErr;
+
+        // Si es imagen y no hay portada, auto-asignar portada
+        if (!cover && (file.type || "").startsWith("image/") && inserted) {
+          onSetCover({
+            id: inserted.id,
+            path: inserted.path,
+            filename: inserted.filename,
+            mime_type: inserted.mime_type,
+          });
+        }
       }
 
       await refresh();
@@ -135,7 +166,17 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
         .createSignedUrl(a.path, 60 * 20);
       if (err) throw err;
       if (!data?.signedUrl) throw new Error("No se pudo crear link");
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      const kind = a.mime_type?.startsWith("image/")
+        ? "image"
+        : a.mime_type?.includes("pdf")
+          ? "pdf"
+          : "other";
+      // Preview in-app for images/PDF; fallback to new tab for others.
+      if (kind === "other") {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      } else {
+        setPreview({ kind, url: data.signedUrl, filename: a.filename });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error abriendo archivo");
     } finally {
@@ -247,6 +288,7 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
           <div className="space-y-2">
             {attachments.map((a) => {
               const isImg = a.mime_type?.startsWith("image/");
+              const isCover = cover?.id === a.id;
               return (
                 <div
                   key={a.id}
@@ -273,6 +315,11 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">
                       {a.filename}
+                      {isCover ? (
+                        <span className="ml-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                          Portada
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-0.5 text-xs text-zinc-500">
                       {prettySize(a.size)} ·{" "}
@@ -287,8 +334,35 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
                       onClick={() => openAttachment(a)}
                       className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
                     >
-                      Abrir
+                      Previsualizar
                     </button>
+                    {isImg ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          onSetCover(
+                            isCover
+                              ? null
+                              : {
+                                  id: a.id,
+                                  path: a.path,
+                                  filename: a.filename,
+                                  mime_type: a.mime_type,
+                                },
+                          )
+                        }
+                        className={cn(
+                          "rounded-lg px-2 py-1 text-xs font-medium",
+                          isCover
+                            ? "text-emerald-800 hover:bg-emerald-50"
+                            : "text-zinc-700 hover:bg-zinc-100",
+                        )}
+                        title="Usar esta imagen como portada en la tarjeta"
+                      >
+                        {isCover ? "Quitar portada" : "Marcar portada"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       disabled={busy}
@@ -312,6 +386,51 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
           </div>
         )}
       </div>
+
+      {preview ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+              <div className="truncate text-sm font-semibold">
+                {preview.filename}
+              </div>
+              <div className="flex gap-2">
+                <a
+                  href={preview.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                >
+                  Abrir en pestaña
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreview(null)}
+                  className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[80vh] overflow-auto bg-zinc-50 p-4">
+              {preview.kind === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt={preview.filename}
+                  src={preview.url}
+                  className="mx-auto max-h-[72vh] w-auto rounded-xl border border-zinc-200 bg-white object-contain"
+                />
+              ) : preview.kind === "pdf" ? (
+                <iframe
+                  title={preview.filename}
+                  src={preview.url}
+                  className="h-[72vh] w-full rounded-xl border border-zinc-200 bg-white"
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

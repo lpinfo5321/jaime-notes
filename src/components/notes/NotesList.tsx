@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { formatDistanceToNow } from "date-fns";
+import { es } from "date-fns/locale";
+import { Copy, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type NoteListItem = {
@@ -11,6 +14,8 @@ export type NoteListItem = {
   body: string;
   tags: string[];
   favorite: boolean;
+  template_snapshot?: any;
+  values?: any;
   updated_at: string;
   created_at: string;
 };
@@ -18,9 +23,17 @@ export type NoteListItem = {
 type Props = {
   notes: NoteListItem[];
   view: "grid" | "list";
+  coverUrls: Record<string, string>;
 };
 
-export default function NotesList({ notes, view }: Props) {
+function pastelFromKey(key: string) {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  return `hsl(${hue} 70% 96%)`;
+}
+
+export default function NotesList({ notes, view, coverUrls }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -81,21 +94,43 @@ export default function NotesList({ notes, view }: Props) {
     <div
       className={cn(
         view === "grid"
-          ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          ? "columns-1 gap-3 sm:columns-2 lg:columns-3 [column-fill:_balance]"
           : "flex flex-col gap-2",
       )}
     >
       {sorted.map((note) => {
         const excerpt = (note.body ?? "").trim().slice(0, 140);
         const isBusy = busyId === note.id;
+        const tagKey = (
+          note.tags?.[0] ?? note.template_snapshot?.name ?? ""
+        ).toString();
+        const bg = tagKey ? pastelFromKey(tagKey) : "white";
+        const templateName =
+          typeof note.template_snapshot?.name === "string"
+            ? note.template_snapshot.name
+            : null;
         return (
           <div
             key={note.id}
             className={cn(
-              "group rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300",
+              "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300",
+              view === "grid" && "mb-3 break-inside-avoid",
               isBusy && "opacity-60",
             )}
+            style={view === "grid" ? { background: bg } : undefined}
           >
+            {coverUrls[note.id] ? (
+              <div className="mb-3 overflow-hidden rounded-xl border border-zinc-200 bg-white/70">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt="Portada"
+                  src={coverUrls[note.id]}
+                  className="h-36 w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            ) : null}
+
             <div className="flex items-start justify-between gap-3">
               <Link
                 href={`/app/n/${note.id}`}
@@ -106,11 +141,11 @@ export default function NotesList({ notes, view }: Props) {
                   {note.title?.trim() ? note.title : "Sin título"}
                 </div>
                 {excerpt ? (
-                  <div className="mt-1 line-clamp-3 text-sm text-zinc-600">
+                  <div className="mt-1 line-clamp-3 text-sm text-zinc-700/80">
                     {excerpt}
                   </div>
                 ) : (
-                  <div className="mt-1 text-sm text-zinc-400">
+                  <div className="mt-1 text-sm text-zinc-500/70">
                     (sin contenido)
                   </div>
                 )}
@@ -121,23 +156,30 @@ export default function NotesList({ notes, view }: Props) {
                 disabled={isBusy}
                 onClick={() => toggleFavorite(note)}
                 className={cn(
-                  "rounded-xl border px-2 py-1 text-xs font-medium",
+                  "inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs font-medium backdrop-blur",
                   note.favorite
                     ? "border-amber-200 bg-amber-50 text-amber-900"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
+                    : "border-zinc-200 bg-white/70 text-zinc-700 hover:bg-white",
                 )}
                 title={note.favorite ? "Quitar de favoritos" : "Marcar favorito"}
               >
-                {note.favorite ? "★" : "☆"}
+                <Star className="h-3.5 w-3.5" />
+                {note.favorite ? "Pin" : "Pin"}
               </button>
             </div>
+
+            {templateName ? (
+              <div className="mt-2 inline-flex rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-xs font-medium text-zinc-700">
+                Plantilla: {templateName}
+              </div>
+            ) : null}
 
             {note.tags?.length ? (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {note.tags.slice(0, 6).map((t) => (
                   <span
                     key={t}
-                    className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600"
+                    className="rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-xs text-zinc-700"
                   >
                     #{t}
                   </span>
@@ -147,11 +189,9 @@ export default function NotesList({ notes, view }: Props) {
 
             <div className="mt-3 flex items-center justify-between">
               <div className="text-xs text-zinc-500">
-                Actualizada{" "}
-                {new Date(note.updated_at).toLocaleDateString(undefined, {
-                  year: "numeric",
-                  month: "short",
-                  day: "2-digit",
+                {formatDistanceToNow(new Date(note.updated_at), {
+                  addSuffix: true,
+                  locale: es,
                 })}
               </div>
 
@@ -160,16 +200,18 @@ export default function NotesList({ notes, view }: Props) {
                   type="button"
                   disabled={isBusy}
                   onClick={() => duplicate(note)}
-                  className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-white/70"
                 >
+                  <Copy className="h-3.5 w-3.5" />
                   Duplicar
                 </button>
                 <button
                   type="button"
                   disabled={isBusy}
                   onClick={() => remove(note)}
-                  className="rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50/80"
                 >
+                  <Trash2 className="h-3.5 w-3.5" />
                   Eliminar
                 </button>
               </div>

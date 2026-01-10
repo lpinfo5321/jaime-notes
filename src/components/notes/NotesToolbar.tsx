@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { LayoutGrid, List, Plus, Search, Star, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -12,9 +13,10 @@ type Props = {
     fav: boolean;
     tag: string;
   };
+  topTags: string[];
 };
 
-export default function NotesToolbar({ initial }: Props) {
+export default function NotesToolbar({ initial, topTags }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -57,77 +59,109 @@ export default function NotesToolbar({ initial }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2">
-          <h1 className="text-base font-semibold tracking-tight">Notas</h1>
-          <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600">
-            MVP
-          </span>
-        </div>
+    <div className="border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur md:sticky md:top-[60px] md:z-10 md:-mx-4">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="truncate text-sm font-semibold tracking-tight">
+              Notas
+            </h1>
+            {(fav || q.trim() || tag.trim()) && (
+              <Link
+                href={hrefBase}
+                className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-50"
+              >
+                Limpiar
+              </Link>
+            )}
+          </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Link
-            href="/app/new"
-            className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800"
-          >
-            Nueva nota
-          </Link>
-
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setParam("fav", fav ? undefined : "1")}
               className={cn(
-                "rounded-xl border px-3 py-2 text-sm font-medium",
+                "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium",
                 fav
                   ? "border-zinc-900 bg-zinc-900 text-white"
                   : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
               )}
-              title="Filtrar favoritos"
+              title="Favoritos"
             >
-              Favoritos
+              <Star className="h-4 w-4" />
+              <span className="hidden sm:inline">Favoritos</span>
             </button>
+
             <button
               type="button"
               onClick={() => setParam("view", view === "grid" ? "list" : "grid")}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
               title="Cambiar vista"
             >
-              {view === "grid" ? "Vista lista" : "Vista grid"}
+              {view === "grid" ? (
+                <List className="h-4 w-4" />
+              ) : (
+                <LayoutGrid className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">
+                {view === "grid" ? "Lista" : "Tarjetas"}
+              </span>
             </button>
+
+            <Link
+              href="/app/new"
+              className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Nueva</span>
+            </Link>
           </div>
         </div>
-      </div>
 
-      <div className="mt-3 grid gap-2 md:grid-cols-2">
-        <label className="block">
-          <span className="sr-only">Buscar</span>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por título o texto…"
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
-          />
-        </label>
+        <div className="grid gap-2 md:grid-cols-[1fr_280px]">
+          <label className="relative block">
+            <span className="sr-only">Buscar</span>
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar notas…"
+              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+            />
+          </label>
 
-        <label className="block">
-          <span className="sr-only">Filtrar por tag</span>
-          <input
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-            placeholder="Filtrar por tag (ej. cliente, incidente)…"
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
-          />
-        </label>
-      </div>
+          <label className="relative block">
+            <span className="sr-only">Filtrar por tag</span>
+            <Tag className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+            <input
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              placeholder="Filtrar por tag…"
+              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+            />
+          </label>
+        </div>
 
-      <div className="mt-2 text-xs text-zinc-500">
-        Tip: escribe tags dentro de una nota (Enter) y luego filtra por tag aquí.
-        {" "}
-        <Link href={hrefBase} className="underline">
-          Limpiar filtros
-        </Link>
+        {topTags.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {topTags.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setParam("tag", t)}
+                className={cn(
+                  "rounded-full border px-2 py-1 text-xs font-medium",
+                  tag === t
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
+                )}
+                title={`Filtrar por #${t}`}
+              >
+                #{t}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
