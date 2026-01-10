@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { Copy, Star, Trash2 } from "lucide-react";
+import { Copy, FileText, Image as ImageIcon, Paperclip, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type NoteListItem = {
@@ -23,6 +23,10 @@ type Props = {
   notes: NoteListItem[];
   view: "grid" | "list";
   coverUrls: Record<string, string>;
+  attachmentMetaByNoteId: Record<
+    string,
+    { total: number; images: number; docs: number; firstDocName?: string }
+  >;
 };
 
 function pastelFromKey(key: string) {
@@ -32,7 +36,12 @@ function pastelFromKey(key: string) {
   return `hsl(${hue} 70% 96%)`;
 }
 
-export default function NotesList({ notes, view, coverUrls }: Props) {
+export default function NotesList({
+  notes,
+  view,
+  coverUrls,
+  attachmentMetaByNoteId,
+}: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -108,6 +117,7 @@ export default function NotesList({ notes, view, coverUrls }: Props) {
           typeof note.template_snapshot?.name === "string"
             ? note.template_snapshot.name
             : null;
+        const meta = attachmentMetaByNoteId[String(note.id)];
         return (
           <div
             key={note.id}
@@ -174,6 +184,32 @@ export default function NotesList({ notes, view, coverUrls }: Props) {
             {templateName ? (
               <div className="mt-2 inline-flex rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-xs font-medium text-zinc-700">
                 Plantilla: {templateName}
+              </div>
+            ) : null}
+
+            {meta?.total ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600">
+                <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  {meta.total}
+                </span>
+                {meta.images ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    {meta.images}
+                  </span>
+                ) : null}
+                {meta.docs ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5">
+                    <FileText className="h-3.5 w-3.5" />
+                    {meta.docs}
+                  </span>
+                ) : null}
+                {meta.firstDocName ? (
+                  <span className="truncate text-zinc-500">
+                    {meta.firstDocName}
+                  </span>
+                ) : null}
               </div>
             ) : null}
 

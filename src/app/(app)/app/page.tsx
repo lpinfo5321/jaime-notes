@@ -49,17 +49,68 @@ export default async function NotesPage({
     .slice(0, 12)
     .map(([t]) => t);
 
-  // Portada: si la nota tiene values._cover.path, generamos URL firmada
-  const coverUrls: Record<string, string> = {};
-  await Promise.all(
-    safeNotes.slice(0, 60).map(async (n: any) => {
-      const cover = n?.values?._cover;
-      if (!cover?.path || typeof cover.path !== "string") return;
-      const { data } = await supabase.storage
+  // Adjuntos: para mostrar miniatura/contador en las tarjetas
+  const noteIds = safeNotes.map((n: any) => String(n.id));
+  const attachmentMetaByNoteId: Record<
+    string,
+    { total: number; images: number; docs: number; firstDocName?: string }
+  > = {};
+
+  const { data: attachments } = noteIds.length
+    ? await supabase
         .from("attachments")
-        .createSignedUrl(String(cover.path), 60 * 15);
-      if (data?.signedUrl) coverUrls[String(n.id)] = data.signedUrl;
-    }),
+        .select("id,note_id,path,filename,mime_type,created_at")
+        .in("note_id", noteIds)
+        .order("created_at", { ascending: false })
+        .limit(500)
+    : { data: [] as any[] };
+
+  const firstImagePathByNoteId: Record<string, string> = {};
+  for (const a of (attachments ?? []) as any[]) {
+    const nid = String(a.note_id);
+    const mime = String(a.mime_type ?? "");
+    const isImg = mime.startsWith("image/");
+    const isDoc = !isImg;
+
+    const meta = (attachmentMetaByNoteId[nid] ??= {
+      total: 0,
+      images: 0,
+      docs: 0,
+    });
+    meta.total += 1;
+    if (isImg) meta.images += 1;
+    if (isDoc) meta.docs += 1;
+    if (isDoc && !meta.firstDocName && typeof a.filename === "string") {
+      meta.firstDocName = a.filename;
+    }
+
+    if (isImg && !firstImagePathByNoteId[nid] && typeof a.path === "string") {
+      firstImagePathByNoteId[nid] = a.path;
+    }
+  }
+
+  // Portada: preferimos values._cover.path, si no, la primera imagen adjunta
+  const coverUrls: Record<string, string> = {};
+  const coverPaths: Record<string, string> = {};
+  for (const n of safeNotes as any[]) {
+    const id = String(n.id);
+    const cover = n?.values?._cover;
+    const fromValues =
+      cover?.path && typeof cover.path === "string" ? String(cover.path) : null;
+    const fromAttachments = firstImagePathByNoteId[id] ?? null;
+    const path = fromValues ?? fromAttachments;
+    if (path) coverPaths[id] = path;
+  }
+
+  await Promise.all(
+    Object.entries(coverPaths)
+      .slice(0, 60)
+      .map(async ([noteId, path]) => {
+        const { data } = await supabase.storage
+          .from("attachments")
+          .createSignedUrl(path, 60 * 15);
+        if (data?.signedUrl) coverUrls[noteId] = data.signedUrl;
+      }),
   );
 
   return (
@@ -79,7 +130,12 @@ export default async function NotesPage({
           Error cargando notas: {error.message}
         </div>
       ) : (
-        <NotesList notes={safeNotes as any} view={view} coverUrls={coverUrls} />
+        <NotesList
+          notes={safeNotes as any}
+          view={view}
+          coverUrls={coverUrls}
+          attachmentMetaByNoteId={attachmentMetaByNoteId}
+        />
       )}
     </div>
   );
