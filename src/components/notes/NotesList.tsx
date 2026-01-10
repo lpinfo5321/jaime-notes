@@ -15,7 +15,6 @@ export type NoteListItem = {
   tags: string[];
   favorite: boolean;
   template_snapshot?: any;
-  values?: any;
   updated_at: string;
   created_at: string;
 };
@@ -120,7 +119,11 @@ export default function NotesList({ notes, view, coverUrls }: Props) {
             style={view === "grid" ? { background: bg } : undefined}
           >
             {coverUrls[note.id] ? (
-              <div className="mb-3 overflow-hidden rounded-xl border border-zinc-200 bg-white/70">
+              <Link
+                href={`/app/n/${note.id}`}
+                prefetch={false}
+                className="mb-3 block overflow-hidden rounded-xl border border-zinc-200 bg-white/70"
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   alt="Portada"
@@ -128,7 +131,7 @@ export default function NotesList({ notes, view, coverUrls }: Props) {
                   className="h-36 w-full object-cover"
                   loading="lazy"
                 />
-              </div>
+              </Link>
             ) : null}
 
             <div className="flex items-start justify-between gap-3">
@@ -195,7 +198,7 @@ export default function NotesList({ notes, view, coverUrls }: Props) {
                 })}
               </div>
 
-              <div className="flex gap-2 opacity-0 transition group-hover:opacity-100">
+              <div className="flex gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
                 <button
                   type="button"
                   disabled={isBusy}

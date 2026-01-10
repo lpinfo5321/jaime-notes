@@ -59,7 +59,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
   }
 
   return (
-    <div className="border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur md:sticky md:top-[60px] md:z-10 md:-mx-4">
+    <div className="md:sticky md:top-[60px] md:z-10 -mx-4 border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -76,7 +76,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => setParam("fav", fav ? undefined : "1")}

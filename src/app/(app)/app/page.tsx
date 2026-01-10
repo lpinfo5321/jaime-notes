@@ -49,11 +49,12 @@ export default async function NotesPage({
     .slice(0, 12)
     .map(([t]) => t);
 
+  // Portada: si la nota tiene values._cover.path, generamos URL firmada
   const coverUrls: Record<string, string> = {};
   await Promise.all(
     safeNotes.slice(0, 60).map(async (n: any) => {
       const cover = n?.values?._cover;
-      if (!cover?.path || !cover?.mime_type?.startsWith?.("image/")) return;
+      if (!cover?.path || typeof cover.path !== "string") return;
       const { data } = await supabase.storage
         .from("attachments")
         .createSignedUrl(String(cover.path), 60 * 15);
