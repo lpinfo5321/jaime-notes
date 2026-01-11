@@ -12,34 +12,36 @@ type ThemeContextType = {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function getInitialTheme(): Theme {
+  if (typeof window === "undefined") return "system";
+  const saved = localStorage.getItem("theme");
+  if (saved === "light" || saved === "dark" || saved === "system") {
+    return saved;
+  }
+  return "system";
+}
+
+function getResolvedTheme(theme: Theme): "light" | "dark" {
+  if (theme === "system") {
+    if (typeof window === "undefined") return "light";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches 
+      ? "dark" 
+      : "light";
+  }
+  return theme;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("system");
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => getResolvedTheme(getInitialTheme()));
 
   useEffect(() => {
-    // Cargar tema guardado
-    const savedTheme = localStorage.getItem("theme") as Theme | null;
-    if (savedTheme && ["light", "dark", "system"].includes(savedTheme)) {
-      setTheme(savedTheme);
-    }
-  }, []);
-
-  useEffect(() => {
-    const root = window.document.documentElement;
+    const root = document.documentElement;
     
     // Limpiar clases previas
     root.classList.remove("light", "dark");
     
-    let effectiveTheme: "light" | "dark";
-    
-    if (theme === "system") {
-      effectiveTheme = window.matchMedia("(prefers-color-scheme: dark)").matches 
-        ? "dark" 
-        : "light";
-    } else {
-      effectiveTheme = theme;
-    }
-    
+    const effectiveTheme = getResolvedTheme(theme);
     root.classList.add(effectiveTheme);
     setResolvedTheme(effectiveTheme);
     
