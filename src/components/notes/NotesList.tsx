@@ -104,8 +104,8 @@ export default function NotesList({
 
   if (empty) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center">
-        <p className="text-sm text-zinc-600">
+      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-700 dark:bg-zinc-900">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
           No hay notas todavía. Crea la primera con <b>Nueva nota</b>.
         </p>
       </div>
@@ -138,7 +138,7 @@ export default function NotesList({
           <div
             key={note.id}
             className={cn(
-              "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300",
+              "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700",
               view === "grid" && "mb-3 break-inside-avoid",
               isBusy && "opacity-60",
             )}
@@ -146,8 +146,8 @@ export default function NotesList({
           >
             {/* Miniaturas estilo Keep (1–3) */}
             {thumbs.length ? (
-              <div className="mb-3 overflow-hidden rounded-xl border border-zinc-200 bg-white/70">
-                <div className="grid grid-cols-3 gap-[1px] bg-zinc-200">
+              <div className="mb-3 overflow-hidden rounded-xl border border-zinc-200 bg-white/70 dark:border-zinc-700 dark:bg-zinc-800/70">
+                <div className="grid grid-cols-3 gap-[1px] bg-zinc-200 dark:bg-zinc-700">
                   {thumbs.slice(0, 3).map((u) => (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -159,16 +159,16 @@ export default function NotesList({
                     />
                   ))}
                   {thumbs.length === 1 ? (
-                    <div className="col-span-2 bg-white/70" />
+                    <div className="col-span-2 bg-white/70 dark:bg-zinc-800/70" />
                   ) : null}
-                  {thumbs.length === 2 ? <div className="bg-white/70" /> : null}
+                  {thumbs.length === 2 ? <div className="bg-white/70 dark:bg-zinc-800/70" /> : null}
                 </div>
               </div>
             ) : coverUrls[note.id] ? (
               <Link
                 href={`/app/n/${note.id}`}
                 prefetch={false}
-                className="mb-3 block overflow-hidden rounded-xl border border-zinc-200 bg-white/70"
+                className="mb-3 block overflow-hidden rounded-xl border border-zinc-200 bg-white/70 dark:border-zinc-700 dark:bg-zinc-800/70"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -186,15 +186,15 @@ export default function NotesList({
                 className="min-w-0 flex-1"
                 prefetch={false}
               >
-                <div className="truncate text-sm font-semibold">
+                <div className="truncate text-sm font-semibold dark:text-zinc-100">
                   {note.title?.trim() ? note.title : "Sin título"}
                 </div>
                 {excerpt ? (
-                  <div className="mt-1 line-clamp-3 text-sm text-zinc-700/80">
+                  <div className="mt-1 line-clamp-3 text-sm text-zinc-700/80 dark:text-zinc-300/80">
                     {excerpt}
                   </div>
                 ) : (
-                  <div className="mt-1 text-sm text-zinc-500/70">
+                  <div className="mt-1 text-sm text-zinc-500/70 dark:text-zinc-400/70">
                     (sin contenido)
                   </div>
                 )}
@@ -207,8 +207,8 @@ export default function NotesList({
                 className={cn(
                   "inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs font-medium backdrop-blur",
                   note.favorite
-                    ? "border-amber-200 bg-amber-50 text-amber-900"
-                    : "border-zinc-200 bg-white/70 text-zinc-700 hover:bg-white",
+                    ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-400"
+                    : "border-zinc-200 bg-white/70 text-zinc-700 hover:bg-white dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300 dark:hover:bg-zinc-800",
                 )}
                 title={note.favorite ? "Quitar de favoritos" : "Marcar favorito"}
               >
@@ -218,25 +218,25 @@ export default function NotesList({
             </div>
 
             {templateName ? (
-              <div className="mt-2 inline-flex rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-xs font-medium text-zinc-700">
+              <div className="mt-2 inline-flex rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300">
                 Plantilla: {templateName}
               </div>
             ) : null}
 
             {meta?.total ? (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600">
-                <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 dark:border-zinc-700 dark:bg-zinc-800/70">
                   <Paperclip className="h-3.5 w-3.5" />
                   {meta.total}
                 </span>
                 {meta.images ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 dark:border-zinc-700 dark:bg-zinc-800/70">
                     <ImageIcon className="h-3.5 w-3.5" />
                     {meta.images}
                   </span>
                 ) : null}
                 {meta.docs ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 dark:border-zinc-700 dark:bg-zinc-800/70">
                     <FileText className="h-3.5 w-3.5" />
                     {meta.docs}
                   </span>
@@ -246,7 +246,7 @@ export default function NotesList({
                     href={firstDoc.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex max-w-[260px] items-center gap-1 truncate rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-zinc-700 hover:bg-white"
+                    className="inline-flex max-w-[260px] items-center gap-1 truncate rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-zinc-700 hover:bg-white dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     title={`Abrir: ${firstDoc.filename}`}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -254,7 +254,7 @@ export default function NotesList({
                     {firstDoc.filename}
                   </a>
                 ) : meta.firstDocName ? (
-                  <span className="truncate text-zinc-500">{meta.firstDocName}</span>
+                  <span className="truncate text-zinc-500 dark:text-zinc-400">{meta.firstDocName}</span>
                 ) : null}
               </div>
             ) : null}
@@ -264,7 +264,7 @@ export default function NotesList({
                 {note.tags.slice(0, 6).map((t) => (
                   <span
                     key={t}
-                    className="rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-xs text-zinc-700"
+                    className="rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300"
                   >
                     #{t}
                   </span>
@@ -273,7 +273,7 @@ export default function NotesList({
             ) : null}
 
             <div className="mt-3 flex items-center justify-between">
-              <div className="text-xs text-zinc-500">
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">
                 {formatDistanceToNow(new Date(note.updated_at), {
                   addSuffix: true,
                   locale: es,
@@ -285,7 +285,7 @@ export default function NotesList({
                   type="button"
                   disabled={isBusy}
                   onClick={() => duplicate(note)}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-white/70"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   <Copy className="h-3.5 w-3.5" />
                   Duplicar
@@ -294,7 +294,7 @@ export default function NotesList({
                   type="button"
                   disabled={isBusy}
                   onClick={() => remove(note)}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50/80"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50/80 dark:text-red-400 dark:hover:bg-red-900/20"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Eliminar
