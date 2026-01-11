@@ -145,15 +145,15 @@ export default function NoteEditor({ note }: { note: Note }) {
       typeof note.template_snapshot === "object" &&
       note.template_snapshot !== null &&
       "fields" in note.template_snapshot ? (
-        <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+        <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
           <div className="mb-3 flex items-start justify-between gap-2">
             <div>
-              <div className="text-sm font-semibold">
+              <div className="text-sm font-semibold dark:text-zinc-100">
                 {typeof (note.template_snapshot as any).name === "string"
                   ? (note.template_snapshot as any).name
                   : "Formulario"}
               </div>
-              <div className="text-xs text-zinc-500">
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">
                 Estilo reporte: etiquetas a la izquierda y campos editables a la
                 derecha.
               </div>
@@ -168,26 +168,26 @@ export default function NoteEditor({ note }: { note: Note }) {
       ) : null}
 
       {note.template_snapshot ? (
-        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3">
-          <div className="mb-2 text-sm font-semibold">Notas adicionales</div>
+        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-2 text-sm font-semibold dark:text-zinc-100">Notas adicionales</div>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Notas libres (opcional)…"
-            className="min-h-[140px] w-full resize-y rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none ring-zinc-300 focus:ring-2"
+            className="min-h-[140px] w-full resize-y rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
           />
         </div>
       ) : null}
 
       <div className="mt-4">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="text-sm font-medium text-zinc-700">Tags</div>
+          <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Tags</div>
           {tags.map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => removeTag(t)}
-              className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100"
+              className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
               title="Quitar tag"
             >
               #{t} ×
@@ -209,9 +209,9 @@ export default function NoteEditor({ note }: { note: Note }) {
             }
           }}
           placeholder="Escribe un tag y presiona Enter…"
-          className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+          className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
         />
-        <div className="mt-1 text-xs text-zinc-500">
+        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
           Ejemplos: <span className="font-medium">cliente</span>,{" "}
           <span className="font-medium">incidente</span>,{" "}
           <span className="font-medium">proveedor</span>.
