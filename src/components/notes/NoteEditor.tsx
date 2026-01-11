@@ -270,7 +270,7 @@ function TemplateForm({
             {section}
           </div>
 
-          <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
+          <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {fs.map((f) => {
               const key = String(f?.key ?? "");
               if (!key) return null;
@@ -293,7 +293,7 @@ function TemplateForm({
 
               return (
                 <div key={String(f?.id ?? key)} className={rowClass}>
-                  <div className="bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-200">
+                  <div className="bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
                     {label}{" "}
                     {required ? (
                       <span className="text-red-600 dark:text-red-400">*</span>

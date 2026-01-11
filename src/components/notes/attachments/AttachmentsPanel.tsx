@@ -348,7 +348,7 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium dark:text-zinc-200">
+                    <div className="truncate text-sm font-medium dark:text-zinc-100">
                       {a.filename}
                     </div>
                     <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
@@ -415,11 +415,11 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
             className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
               <div className="truncate text-sm font-semibold dark:text-zinc-100">{preview.filename}</div>
               <button
                 type="button"
-                className="rounded-lg px-2 py-1 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                className="rounded-lg px-2 py-1 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 onClick={() => setPreview(null)}
               >
                 Cerrar
@@ -441,7 +441,7 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
                 />
               )}
             </div>
-            <div className="flex justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-700">
+            <div className="flex justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
               <a
                 href={preview.url}
                 target="_blank"
