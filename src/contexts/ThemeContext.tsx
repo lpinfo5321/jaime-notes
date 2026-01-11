@@ -49,6 +49,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
+  // Escuchar cambios en preferencia del sistema (solo cuando theme === "system")
+  useEffect(() => {
+    if (theme !== "system") return;
+    
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => {
+      const effectiveTheme = mediaQuery.matches ? "dark" : "light";
+      setResolvedTheme(effectiveTheme);
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(effectiveTheme);
+    };
+    
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [theme]);
+
   // Escuchar cambios en preferencia del sistema
   useEffect(() => {
     if (theme !== "system") return;
