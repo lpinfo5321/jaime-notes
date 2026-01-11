@@ -433,7 +433,7 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
         )}
       </div>
 
-      <div className="mt-4 text-xs text-zinc-500">
+      <div className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
         Nota: cuando creas una nota desde esta plantilla, se guarda un{" "}
         <b>snapshot</b> del formulario dentro del registro para que no cambie si
         editas la plantilla después.
