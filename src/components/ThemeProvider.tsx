@@ -30,10 +30,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   function applyTheme(newTheme: Theme) {
     const root = document.documentElement;
+    root.classList.remove("dark", "light");
     if (newTheme === "dark") {
       root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
     }
   }
 
