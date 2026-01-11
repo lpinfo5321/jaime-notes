@@ -83,7 +83,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
               className={cn(
                 "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium",
                 fav
-                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-700 dark:bg-zinc-800"
                   : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700",
               )}
               title="Favoritos"
@@ -110,7 +110,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
 
             <Link
               href="/app/new"
-              className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600"
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Nueva</span>
@@ -126,7 +126,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar notas…"
-              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
+              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600 dark:placeholder:text-zinc-500"
             />
           </label>
 
@@ -137,7 +137,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               placeholder="Filtrar por tag…"
-              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
+              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600 dark:placeholder:text-zinc-500"
             />
           </label>
         </div>
@@ -152,7 +152,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
                 className={cn(
                   "rounded-full border px-2 py-1 text-xs font-medium",
                   tag === t
-                    ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                    ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-700 dark:bg-zinc-800"
                     : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700",
                 )}
                 title={`Filtrar por #${t}`}

@@ -120,7 +120,7 @@ export default function NoteEditor({ note }: { note: Note }) {
             className={cn(
               "rounded-xl border px-3 py-2 text-sm font-medium",
               favorite
-                ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
                 : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700",
             )}
           >
@@ -129,7 +129,7 @@ export default function NoteEditor({ note }: { note: Note }) {
           <button
             type="button"
             onClick={removeNote}
-            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-950"
+            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-900/30"
           >
             Eliminar
           </button>
@@ -145,7 +145,7 @@ export default function NoteEditor({ note }: { note: Note }) {
       typeof note.template_snapshot === "object" &&
       note.template_snapshot !== null &&
       "fields" in note.template_snapshot ? (
-        <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+        <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
           <div className="mb-3 flex items-start justify-between gap-2">
             <div>
               <div className="text-sm font-semibold dark:text-zinc-100">
@@ -168,7 +168,7 @@ export default function NoteEditor({ note }: { note: Note }) {
       ) : null}
 
       {note.template_snapshot ? (
-        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
           <div className="mb-2 text-sm font-semibold dark:text-zinc-100">Notas adicionales</div>
           <textarea
             value={body}
@@ -219,20 +219,20 @@ export default function NoteEditor({ note }: { note: Note }) {
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <div className="text-xs text-zinc-500">
+        <div className="text-xs text-zinc-500 dark:text-zinc-400">
           {saveState === "saving" ? (
-            <span className="text-zinc-700">Guardando…</span>
+            <span className="text-zinc-700 dark:text-zinc-300">Guardando…</span>
           ) : saveState === "saved" ? (
-            <span className="text-emerald-700">
+            <span className="text-emerald-700 dark:text-emerald-400">
               Guardado ({new Date(lastSavedRef.current).toLocaleTimeString()})
             </span>
           ) : saveState === "error" ? (
-            <span className="text-red-700">Error al guardar</span>
+            <span className="text-red-700 dark:text-red-400">Error al guardar</span>
           ) : (
             <span>—</span>
           )}
         </div>
-        <div className="text-xs text-zinc-500">
+        <div className="text-xs text-zinc-500 dark:text-zinc-400">
           {new Date(note.updated_at).toLocaleString()}
         </div>
       </div>
@@ -264,13 +264,13 @@ function TemplateForm({
       {Array.from(bySection.entries()).map(([section, fs]) => (
         <div
           key={section}
-          className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+          className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/50"
         >
-          <div className="bg-zinc-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
+          <div className="bg-zinc-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
             {section}
           </div>
 
-          <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
             {fs.map((f) => {
               const key = String(f?.key ?? "");
               if (!key) return null;
@@ -293,7 +293,7 @@ function TemplateForm({
 
               return (
                 <div key={String(f?.id ?? key)} className={rowClass}>
-                  <div className="bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
+                  <div className="bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300">
                     {label}{" "}
                     {required ? (
                       <span className="text-red-600 dark:text-red-400">*</span>

@@ -31,7 +31,7 @@ export default async function TemplatePage({
         </Link>
         <Link
           href={`/app/from-template/${t.id}`}
-          className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600"
         >
           Crear nota con esta plantilla
         </Link>

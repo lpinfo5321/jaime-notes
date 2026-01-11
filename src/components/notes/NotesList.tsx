@@ -14,7 +14,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTheme } from "@/components/ThemeProvider";
 
 export type NoteListItem = {
   id: string;
@@ -58,7 +57,6 @@ export default function NotesList({
   firstDocUrlsByNoteId,
 }: Props) {
   const router = useRouter();
-  const { theme } = useTheme();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const empty = notes.length === 0;
@@ -106,7 +104,7 @@ export default function NotesList({
 
   if (empty) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/50">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           No hay notas todavía. Crea la primera con <b>Nueva nota</b>.
         </p>
@@ -136,17 +134,15 @@ export default function NotesList({
         const meta = attachmentMetaByNoteId[String(note.id)];
         const thumbs = thumbUrlsByNoteId[String(note.id)] ?? [];
         const firstDoc = firstDocUrlsByNoteId[String(note.id)] ?? null;
-        // En modo oscuro, no usar fondo pastel (usar solo clases Tailwind)
-        const usePastelBg = view === "grid" && theme === "light";
         return (
           <div
             key={note.id}
             className={cn(
-              "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-800 dark:hover:border-zinc-700",
+              "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-zinc-700",
               view === "grid" && "mb-3 break-inside-avoid",
               isBusy && "opacity-60",
             )}
-            style={usePastelBg ? { background: bg } : undefined}
+            style={view === "grid" ? { background: bg } : undefined}
           >
             {/* Miniaturas estilo Keep (1–3) */}
             {thumbs.length ? (
@@ -194,11 +190,11 @@ export default function NotesList({
                   {note.title?.trim() ? note.title : "Sin título"}
                 </div>
                 {excerpt ? (
-                  <div className="mt-1 line-clamp-3 text-sm text-zinc-700/80 dark:text-zinc-300">
+                  <div className="mt-1 line-clamp-3 text-sm text-zinc-700/80 dark:text-zinc-300/80">
                     {excerpt}
                   </div>
                 ) : (
-                  <div className="mt-1 text-sm text-zinc-500/70 dark:text-zinc-400">
+                  <div className="mt-1 text-sm text-zinc-500/70 dark:text-zinc-400/70">
                     (sin contenido)
                   </div>
                 )}
@@ -211,8 +207,8 @@ export default function NotesList({
                 className={cn(
                   "inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs font-medium backdrop-blur",
                   note.favorite
-                    ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                    : "border-zinc-200 bg-white/70 text-zinc-700 hover:bg-white dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300 dark:hover:bg-zinc-700",
+                    ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                    : "border-zinc-200 bg-white/70 text-zinc-700 hover:bg-white dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300 dark:hover:bg-zinc-800",
                 )}
                 title={note.favorite ? "Quitar de favoritos" : "Marcar favorito"}
               >
@@ -250,7 +246,7 @@ export default function NotesList({
                     href={firstDoc.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex max-w-[260px] items-center gap-1 truncate rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-zinc-700 hover:bg-white dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    className="inline-flex max-w-[260px] items-center gap-1 truncate rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-zinc-700 hover:bg-white dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     title={`Abrir: ${firstDoc.filename}`}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -277,7 +273,7 @@ export default function NotesList({
             ) : null}
 
             <div className="mt-3 flex items-center justify-between">
-              <div className="text-xs text-zinc-500">
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">
                 {formatDistanceToNow(new Date(note.updated_at), {
                   addSuffix: true,
                   locale: es,
@@ -289,7 +285,7 @@ export default function NotesList({
                   type="button"
                   disabled={isBusy}
                   onClick={() => duplicate(note)}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-white/70"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-300 dark:hover:bg-zinc-800/70"
                 >
                   <Copy className="h-3.5 w-3.5" />
                   Duplicar
@@ -298,7 +294,7 @@ export default function NotesList({
                   type="button"
                   disabled={isBusy}
                   onClick={() => remove(note)}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50/80"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50/80 dark:text-red-400 dark:hover:bg-red-900/30"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Eliminar

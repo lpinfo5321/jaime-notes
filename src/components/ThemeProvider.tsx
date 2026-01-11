@@ -4,13 +4,13 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
-const ThemeContext = createContext<{
+type ThemeContextType = {
   theme: Theme;
   setTheme: (theme: Theme) => void;
-}>({
-  theme: "light",
-  setTheme: () => {},
-});
+  toggleTheme: () => void;
+};
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("light");
@@ -23,6 +23,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const systemPrefersDark = window.matchMedia(
       "(prefers-color-scheme: dark)",
     ).matches;
+
     const initialTheme = saved || (systemPrefersDark ? "dark" : "light");
     setThemeState(initialTheme);
     applyTheme(initialTheme);
@@ -30,9 +31,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   function applyTheme(newTheme: Theme) {
     const root = document.documentElement;
-    root.classList.remove("dark", "light");
     if (newTheme === "dark") {
       root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
     }
   }
 
@@ -42,18 +44,26 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(newTheme);
   }
 
-  // Evitar flash de contenido sin tema
+  function toggleTheme() {
+    setTheme(theme === "light" ? "dark" : "light");
+  }
+
+  // Evitar flash durante hidratación
   if (!mounted) {
     return <>{children}</>;
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
 export function useTheme() {
-  return useContext(ThemeContext);
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error("useTheme must be used within a ThemeProvider");
+  }
+  return context;
 }
