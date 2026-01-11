@@ -360,12 +360,12 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
             className={cn(
               "rounded-xl border px-3 py-2 text-xs font-medium",
               saveState === "saving"
-                ? "border-zinc-200 bg-zinc-50 text-zinc-700"
+                ? "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                 : saveState === "saved"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
                   : saveState === "error"
-                    ? "border-red-200 bg-red-50 text-red-800"
-                    : "border-zinc-200 bg-white text-zinc-500",
+                    ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                    : "border-zinc-200 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
             )}
           >
             {saveState === "saving"
@@ -379,7 +379,7 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
           <button
             type="button"
             onClick={removeTemplate}
-            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-950"
           >
             Eliminar
           </button>
