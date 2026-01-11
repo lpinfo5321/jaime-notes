@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/components/ThemeProvider";
 
 export type NoteListItem = {
   id: string;
@@ -57,6 +58,7 @@ export default function NotesList({
   firstDocUrlsByNoteId,
 }: Props) {
   const router = useRouter();
+  const { theme } = useTheme();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const empty = notes.length === 0;
@@ -134,15 +136,17 @@ export default function NotesList({
         const meta = attachmentMetaByNoteId[String(note.id)];
         const thumbs = thumbUrlsByNoteId[String(note.id)] ?? [];
         const firstDoc = firstDocUrlsByNoteId[String(note.id)] ?? null;
+        // En modo oscuro, no usar fondo pastel (usar solo clases Tailwind)
+        const usePastelBg = view === "grid" && theme === "light";
         return (
           <div
             key={note.id}
             className={cn(
-              "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-zinc-700",
+              "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-800 dark:hover:border-zinc-700",
               view === "grid" && "mb-3 break-inside-avoid",
               isBusy && "opacity-60",
             )}
-            style={view === "grid" ? { background: bg } : undefined}
+            style={usePastelBg ? { background: bg } : undefined}
           >
             {/* Miniaturas estilo Keep (1–3) */}
             {thumbs.length ? (
