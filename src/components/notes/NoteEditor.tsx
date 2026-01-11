@@ -94,21 +94,21 @@ export default function NoteEditor({ note }: { note: Note }) {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 flex-1">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Título…"
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
           />
           {note.template_snapshot ? null : (
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="Escribe aquí…"
-              className="mt-3 min-h-[220px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+              className="mt-3 min-h-[220px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
             />
           )}
         </div>
@@ -120,8 +120,8 @@ export default function NoteEditor({ note }: { note: Note }) {
             className={cn(
               "rounded-xl border px-3 py-2 text-sm font-medium",
               favorite
-                ? "border-amber-200 bg-amber-50 text-amber-900"
-                : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
+                ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700",
             )}
           >
             {favorite ? "★ Favorito" : "☆ Favorito"}
@@ -129,7 +129,7 @@ export default function NoteEditor({ note }: { note: Note }) {
           <button
             type="button"
             onClick={removeNote}
-            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-950"
           >
             Eliminar
           </button>
