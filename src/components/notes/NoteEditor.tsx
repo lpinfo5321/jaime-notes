@@ -94,21 +94,21 @@ export default function NoteEditor({ note }: { note: Note }) {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 flex-1">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Título…"
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2"
           />
           {note.template_snapshot ? null : (
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="Escribe aquí…"
-              className="mt-3 min-h-[220px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
+              className="mt-3 min-h-[220px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
             />
           )}
         </div>
@@ -120,8 +120,8 @@ export default function NoteEditor({ note }: { note: Note }) {
             className={cn(
               "rounded-xl border px-3 py-2 text-sm font-medium",
               favorite
-                ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700",
+                ? "border-amber-200 bg-amber-50 text-amber-900"
+                : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
             )}
           >
             {favorite ? "★ Favorito" : "☆ Favorito"}
@@ -129,7 +129,7 @@ export default function NoteEditor({ note }: { note: Note }) {
           <button
             type="button"
             onClick={removeNote}
-            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-900/30"
+            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
           >
             Eliminar
           </button>
@@ -145,15 +145,15 @@ export default function NoteEditor({ note }: { note: Note }) {
       typeof note.template_snapshot === "object" &&
       note.template_snapshot !== null &&
       "fields" in note.template_snapshot ? (
-        <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
+        <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
           <div className="mb-3 flex items-start justify-between gap-2">
             <div>
-              <div className="text-sm font-semibold dark:text-zinc-100">
+              <div className="text-sm font-semibold">
                 {typeof (note.template_snapshot as any).name === "string"
                   ? (note.template_snapshot as any).name
                   : "Formulario"}
               </div>
-              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="text-xs text-zinc-500">
                 Estilo reporte: etiquetas a la izquierda y campos editables a la
                 derecha.
               </div>
@@ -168,26 +168,26 @@ export default function NoteEditor({ note }: { note: Note }) {
       ) : null}
 
       {note.template_snapshot ? (
-        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
-          <div className="mb-2 text-sm font-semibold dark:text-zinc-100">Notas adicionales</div>
+        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3">
+          <div className="mb-2 text-sm font-semibold">Notas adicionales</div>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Notas libres (opcional)…"
-            className="min-h-[140px] w-full resize-y rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
+            className="min-h-[140px] w-full resize-y rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none ring-zinc-300 focus:ring-2"
           />
         </div>
       ) : null}
 
       <div className="mt-4">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Tags</div>
+          <div className="text-sm font-medium text-zinc-700">Tags</div>
           {tags.map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => removeTag(t)}
-              className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100"
               title="Quitar tag"
             >
               #{t} ×
@@ -209,9 +209,9 @@ export default function NoteEditor({ note }: { note: Note }) {
             }
           }}
           placeholder="Escribe un tag y presiona Enter…"
-          className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
+          className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
         />
-        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="mt-1 text-xs text-zinc-500">
           Ejemplos: <span className="font-medium">cliente</span>,{" "}
           <span className="font-medium">incidente</span>,{" "}
           <span className="font-medium">proveedor</span>.
@@ -219,20 +219,20 @@ export default function NoteEditor({ note }: { note: Note }) {
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="text-xs text-zinc-500">
           {saveState === "saving" ? (
-            <span className="text-zinc-700 dark:text-zinc-300">Guardando…</span>
+            <span className="text-zinc-700">Guardando…</span>
           ) : saveState === "saved" ? (
-            <span className="text-emerald-700 dark:text-emerald-400">
+            <span className="text-emerald-700">
               Guardado ({new Date(lastSavedRef.current).toLocaleTimeString()})
             </span>
           ) : saveState === "error" ? (
-            <span className="text-red-700 dark:text-red-400">Error al guardar</span>
+            <span className="text-red-700">Error al guardar</span>
           ) : (
             <span>—</span>
           )}
         </div>
-        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="text-xs text-zinc-500">
           {new Date(note.updated_at).toLocaleString()}
         </div>
       </div>
@@ -257,20 +257,20 @@ function TemplateForm({
   }
 
   const inputBase =
-    "w-full rounded-lg border border-transparent bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600";
+    "w-full rounded-lg border border-transparent bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2";
 
   return (
     <div className="space-y-4">
       {Array.from(bySection.entries()).map(([section, fs]) => (
         <div
           key={section}
-          className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/50"
+          className="overflow-hidden rounded-2xl border border-zinc-200 bg-white"
         >
-          <div className="bg-zinc-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+          <div className="bg-zinc-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-600">
             {section}
           </div>
 
-          <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
+          <div className="divide-y divide-zinc-200">
             {fs.map((f) => {
               const key = String(f?.key ?? "");
               if (!key) return null;
@@ -293,10 +293,10 @@ function TemplateForm({
 
               return (
                 <div key={String(f?.id ?? key)} className={rowClass}>
-                  <div className="bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300">
+                  <div className="bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-800">
                     {label}{" "}
                     {required ? (
-                      <span className="text-red-600 dark:text-red-400">*</span>
+                      <span className="text-red-600">*</span>
                     ) : null}
                   </div>
                   <div className="px-4 py-2">
@@ -311,7 +311,7 @@ function TemplateForm({
                         placeholder={placeholder}
                       />
                     ) : type === "checkbox" ? (
-                      <label className="inline-flex items-center gap-2 px-1 py-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <label className="inline-flex items-center gap-2 px-1 py-2 text-sm text-zinc-700">
                         <input
                           type="checkbox"
                           checked={!!v}
