@@ -316,7 +316,7 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
 
       <div className="mt-3">
         {attachments.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+          <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400">
             No hay adjuntos en esta nota.
           </div>
         ) : (
@@ -332,7 +332,7 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
                     busy && "opacity-70",
                   )}
                 >
-                  <div className="h-12 w-12 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-700">
+                  <div className="h-12 w-12 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-700/50">
                     {isImg && thumbs[a.id] ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
