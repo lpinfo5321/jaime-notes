@@ -299,28 +299,28 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 flex-1">
           <div className="grid gap-2 md:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-700">
+              <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Nombre
               </span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-700">
+              <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Descripción (opcional)
               </span>
               <input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
               />
             </label>
           </div>
@@ -329,7 +329,7 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
             <select
               value={addType}
               onChange={(e) => setAddType(e.target.value as FieldType)}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
             >
               {FIELD_TYPES.map((x) => (
                 <option key={x.type} value={x.type}>
@@ -340,14 +340,14 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
             <button
               type="button"
               onClick={() => setFields((prev) => ensureUniqueKeys([...prev, newField(addType)]))}
-              className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+              className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               Agregar campo
             </button>
             <button
               type="button"
               onClick={() => setFields((prev) => ensureUniqueKeys(prev))}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
               title="Arregla claves duplicadas automáticamente"
             >
               Normalizar claves
