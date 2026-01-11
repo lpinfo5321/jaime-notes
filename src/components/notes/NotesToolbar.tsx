@@ -59,17 +59,17 @@ export default function NotesToolbar({ initial, topTags }: Props) {
   }
 
   return (
-    <div className="md:sticky md:top-[60px] md:z-10 -mx-4 border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80">
+    <div className="md:sticky md:top-[60px] md:z-10 -mx-4 border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/80">
       <div className="mx-auto flex max-w-6xl flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <h1 className="truncate text-sm font-semibold tracking-tight dark:text-zinc-50">
+            <h1 className="truncate text-sm font-semibold tracking-tight dark:text-zinc-100">
               Notas
             </h1>
             {(fav || q.trim() || tag.trim()) && (
               <Link
                 href={hrefBase}
-                className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
               >
                 Limpiar
               </Link>
@@ -84,7 +84,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
                 "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium",
                 fav
                   ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700",
+                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700",
               )}
               title="Favoritos"
             >
@@ -95,7 +95,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
             <button
               type="button"
               onClick={() => setParam("view", view === "grid" ? "list" : "grid")}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
               title="Cambiar vista"
             >
               {view === "grid" ? (
@@ -110,7 +110,7 @@ export default function NotesToolbar({ initial, topTags }: Props) {
 
             <Link
               href="/app/new"
-              className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800"
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Nueva</span>
@@ -121,23 +121,23 @@ export default function NotesToolbar({ initial, topTags }: Props) {
         <div className="grid gap-2 md:grid-cols-[1fr_280px]">
           <label className="relative block">
             <span className="sr-only">Buscar</span>
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar notas…"
-              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder:text-zinc-400 dark:ring-zinc-600"
+              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
             />
           </label>
 
           <label className="relative block">
             <span className="sr-only">Filtrar por tag</span>
-            <Tag className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+            <Tag className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
             <input
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               placeholder="Filtrar por tag…"
-              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder:text-zinc-400 dark:ring-zinc-600"
+              className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
             />
           </label>
         </div>
@@ -152,8 +152,8 @@ export default function NotesToolbar({ initial, topTags }: Props) {
                 className={cn(
                   "rounded-full border px-2 py-1 text-xs font-medium",
                   tag === t
-                    ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700",
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
                 )}
                 title={`Filtrar por #${t}`}
               >
@@ -166,3 +166,4 @@ export default function NotesToolbar({ initial, topTags }: Props) {
     </div>
   );
 }
+

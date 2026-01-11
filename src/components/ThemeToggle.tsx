@@ -1,35 +1,50 @@
 "use client";
 
-import { useTheme } from "next-themes";
-import { Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { cn } from "@/lib/utils";
 
 export default function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const { theme, setTheme, resolvedTheme } = useTheme();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const toggleTheme = () => {
+    if (theme === "light") {
+      setTheme("dark");
+    } else if (theme === "dark") {
+      setTheme("system");
+    } else {
+      setTheme("light");
+    }
+  };
 
-  if (!mounted) {
-    return (
-      <div className="h-8 w-8 rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800" />
-    );
-  }
+  const getIcon = () => {
+    if (theme === "system") {
+      return "🖥️";
+    }
+    return resolvedTheme === "dark" ? "🌙" : "☀️";
+  };
+
+  const getLabel = () => {
+    if (theme === "system") return "Sistema";
+    return resolvedTheme === "dark" ? "Oscuro" : "Claro";
+  };
 
   return (
     <button
-      type="button"
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-      title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
-    >
-      {theme === "dark" ? (
-        <Sun className="h-4 w-4" />
-      ) : (
-        <Moon className="h-4 w-4" />
+      onClick={toggleTheme}
+      className={cn(
+        "flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-200",
+        "hover:scale-105 active:scale-95",
+        // Modo claro
+        "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
+        // Modo oscuro
+        "dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
       )}
+      title={`Cambiar tema (actual: ${getLabel()})`}
+    >
+      <span className="text-base transition-transform duration-300 hover:rotate-12">
+        {getIcon()}
+      </span>
+      <span className="hidden sm:inline">{getLabel()}</span>
     </button>
   );
 }
