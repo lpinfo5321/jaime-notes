@@ -138,23 +138,7 @@ export default function NoteEditor({ note }: { note: Note }) {
       </div>
 
       <div className="mt-4">
-        <AttachmentsPanel
-          noteId={note.id}
-          cover={((values as any)?._cover ?? null) as any}
-          onSetCover={(a) =>
-            setValues((prev) => ({
-              ...(prev ?? {}),
-              _cover: a
-                ? {
-                    id: a.id,
-                    path: a.path,
-                    filename: a.filename,
-                    mime_type: a.mime_type,
-                  }
-                : null,
-            }))
-          }
-        />
+        <AttachmentsPanel noteId={note.id} />
       </div>
 
       {note.template_snapshot &&
