@@ -102,7 +102,7 @@ function SortableRow({
       ref={sortable.setNodeRef}
       style={style}
       className={cn(
-        "rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm",
+        "rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900",
         sortable.isDragging && "opacity-70",
       )}
     >
@@ -299,28 +299,28 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 flex-1">
           <div className="grid gap-2 md:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-700">
+              <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Nombre
               </span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-700">
+              <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Descripción (opcional)
               </span>
               <input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
               />
             </label>
           </div>
@@ -329,7 +329,7 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
             <select
               value={addType}
               onChange={(e) => setAddType(e.target.value as FieldType)}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
             >
               {FIELD_TYPES.map((x) => (
                 <option key={x.type} value={x.type}>
@@ -340,14 +340,14 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
             <button
               type="button"
               onClick={() => setFields((prev) => ensureUniqueKeys([...prev, newField(addType)]))}
-              className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+              className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               Agregar campo
             </button>
             <button
               type="button"
               onClick={() => setFields((prev) => ensureUniqueKeys(prev))}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
               title="Arregla claves duplicadas automáticamente"
             >
               Normalizar claves
@@ -360,12 +360,12 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
             className={cn(
               "rounded-xl border px-3 py-2 text-xs font-medium",
               saveState === "saving"
-                ? "border-zinc-200 bg-zinc-50 text-zinc-700"
+                ? "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                 : saveState === "saved"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
                   : saveState === "error"
-                    ? "border-red-200 bg-red-50 text-red-800"
-                    : "border-zinc-200 bg-white text-zinc-500",
+                    ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                    : "border-zinc-200 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
             )}
           >
             {saveState === "saving"
@@ -379,7 +379,7 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
           <button
             type="button"
             onClick={removeTemplate}
-            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+            className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-950"
           >
             Eliminar
           </button>
@@ -387,9 +387,9 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
       </div>
 
       <div className="mt-4">
-        <div className="mb-2 text-sm font-semibold">Campos</div>
+        <div className="mb-2 text-sm font-semibold dark:text-zinc-100">Campos</div>
         {fields.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-6 text-sm text-zinc-600">
+          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
             Aún no hay campos. Agrega uno arriba.
           </div>
         ) : (
@@ -433,7 +433,7 @@ export default function TemplateEditor({ template }: { template: TemplateDTO }) 
         )}
       </div>
 
-      <div className="mt-4 text-xs text-zinc-500">
+      <div className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
         Nota: cuando creas una nota desde esta plantilla, se guarda un{" "}
         <b>snapshot</b> del formulario dentro del registro para que no cambie si
         editas la plantilla después.
