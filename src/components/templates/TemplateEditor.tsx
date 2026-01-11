@@ -111,7 +111,7 @@ function SortableRow({
           type="button"
           {...sortable.attributes}
           {...sortable.listeners}
-          className="mt-1 cursor-grab select-none rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-medium text-zinc-700 active:cursor-grabbing"
+          className="mt-1 cursor-grab select-none rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-medium text-zinc-700 active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
           title="Arrastra para ordenar"
         >
           ↕
@@ -120,7 +120,7 @@ function SortableRow({
         <div className="min-w-0 flex-1">
           <div className="grid gap-2 md:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-700">
+              <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Etiqueta
               </span>
               <input
@@ -129,36 +129,36 @@ function SortableRow({
                   const label = e.target.value;
                   onChange({ label, key: field.key ? field.key : slugKey(label) });
                 }}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-700">
+              <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Clave (se guarda en el registro)
               </span>
               <input
                 value={field.key}
                 onChange={(e) => onChange({ key: e.target.value })}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
               />
             </label>
           </div>
 
           <div className="mt-2 grid gap-2 md:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-700">
+              <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Sección (opcional)
               </span>
               <input
                 value={field.section ?? ""}
                 onChange={(e) => onChange({ section: e.target.value })}
                 placeholder="Ej. Datos del cheque"
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-700">
+              <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Ancho
               </span>
               <select
@@ -166,7 +166,7 @@ function SortableRow({
                 onChange={(e) =>
                   onChange({ width: e.target.value as "half" | "full" })
                 }
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
               >
                 <option value="half">Medio</option>
                 <option value="full">Completo</option>
@@ -176,24 +176,24 @@ function SortableRow({
 
           <div className="mt-2">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-700">
+              <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Placeholder (opcional)
               </span>
               <input
                 value={field.placeholder ?? ""}
                 onChange={(e) => onChange({ placeholder: e.target.value })}
                 placeholder="Ej. 813-555-1234"
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
               />
             </label>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600">
+            <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
               Tipo: <b>{field.type}</b>
             </span>
 
-            <label className="inline-flex items-center gap-2 text-xs text-zinc-700">
+            <label className="inline-flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
               <input
                 type="checkbox"
                 checked={!!field.required}
@@ -205,7 +205,7 @@ function SortableRow({
             <button
               type="button"
               onClick={onRemove}
-              className="ml-auto rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+              className="ml-auto rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
             >
               Eliminar campo
             </button>
@@ -213,7 +213,7 @@ function SortableRow({
 
           {field.type === "select" ? (
             <div className="mt-2">
-              <div className="mb-1 text-xs font-medium text-zinc-700">
+              <div className="mb-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Opciones (una por línea)
               </div>
               <textarea
@@ -227,7 +227,7 @@ function SortableRow({
                       .slice(0, 60),
                   })
                 }
-                className="min-h-[80px] w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+                className="min-h-[80px] w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600"
               />
             </div>
           ) : null}
