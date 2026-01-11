@@ -257,20 +257,20 @@ function TemplateForm({
   }
 
   const inputBase =
-    "w-full rounded-lg border border-transparent bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2";
+    "w-full rounded-lg border border-transparent bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600";
 
   return (
     <div className="space-y-4">
       {Array.from(bySection.entries()).map(([section, fs]) => (
         <div
           key={section}
-          className="overflow-hidden rounded-2xl border border-zinc-200 bg-white"
+          className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
         >
-          <div className="bg-zinc-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-600">
+          <div className="bg-zinc-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
             {section}
           </div>
 
-          <div className="divide-y divide-zinc-200">
+          <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
             {fs.map((f) => {
               const key = String(f?.key ?? "");
               if (!key) return null;
@@ -293,10 +293,10 @@ function TemplateForm({
 
               return (
                 <div key={String(f?.id ?? key)} className={rowClass}>
-                  <div className="bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-800">
+                  <div className="bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-200">
                     {label}{" "}
                     {required ? (
-                      <span className="text-red-600">*</span>
+                      <span className="text-red-600 dark:text-red-400">*</span>
                     ) : null}
                   </div>
                   <div className="px-4 py-2">
@@ -311,7 +311,7 @@ function TemplateForm({
                         placeholder={placeholder}
                       />
                     ) : type === "checkbox" ? (
-                      <label className="inline-flex items-center gap-2 px-1 py-2 text-sm text-zinc-700">
+                      <label className="inline-flex items-center gap-2 px-1 py-2 text-sm text-zinc-700 dark:text-zinc-300">
                         <input
                           type="checkbox"
                           checked={!!v}
