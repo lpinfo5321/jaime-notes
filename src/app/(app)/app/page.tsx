@@ -1,13 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import NotesToolbar from "@/components/notes/NotesToolbar";
 import NotesList from "@/components/notes/NotesList";
-import FeaturedNoteCard from "@/components/notes/FeaturedNoteCard";
 
 type NotesSearchParams = {
   q?: string;
   view?: "grid" | "list";
   fav?: "1" | "0";
-  tag?: string;
 };
 
 export default async function NotesPage({
@@ -21,10 +19,6 @@ export default async function NotesPage({
   const q = (sp.q ?? "").trim();
   const view = sp.view === "list" ? "list" : "grid";
   const fav = sp.fav === "1";
-  const tag = (sp.tag ?? "").trim();
-  const companyName = (process.env.NEXT_PUBLIC_COMPANY_NAME ?? "Jaime Notes")
-    .trim()
-    .toUpperCase();
 
   let query = supabase
     .from("notes")
@@ -35,23 +29,10 @@ export default async function NotesPage({
     .limit(200);
 
   if (fav) query = query.eq("favorite", true);
-  if (tag) query = query.contains("tags", [tag]);
   if (q) query = query.or(`title.ilike.%${q}%,body.ilike.%${q}%`);
 
   const { data: notes, error } = await query;
   const safeNotes = notes ?? [];
-
-  const tagCounts = new Map<string, number>();
-  for (const n of safeNotes) {
-    for (const t of (n.tags ?? []) as string[]) {
-      const k = String(t);
-      tagCounts.set(k, (tagCounts.get(k) ?? 0) + 1);
-    }
-  }
-  const topTags = Array.from(tagCounts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 12)
-    .map(([t]) => t);
 
   // Adjuntos: para mostrar miniaturas/contador en las tarjetas
   const noteIds = safeNotes.map((n: any) => String(n.id));
@@ -70,7 +51,6 @@ export default async function NotesPage({
     : { data: [] as any[] };
 
   const firstImagePathByNoteId: Record<string, string> = {};
-  const imageThumbPathsByNoteId: Record<string, string[]> = {};
   const firstDocByNoteId: Record<
     string,
     { path: string; filename: string; mime: string }
@@ -96,11 +76,6 @@ export default async function NotesPage({
 
     if (isImg && !firstImagePathByNoteId[nid] && typeof a.path === "string") {
       firstImagePathByNoteId[nid] = a.path;
-    }
-
-    if (isImg && typeof a.path === "string") {
-      const arr = (imageThumbPathsByNoteId[nid] ??= []);
-      if (arr.length < 3) arr.push(a.path);
     }
 
     if (
@@ -141,23 +116,6 @@ export default async function NotesPage({
       }),
   );
 
-  // Miniaturas (hasta 3 imágenes por nota)
-  const thumbUrlsByNoteId: Record<string, string[]> = {};
-  await Promise.all(
-    Object.entries(imageThumbPathsByNoteId)
-      .slice(0, 80)
-      .map(async ([noteId, paths]) => {
-        const urls: string[] = [];
-        for (const p of paths) {
-          const { data } = await supabase.storage
-            .from("attachments")
-            .createSignedUrl(p, 60 * 10);
-          if (data?.signedUrl) urls.push(data.signedUrl);
-        }
-        if (urls.length) thumbUrlsByNoteId[noteId] = urls;
-      }),
-  );
-
   // Primer documento (link directo desde la tarjeta)
   const firstDocUrlsByNoteId: Record<
     string,
@@ -180,23 +138,14 @@ export default async function NotesPage({
       }),
   );
 
-  const latest = safeNotes.length ? (safeNotes[0] as any) : null;
-  const latestId = latest ? String(latest.id) : null;
-  const latestCover = latestId ? coverUrls[latestId] : null;
-  const latestThumb = latestId ? thumbUrlsByNoteId[latestId]?.[0] : null;
-  const latestDoc = latestId ? firstDocUrlsByNoteId[latestId] : null;
-  const latestMeta = latestId ? attachmentMetaByNoteId[latestId] : null;
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <NotesToolbar
         initial={{
           q,
           view,
           fav,
-          tag,
         }}
-        topTags={topTags}
       />
 
       {error ? (
@@ -204,33 +153,13 @@ export default async function NotesPage({
           Error cargando notas: {error.message}
         </div>
       ) : (
-        <div className="space-y-5">
-          {view === "grid" && latest ? (
-            <FeaturedNoteCard
-              companyName={companyName}
-              note={{
-                id: String(latest.id),
-                title: String(latest.title ?? ""),
-                body: String(latest.body ?? ""),
-                tags: (latest.tags ?? []) as string[],
-                template_snapshot: latest.template_snapshot,
-                updated_at: String(latest.updated_at),
-              }}
-              coverUrl={latestCover ?? latestThumb ?? null}
-              firstDoc={latestDoc ?? null}
-              meta={latestMeta ?? null}
-            />
-          ) : null}
-
-          <NotesList
-            notes={(view === "grid" ? safeNotes.slice(1) : safeNotes) as any}
-            view={view}
-            coverUrls={coverUrls}
-            attachmentMetaByNoteId={attachmentMetaByNoteId}
-            thumbUrlsByNoteId={thumbUrlsByNoteId}
-            firstDocUrlsByNoteId={firstDocUrlsByNoteId}
-          />
-        </div>
+        <NotesList
+          notes={safeNotes as any}
+          view={view}
+          coverUrls={coverUrls}
+          attachmentMetaByNoteId={attachmentMetaByNoteId}
+          firstDocUrlsByNoteId={firstDocUrlsByNoteId}
+        />
       )}
     </div>
   );
