@@ -131,137 +131,78 @@ export default function NotesList({
         const thumbs = thumbUrlsByNoteId[String(note.id)] ?? [];
         const firstDoc = firstDocUrlsByNoteId[String(note.id)] ?? null;
         const cover = coverUrls[note.id] ?? null;
+        const noteDate = new Date(note.updated_at).toLocaleDateString("es-ES", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "2-digit",
+        });
         return (
-          <div
+          <Link
             key={note.id}
+            href={`/app/n/${note.id}`}
+            prefetch={false}
             className={cn(
-              "group flex gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900",
-              isBusy && "opacity-60",
+              "group relative flex gap-6 overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-6 shadow-sm transition hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900",
+              isBusy && "pointer-events-none opacity-60",
             )}
           >
             {/* Izquierda: info */}
-            <div className="min-w-0 flex-1">
-              <Link
-                href={`/app/n/${note.id}`}
-                className="block"
-                prefetch={false}
-              >
-                <div className="mb-1 flex items-start justify-between gap-2">
-                  <h3 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-                    {note.title?.trim() ? note.title : "Sin título"}
-                  </h3>
-                  <button
-                    type="button"
-                    disabled={isBusy}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      toggleFavorite(note);
-                    }}
-                    className={cn(
-                      "shrink-0 rounded-lg p-1.5 transition",
-                      note.favorite
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400",
-                    )}
-                    title={note.favorite ? "Quitar de favoritos" : "Marcar favorito"}
-                  >
-                    <Star
-                      className={cn(
-                        "h-5 w-5",
-                        note.favorite && "fill-current",
-                      )}
-                    />
-                  </button>
-                </div>
+            <div className="flex min-w-0 flex-1 flex-col">
+              {/* Título grande */}
+              <h2 className="mb-3 text-2xl font-black uppercase tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
+                {note.title?.trim() ? note.title : "Sin título"}
+              </h2>
 
-                {excerpt ? (
-                  <p className="line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
-                    {excerpt}
-                  </p>
-                ) : (
-                  <p className="text-sm italic text-zinc-400 dark:text-zinc-600">
-                    Sin contenido
-                  </p>
-                )}
-              </Link>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-500">
-                {templateName ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 font-medium dark:border-zinc-800 dark:bg-zinc-800/50">
-                    Plantilla: {templateName}
-                  </span>
-                ) : null}
-                {meta?.total ? (
-                  <>
-                    <span className="inline-flex items-center gap-1">
-                      <Paperclip className="h-3.5 w-3.5" />
-                      {meta.total}
-                    </span>
-                    {meta.images ? (
-                      <span className="inline-flex items-center gap-1">
-                        <ImageIcon className="h-3.5 w-3.5" />
-                        {meta.images}
-                      </span>
-                    ) : null}
-                    {meta.docs ? (
-                      <span className="inline-flex items-center gap-1">
-                        <FileText className="h-3.5 w-3.5" />
-                        {meta.docs}
-                      </span>
-                    ) : null}
-                  </>
-                ) : null}
-                <span>·</span>
-                <span>
-                  {formatDistanceToNow(new Date(note.updated_at), {
-                    addSuffix: true,
-                    locale: es,
-                  })}
-                </span>
+              {/* Última Nota */}
+              <div className="mb-2 text-sm font-bold text-zinc-500 dark:text-zinc-400">
+                Última Nota
               </div>
 
-              {note.tags?.length ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {note.tags.slice(0, 4).map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300"
-                    >
-                      #{t}
-                    </span>
-                  ))}
+              {/* Fecha + Contenido */}
+              <div className="mb-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <span className="font-bold">{noteDate}</span>
+                {excerpt && (
+                  <span className="ml-1">
+                    {excerpt}
+                  </span>
+                )}
+              </div>
+
+              {/* Indicador de adjuntos */}
+              {meta?.total ? (
+                <div className="mt-auto flex items-center gap-2">
+                  <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+                    <Paperclip className="h-4 w-4" />
+                    {meta.total}
+                  </div>
                 </div>
               ) : null}
 
-              <div className="mt-3 flex gap-2 opacity-0 transition group-hover:opacity-100">
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() => duplicate(note)}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  Duplicar
-                </button>
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() => remove(note)}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Eliminar
-                </button>
-              </div>
+              {/* Botón favorito (esquina superior izquierda) */}
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={(e) => {
+                  e.preventDefault();
+                  toggleFavorite(note);
+                }}
+                className={cn(
+                  "absolute left-4 top-4 rounded-full p-2 transition",
+                  note.favorite
+                    ? "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+                    : "bg-zinc-100 text-zinc-400 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-500 dark:hover:bg-zinc-700",
+                )}
+                title={note.favorite ? "Quitar de favoritos" : "Marcar favorito"}
+              >
+                <Star
+                  className={cn("h-5 w-5", note.favorite && "fill-current")}
+                />
+              </button>
             </div>
 
-            {/* Derecha: portada */}
-            <Link
-              href={`/app/n/${note.id}`}
-              prefetch={false}
-              className="shrink-0"
-            >
-              <div className="h-32 w-32 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:h-40 sm:w-40">
+            {/* Derecha: portada grande */}
+            <div className="relative shrink-0">
+              <div className="h-48 w-48 overflow-hidden rounded-2xl border-2 border-zinc-200/50 bg-zinc-50 shadow-md dark:border-zinc-800/50 dark:bg-zinc-950 sm:h-56 sm:w-56">
                 {cover ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -271,13 +212,13 @@ export default function NotesList({
                     loading="lazy"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs font-medium text-zinc-400 dark:text-zinc-600">
-                    Sin portada
+                  <div className="flex h-full w-full items-center justify-center text-sm font-medium text-zinc-400 dark:text-zinc-600">
+                    Sin imagen
                   </div>
                 )}
               </div>
-            </Link>
-          </div>
+            </div>
+          </Link>
         );
       })}
     </div>
