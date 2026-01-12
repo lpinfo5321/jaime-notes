@@ -4,7 +4,6 @@ import NotesList from "@/components/notes/NotesList";
 
 type NotesSearchParams = {
   q?: string;
-  view?: "grid" | "list";
   fav?: "1" | "0";
 };
 
@@ -17,7 +16,6 @@ export default async function NotesPage({
   const supabase = await createClient();
 
   const q = (sp.q ?? "").trim();
-  const view = sp.view === "list" ? "list" : "grid";
   const fav = sp.fav === "1";
 
   let query = supabase
@@ -139,11 +137,10 @@ export default async function NotesPage({
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <NotesToolbar
         initial={{
           q,
-          view,
           fav,
         }}
       />
@@ -155,7 +152,6 @@ export default async function NotesPage({
       ) : (
         <NotesList
           notes={safeNotes as any}
-          view={view}
           coverUrls={coverUrls}
           attachmentMetaByNoteId={attachmentMetaByNoteId}
           firstDocUrlsByNoteId={firstDocUrlsByNoteId}

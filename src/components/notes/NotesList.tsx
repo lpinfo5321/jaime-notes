@@ -3,17 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { es } from "date-fns/locale";
 import {
   Copy,
   FileText,
-  Image as ImageIcon,
   Paperclip,
   Star,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { COMPANY_NAME } from "@/lib/config";
 
 export type NoteListItem = {
   id: string;
@@ -28,32 +26,21 @@ export type NoteListItem = {
 
 type Props = {
   notes: NoteListItem[];
-  view: "grid" | "list";
   coverUrls: Record<string, string>;
   attachmentMetaByNoteId: Record<
     string,
     { total: number; images: number; docs: number; firstDocName?: string }
   >;
-  thumbUrlsByNoteId: Record<string, string[]>;
   firstDocUrlsByNoteId: Record<
     string,
     { url: string; filename: string; mime: string }
   >;
 };
 
-function pastelFromKey(key: string) {
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-  const hue = h % 360;
-  return `hsl(${hue} 70% 96%)`;
-}
-
 export default function NotesList({
   notes,
-  view,
   coverUrls,
   attachmentMetaByNoteId,
-  thumbUrlsByNoteId,
   firstDocUrlsByNoteId,
 }: Props) {
   const router = useRouter();
@@ -113,22 +100,14 @@ export default function NotesList({
   }
 
   return (
-    <div
-      className={cn(
-        view === "grid"
-          ? "columns-1 gap-3 sm:columns-2 lg:columns-3 [column-fill:_balance]"
-          : "flex flex-col gap-2",
-      )}
-    >
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       {sorted.map((note) => {
-        const excerpt = (note.body ?? "").trim().slice(0, 140);
+        const excerpt = (note.body ?? "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .slice(0, 140);
         const isBusy = busyId === note.id;
-        const templateName =
-          typeof note.template_snapshot?.name === "string"
-            ? note.template_snapshot.name
-            : null;
         const meta = attachmentMetaByNoteId[String(note.id)];
-        const thumbs = thumbUrlsByNoteId[String(note.id)] ?? [];
         const firstDoc = firstDocUrlsByNoteId[String(note.id)] ?? null;
         const cover = coverUrls[note.id] ?? null;
         const noteDate = new Date(note.updated_at).toLocaleDateString("es-ES", {
@@ -136,89 +115,123 @@ export default function NotesList({
           month: "2-digit",
           year: "2-digit",
         });
+
+        const isPdf = !!firstDoc && String(firstDoc.mime ?? "").includes("pdf");
+
         return (
-          <Link
+          <div
             key={note.id}
-            href={`/app/n/${note.id}`}
-            prefetch={false}
             className={cn(
-              "group relative flex gap-6 overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-6 shadow-sm transition hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900",
+              "group relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-6 shadow-sm transition hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900",
               isBusy && "pointer-events-none opacity-60",
             )}
           >
-            {/* Izquierda: info */}
-            <div className="flex min-w-0 flex-1 flex-col">
-              {/* Título grande */}
-              <h2 className="mb-3 text-2xl font-black uppercase tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
-                {note.title?.trim() ? note.title : "Sin título"}
-              </h2>
+            {/* Arriba: nombre compañía */}
+            <div className="mb-4 text-center text-3xl font-black uppercase tracking-tight text-zinc-900 dark:text-white sm:text-4xl">
+              {COMPANY_NAME}
+            </div>
 
-              {/* Última Nota */}
-              <div className="mb-2 text-sm font-bold text-zinc-500 dark:text-zinc-400">
-                Última Nota
-              </div>
+            {/* Botón favorito */}
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => toggleFavorite(note)}
+              className={cn(
+                "absolute right-4 top-4 inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs font-medium backdrop-blur",
+                note.favorite
+                  ? "border-amber-200 bg-amber-50 text-amber-900"
+                  : "border-zinc-200 bg-white/70 text-zinc-700 hover:bg-white dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:bg-zinc-900",
+              )}
+              title={note.favorite ? "Quitar de favoritos" : "Marcar favorito"}
+            >
+              <Star className={cn("h-3.5 w-3.5", note.favorite && "fill-current")} />
+              Pin
+            </button>
 
-              {/* Fecha + Contenido */}
-              <div className="mb-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                <span className="font-bold">{noteDate}</span>
-                {excerpt && (
-                  <span className="ml-1">
-                    {excerpt}
-                  </span>
-                )}
-              </div>
+            {/* 2 columnas siempre */}
+            <div className="grid grid-cols-[1fr_44%] gap-6">
+              {/* Izquierda */}
+              <div className="min-w-0">
+                <div className="mb-2 text-sm font-bold text-zinc-500 dark:text-zinc-300">
+                  Última Nota
+                </div>
 
-              {/* Indicador de adjuntos */}
-              {meta?.total ? (
-                <div className="mt-auto flex items-center gap-2">
-                  <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
-                    <Paperclip className="h-4 w-4" />
-                    {meta.total}
+                <div className="rounded-2xl bg-zinc-50 px-4 py-3 text-sm text-zinc-800 shadow-inner dark:bg-zinc-950 dark:text-zinc-100">
+                  <div className="font-semibold">{noteDate}</div>
+                  <div className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+                    {excerpt ? excerpt : "(sin contenido)"}
                   </div>
                 </div>
-              ) : null}
 
-              {/* Botón favorito (esquina superior izquierda) */}
-              <button
-                type="button"
-                disabled={isBusy}
-                onClick={(e) => {
-                  e.preventDefault();
-                  toggleFavorite(note);
-                }}
-                className={cn(
-                  "absolute left-4 top-4 rounded-full p-2 transition",
-                  note.favorite
-                    ? "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
-                    : "bg-zinc-100 text-zinc-400 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-500 dark:hover:bg-zinc-700",
-                )}
-                title={note.favorite ? "Quitar de favoritos" : "Marcar favorito"}
-              >
-                <Star
-                  className={cn("h-5 w-5", note.favorite && "fill-current")}
-                />
-              </button>
-            </div>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  {meta?.total ? (
+                    <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                      <Paperclip className="h-4 w-4" />
+                      {meta.total}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">—</div>
+                  )}
 
-            {/* Derecha: portada grande */}
-            <div className="relative shrink-0">
-              <div className="h-48 w-48 overflow-hidden rounded-2xl border-2 border-zinc-200/50 bg-zinc-50 shadow-md dark:border-zinc-800/50 dark:bg-zinc-950 sm:h-56 sm:w-56">
-                {cover ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    alt="Portada"
-                    src={cover}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-sm font-medium text-zinc-400 dark:text-zinc-600">
-                    Sin imagen
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => duplicate(note)}
+                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Duplicar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => remove(note)}
+                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Eliminar
+                    </button>
                   </div>
-                )}
+                </div>
+
+                <div className="mt-3">
+                  <Link
+                    href={`/app/n/${note.id}`}
+                    prefetch={false}
+                    className="text-sm font-semibold text-zinc-900 underline-offset-4 hover:underline dark:text-white"
+                  >
+                    Abrir nota →
+                  </Link>
+                </div>
+              </div>
+
+              {/* Derecha: portada (contain) */}
+              <div className="flex items-center justify-center">
+                <div className="aspect-[3/4] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 shadow-md dark:border-zinc-800 dark:bg-zinc-950">
+                  {cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt="Portada"
+                      src={cover}
+                      className="h-full w-full object-contain"
+                      loading="lazy"
+                    />
+                  ) : isPdf && firstDoc ? (
+                    <iframe
+                      title={firstDoc.filename}
+                      src={firstDoc.url}
+                      className="h-full w-full"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center px-4 text-center text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                      Sin portada seleccionada
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </Link>
+          </div>
         );
       })}
     </div>
