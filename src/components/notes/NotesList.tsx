@@ -248,13 +248,13 @@ export default function NotesList({
                 prefetch={false}
                 className="shrink-0"
               >
-                <div className="h-28 w-40 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 sm:h-32 sm:w-48">
+                <div className="h-32 w-44 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:h-36 sm:w-56">
                   {cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       alt="Portada"
                       src={cover}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-contain bg-white"
                       loading="lazy"
                     />
                   ) : (
