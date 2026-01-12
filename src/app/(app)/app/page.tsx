@@ -189,7 +189,7 @@ export default async function NotesPage({
       />
 
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400">
           Error cargando notas: {error.message}
         </div>
       ) : (
