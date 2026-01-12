@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { useTheme } from "next-themes";
 import {
   Copy,
   FileText,
@@ -49,13 +48,6 @@ function pastelFromKey(key: string) {
   return `hsl(${hue} 70% 96%)`;
 }
 
-function pastelDarkFromKey(key: string) {
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-  const hue = h % 360;
-  return `hsl(${hue} 22% 16%)`;
-}
-
 export default function NotesList({
   notes,
   view,
@@ -66,8 +58,6 @@ export default function NotesList({
 }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
 
   const empty = notes.length === 0;
   const sorted = useMemo(() => notes, [notes]);
@@ -136,13 +126,9 @@ export default function NotesList({
         const tagKey = (
           note.tags?.[0] ?? note.template_snapshot?.name ?? ""
         ).toString();
-        const bg = tagKey
-          ? isDark
-            ? pastelDarkFromKey(tagKey)
-            : pastelFromKey(tagKey)
-          : isDark
-            ? "rgb(24 24 27)" // zinc-900
-            : "white";
+        // Nota: en modo claro usamos un pastel suave; en modo oscuro usamos fondo neutro (sin tonos rojos)
+        // y lo aplicamos con clases `dark:` para evitar parpadeos al recargar.
+        const lightBg = tagKey ? pastelFromKey(tagKey) : "white";
         const templateName =
           typeof note.template_snapshot?.name === "string"
             ? note.template_snapshot.name
@@ -156,10 +142,15 @@ export default function NotesList({
             className={cn(
               "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700",
               view === "list" && "bg-white dark:bg-zinc-900",
+              view === "grid" && "bg-[var(--note-bg)] dark:bg-zinc-900",
               view === "grid" && "mb-3 break-inside-avoid",
               isBusy && "opacity-60",
             )}
-            style={view === "grid" ? { background: bg } : undefined}
+            style={
+              view === "grid"
+                ? ({ ["--note-bg" as any]: lightBg } as React.CSSProperties)
+                : undefined
+            }
           >
             {/* Miniaturas estilo Keep (1–3) */}
             {thumbs.length ? (
