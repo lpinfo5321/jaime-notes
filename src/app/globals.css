@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tailwind v4 dark mode by class (used by next-themes) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -12,11 +15,25 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Manual dark mode (next-themes sets .dark on <html>) */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+/* If user chooses "system" theme, keep a sensible default */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.dark) {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
 }
 
 body {

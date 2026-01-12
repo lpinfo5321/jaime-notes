@@ -10,27 +10,27 @@ export default async function TemplatesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-base font-semibold tracking-tight dark:text-zinc-50">
+            <h1 className="text-base font-semibold tracking-tight">
               Plantillas
             </h1>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-zinc-600">
               Crea formularios reutilizables (campos, requeridos, orden).
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
               href="/templates/presets/returned-check"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
               title="Crea una plantilla ejemplo estilo reporte"
             >
               Plantilla ejemplo (Returned Check)
             </Link>
             <Link
               href="/templates/new"
-              className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600"
+              className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800"
             >
               Nueva plantilla
             </Link>
@@ -39,7 +39,7 @@ export default async function TemplatesPage() {
       </div>
 
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           Error cargando plantillas: {error.message}
         </div>
       ) : (
@@ -47,27 +47,27 @@ export default async function TemplatesPage() {
           {(templates ?? []).map((t) => (
             <div
               key={t.id}
-              className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+              className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
             >
-              <div className="text-sm font-semibold dark:text-zinc-50">{t.name}</div>
+              <div className="text-sm font-semibold">{t.name}</div>
               {t.description ? (
-                <div className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <div className="mt-1 line-clamp-2 text-sm text-zinc-600">
                   {t.description}
                 </div>
               ) : (
-                <div className="mt-1 text-sm text-zinc-400 dark:text-zinc-500">(sin descripción)</div>
+                <div className="mt-1 text-sm text-zinc-400">(sin descripción)</div>
               )}
 
               <div className="mt-3 flex gap-2">
                 <Link
                   href={`/templates/${t.id}`}
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
                 >
                   Editar
                 </Link>
                 <Link
                   href={`/app/from-template/${t.id}`}
-                  className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                  className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800"
                 >
                   Crear nota
                 </Link>
@@ -75,7 +75,7 @@ export default async function TemplatesPage() {
             </div>
           ))}
           {(templates ?? []).length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 sm:col-span-2 lg:col-span-3">
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600 sm:col-span-2 lg:col-span-3">
               No hay plantillas todavía. Crea la primera con{" "}
               <b>Nueva plantilla</b>.
             </div>
