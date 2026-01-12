@@ -123,12 +123,6 @@ export default function NotesList({
       {sorted.map((note) => {
         const excerpt = (note.body ?? "").trim().slice(0, 140);
         const isBusy = busyId === note.id;
-        const tagKey = (
-          note.tags?.[0] ?? note.template_snapshot?.name ?? ""
-        ).toString();
-        // Nota: en modo claro usamos un pastel suave; en modo oscuro usamos fondo neutro (sin tonos rojos)
-        // y lo aplicamos con clases `dark:` para evitar parpadeos al recargar.
-        const lightBg = tagKey ? pastelFromKey(tagKey) : "white";
         const templateName =
           typeof note.template_snapshot?.name === "string"
             ? note.template_snapshot.name
@@ -142,15 +136,10 @@ export default function NotesList({
             className={cn(
               "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700",
               view === "list" && "bg-white dark:bg-zinc-900",
-              view === "grid" && "bg-[var(--note-bg)] dark:bg-zinc-900",
+              view === "grid" && "bg-white dark:bg-zinc-900",
               view === "grid" && "mb-3 break-inside-avoid",
               isBusy && "opacity-60",
             )}
-            style={
-              view === "grid"
-                ? ({ ["--note-bg" as any]: lightBg } as React.CSSProperties)
-                : undefined
-            }
           >
             {/* Miniaturas estilo Keep (1–3) */}
             {thumbs.length ? (
