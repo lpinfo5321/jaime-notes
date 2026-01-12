@@ -34,17 +34,26 @@ type Props = {
     string,
     { total: number; images: number; docs: number; firstDocName?: string }
   >;
+  thumbUrlsByNoteId: Record<string, string[]>;
   firstDocUrlsByNoteId: Record<
     string,
     { url: string; filename: string; mime: string }
   >;
 };
 
+function pastelFromKey(key: string) {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  return `hsl(${hue} 70% 96%)`;
+}
+
 export default function NotesList({
   notes,
   view,
   coverUrls,
   attachmentMetaByNoteId,
+  thumbUrlsByNoteId,
   firstDocUrlsByNoteId,
 }: Props) {
   const router = useRouter();
@@ -107,8 +116,8 @@ export default function NotesList({
     <div
       className={cn(
         view === "grid"
-          ? "grid grid-cols-1 gap-4 md:grid-cols-2"
-          : "flex flex-col gap-3",
+          ? "columns-1 gap-3 sm:columns-2 lg:columns-3 [column-fill:_balance]"
+          : "flex flex-col gap-2",
       )}
     >
       {sorted.map((note) => {
@@ -119,153 +128,155 @@ export default function NotesList({
             ? note.template_snapshot.name
             : null;
         const meta = attachmentMetaByNoteId[String(note.id)];
+        const thumbs = thumbUrlsByNoteId[String(note.id)] ?? [];
         const firstDoc = firstDocUrlsByNoteId[String(note.id)] ?? null;
         const cover = coverUrls[note.id] ?? null;
         return (
           <div
             key={note.id}
             className={cn(
-              "group rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700",
+              "group flex gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900",
               isBusy && "opacity-60",
             )}
           >
-            <div className="flex items-stretch gap-4">
-              {/* Izquierda: info */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <Link
-                    href={`/app/n/${note.id}`}
-                    className="min-w-0 flex-1"
-                    prefetch={false}
-                  >
-                    <div className="truncate text-base font-bold tracking-tight">
-                      {note.title?.trim() ? note.title : "Sin título"}
-                    </div>
-                    {excerpt ? (
-                      <div className="mt-1 line-clamp-3 text-sm text-zinc-700/80 dark:text-zinc-200/90">
-                        {excerpt}
-                      </div>
-                    ) : (
-                      <div className="mt-1 text-sm text-zinc-500/70 dark:text-zinc-400/80">
-                        (sin contenido)
-                      </div>
-                    )}
-                  </Link>
-
+            {/* Izquierda: info */}
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/app/n/${note.id}`}
+                className="block"
+                prefetch={false}
+              >
+                <div className="mb-1 flex items-start justify-between gap-2">
+                  <h3 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+                    {note.title?.trim() ? note.title : "Sin título"}
+                  </h3>
                   <button
                     type="button"
                     disabled={isBusy}
-                    onClick={() => toggleFavorite(note)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleFavorite(note);
+                    }}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs font-medium",
+                      "shrink-0 rounded-lg p-1.5 transition",
                       note.favorite
-                        ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900"
-                        : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900",
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400",
                     )}
-                    title={
-                      note.favorite ? "Quitar de favoritos" : "Marcar favorito"
-                    }
+                    title={note.favorite ? "Quitar de favoritos" : "Marcar favorito"}
                   >
-                    <Star className="h-3.5 w-3.5" />
-                    Pin
+                    <Star
+                      className={cn(
+                        "h-5 w-5",
+                        note.favorite && "fill-current",
+                      )}
+                    />
                   </button>
                 </div>
 
-                {templateName ? (
-                  <div className="mt-2 inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-                    Plantilla: {templateName}
-                  </div>
-                ) : null}
+                {excerpt ? (
+                  <p className="line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    {excerpt}
+                  </p>
+                ) : (
+                  <p className="text-sm italic text-zinc-400 dark:text-zinc-600">
+                    Sin contenido
+                  </p>
+                )}
+              </Link>
 
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-500">
+                {templateName ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 font-medium dark:border-zinc-800 dark:bg-zinc-800/50">
+                    Plantilla: {templateName}
+                  </span>
+                ) : null}
                 {meta?.total ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
-                    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 dark:border-zinc-800 dark:bg-zinc-950">
+                  <>
+                    <span className="inline-flex items-center gap-1">
                       <Paperclip className="h-3.5 w-3.5" />
                       {meta.total}
                     </span>
                     {meta.images ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 dark:border-zinc-800 dark:bg-zinc-950">
+                      <span className="inline-flex items-center gap-1">
                         <ImageIcon className="h-3.5 w-3.5" />
                         {meta.images}
                       </span>
                     ) : null}
                     {meta.docs ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 dark:border-zinc-800 dark:bg-zinc-950">
+                      <span className="inline-flex items-center gap-1">
                         <FileText className="h-3.5 w-3.5" />
                         {meta.docs}
                       </span>
                     ) : null}
-                    {firstDoc ? (
-                      <a
-                        href={firstDoc.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex max-w-[240px] items-center gap-1 truncate rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                        title={`Abrir: ${firstDoc.filename}`}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                        {firstDoc.filename}
-                      </a>
-                    ) : null}
-                  </div>
+                  </>
                 ) : null}
-
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {formatDistanceToNow(new Date(note.updated_at), {
-                      addSuffix: true,
-                      locale: es,
-                    })}
-                  </div>
-
-                  <div className="flex gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => duplicate(note)}
-                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Duplicar
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => remove(note)}
-                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Eliminar
-                    </button>
-                  </div>
-                </div>
+                <span>·</span>
+                <span>
+                  {formatDistanceToNow(new Date(note.updated_at), {
+                    addSuffix: true,
+                    locale: es,
+                  })}
+                </span>
               </div>
 
-              {/* Derecha: portada */}
-              <Link
-                href={`/app/n/${note.id}`}
-                prefetch={false}
-                className="shrink-0"
-              >
-                <div className="h-32 w-44 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:h-36 sm:w-56">
-                  {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      alt="Portada"
-                      src={cover}
-                      className="h-full w-full object-contain bg-white"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-zinc-400 dark:text-zinc-500">
-                      Sin portada
-                    </div>
-                  )}
+              {note.tags?.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {note.tags.slice(0, 4).map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300"
+                    >
+                      #{t}
+                    </span>
+                  ))}
                 </div>
-              </Link>
+              ) : null}
+
+              <div className="mt-3 flex gap-2 opacity-0 transition group-hover:opacity-100">
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => duplicate(note)}
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Duplicar
+                </button>
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => remove(note)}
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Eliminar
+                </button>
+              </div>
             </div>
 
+            {/* Derecha: portada */}
+            <Link
+              href={`/app/n/${note.id}`}
+              prefetch={false}
+              className="shrink-0"
+            >
+              <div className="h-32 w-32 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:h-40 sm:w-40">
+                {cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt="Portada"
+                    src={cover}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs font-medium text-zinc-400 dark:text-zinc-600">
+                    Sin portada
+                  </div>
+                )}
+              </div>
+            </Link>
           </div>
         );
       })}
