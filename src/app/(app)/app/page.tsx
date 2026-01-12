@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import NotesToolbar from "@/components/notes/NotesToolbar";
 import NotesList from "@/components/notes/NotesList";
+import FeaturedNoteCard from "@/components/notes/FeaturedNoteCard";
 
 type NotesSearchParams = {
   q?: string;
@@ -21,6 +22,9 @@ export default async function NotesPage({
   const view = sp.view === "list" ? "list" : "grid";
   const fav = sp.fav === "1";
   const tag = (sp.tag ?? "").trim();
+  const companyName = (process.env.NEXT_PUBLIC_COMPANY_NAME ?? "Jaime Notes")
+    .trim()
+    .toUpperCase();
 
   let query = supabase
     .from("notes")
@@ -176,6 +180,13 @@ export default async function NotesPage({
       }),
   );
 
+  const latest = safeNotes.length ? (safeNotes[0] as any) : null;
+  const latestId = latest ? String(latest.id) : null;
+  const latestCover = latestId ? coverUrls[latestId] : null;
+  const latestThumb = latestId ? thumbUrlsByNoteId[latestId]?.[0] : null;
+  const latestDoc = latestId ? firstDocUrlsByNoteId[latestId] : null;
+  const latestMeta = latestId ? attachmentMetaByNoteId[latestId] : null;
+
   return (
     <div className="space-y-4">
       <NotesToolbar
@@ -193,14 +204,33 @@ export default async function NotesPage({
           Error cargando notas: {error.message}
         </div>
       ) : (
-        <NotesList
-          notes={safeNotes as any}
-          view={view}
-          coverUrls={coverUrls}
-          attachmentMetaByNoteId={attachmentMetaByNoteId}
-          thumbUrlsByNoteId={thumbUrlsByNoteId}
-          firstDocUrlsByNoteId={firstDocUrlsByNoteId}
-        />
+        <div className="space-y-5">
+          {view === "grid" && latest ? (
+            <FeaturedNoteCard
+              companyName={companyName}
+              note={{
+                id: String(latest.id),
+                title: String(latest.title ?? ""),
+                body: String(latest.body ?? ""),
+                tags: (latest.tags ?? []) as string[],
+                template_snapshot: latest.template_snapshot,
+                updated_at: String(latest.updated_at),
+              }}
+              coverUrl={latestCover ?? latestThumb ?? null}
+              firstDoc={latestDoc ?? null}
+              meta={latestMeta ?? null}
+            />
+          ) : null}
+
+          <NotesList
+            notes={(view === "grid" ? safeNotes.slice(1) : safeNotes) as any}
+            view={view}
+            coverUrls={coverUrls}
+            attachmentMetaByNoteId={attachmentMetaByNoteId}
+            thumbUrlsByNoteId={thumbUrlsByNoteId}
+            firstDocUrlsByNoteId={firstDocUrlsByNoteId}
+          />
+        </div>
       )}
     </div>
   );

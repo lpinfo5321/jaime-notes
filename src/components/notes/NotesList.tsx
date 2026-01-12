@@ -116,7 +116,7 @@ export default function NotesList({
     <div
       className={cn(
         view === "grid"
-          ? "columns-1 gap-3 sm:columns-2 lg:columns-3 [column-fill:_balance]"
+          ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2"
           : "flex flex-col gap-2",
       )}
     >
@@ -137,7 +137,6 @@ export default function NotesList({
               "group rounded-2xl border border-zinc-200 p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700",
               view === "list" && "bg-white dark:bg-zinc-900",
               view === "grid" && "bg-white dark:bg-zinc-900",
-              view === "grid" && "mb-3 break-inside-avoid",
               isBusy && "opacity-60",
             )}
           >
