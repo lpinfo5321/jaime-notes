@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Plus, Search, Star } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Plus, Search } from "lucide-react";
 
 type Props = {
   initial: {
     q: string;
-    fav: boolean;
   };
 };
 
@@ -19,8 +17,6 @@ export default function NotesToolbar({ initial }: Props) {
   const sp = useSearchParams();
 
   const [q, setQ] = useState(initial.q);
-
-  const fav = (sp.get("fav") ?? (initial.fav ? "1" : "0")) === "1";
 
   useEffect(() => setQ(initial.q), [initial.q]);
 
@@ -57,7 +53,7 @@ export default function NotesToolbar({ initial }: Props) {
             <h1 className="truncate text-sm font-semibold tracking-tight">
               Notas
             </h1>
-            {(fav || q.trim()) && (
+            {q.trim() && (
               <Link
                 href={hrefBase}
                 className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -68,21 +64,6 @@ export default function NotesToolbar({ initial }: Props) {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setParam("fav", fav ? undefined : "1")}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium",
-                fav
-                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800",
-              )}
-              title="Favoritos"
-            >
-              <Star className="h-4 w-4" />
-              <span className="hidden sm:inline">Favoritos</span>
-            </button>
-
             <Link
               href="/app/new"
               className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"

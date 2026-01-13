@@ -1,17 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import {
-  Copy,
-  FileText,
-  Paperclip,
-  Star,
-  Trash2,
-} from "lucide-react";
+import { FileText, Paperclip, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCompanyName } from "@/lib/companyName";
 
 export type NoteListItem = {
   id: string;
@@ -38,6 +30,48 @@ type Props = {
   >;
 };
 
+type Entry = {
+  id: string;
+  date: string; // yyyy-mm-dd
+  agent: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function isoToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function toEntryArray(values: Record<string, unknown> | null | undefined): Entry[] {
+  const raw = (values as any)?._entries;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((e: any) => ({
+      id: typeof e?.id === "string" ? e.id : "",
+      date: typeof e?.date === "string" ? e.date : "",
+      agent: typeof e?.agent === "string" ? e.agent : "",
+      note: typeof e?.note === "string" ? e.note : "",
+      createdAt:
+        typeof e?.createdAt === "string" ? e.createdAt : new Date().toISOString(),
+      updatedAt:
+        typeof e?.updatedAt === "string" ? e.updatedAt : new Date().toISOString(),
+    }))
+    .filter((e: Entry) => !!e.id && !!e.date);
+}
+
+function sortEntriesDesc(entries: Entry[]) {
+  return [...entries].sort((a, b) => {
+    if ((a.date ?? "") !== (b.date ?? "")) return (b.date ?? "").localeCompare(a.date ?? "");
+    return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
+  });
+}
+
+function formatDdMmYy(iso: string) {
+  const d = new Date((iso || isoToday()) + "T00:00:00");
+  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
 export default function NotesList({
   notes,
   coverUrls,
@@ -46,106 +80,21 @@ export default function NotesList({
 }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const { companyName } = useCompanyName();
   const [openId, setOpenId] = useState<string | null>(null);
-  const [draftDate, setDraftDate] = useState<string>("");
-  const [draftAgent, setDraftAgent] = useState<string>("");
-  const [draftNote, setDraftNote] = useState<string>("");
-  const [draftValues, setDraftValues] = useState<Record<string, unknown>>({});
 
   const empty = notes.length === 0;
   const sorted = useMemo(() => notes, [notes]);
 
-  const openNote = useMemo(() => {
+  const openCompany = useMemo(() => {
     if (!openId) return null;
     return sorted.find((n) => n.id === openId) ?? null;
   }, [openId, sorted]);
-
-  function startEdit(n: NoteListItem) {
-    const v = ((n.values ?? {}) as Record<string, unknown>) ?? {};
-    const d =
-      typeof (v as any)?._entry_date === "string"
-        ? String((v as any)._entry_date)
-        : new Date().toISOString().slice(0, 10);
-    setDraftDate(d);
-    setDraftAgent(n.title ?? "");
-    setDraftNote(n.body ?? "");
-    setDraftValues(v);
-    setOpenId(n.id);
-  }
-
-  async function saveQuickEdit() {
-    if (!openId) return;
-    setBusyId(openId);
-    try {
-      const nextValues = {
-        ...(draftValues ?? {}),
-        _entry_date: draftDate,
-      };
-      const res = await fetch(`/api/notes/${openId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: draftAgent,
-          body: draftNote,
-          values: nextValues,
-        }),
-      });
-      if (!res.ok) throw new Error("No se pudo guardar");
-      setOpenId(null);
-      router.refresh();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Error guardando");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function toggleFavorite(note: NoteListItem) {
-    setBusyId(note.id);
-    try {
-      await fetch(`/api/notes/${note.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ favorite: !note.favorite }),
-      });
-      router.refresh();
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function duplicate(note: NoteListItem) {
-    setBusyId(note.id);
-    try {
-      const res = await fetch(`/api/notes/${note.id}/duplicate`, {
-        method: "POST",
-      });
-      if (!res.ok) return;
-      const json = (await res.json()) as { id: string };
-      router.push(`/app/n/${json.id}`);
-      router.refresh();
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function remove(note: NoteListItem) {
-    if (!confirm("¿Eliminar esta nota?")) return;
-    setBusyId(note.id);
-    try {
-      await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
-      router.refresh();
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   if (empty) {
     return (
       <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
         <p className="text-sm text-zinc-600 dark:text-zinc-300">
-          No hay notas todavía. Crea la primera con <b>Nueva nota</b>.
+          No hay compañías todavía. Crea la primera con <b>Nueva</b>.
         </p>
       </div>
     );
@@ -154,151 +103,414 @@ export default function NotesList({
   return (
     <div className="mx-auto w-full max-w-7xl">
       <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
-      {sorted.map((note) => {
-        const excerpt = (note.body ?? "")
-          .trim()
-          .replace(/\s+/g, " ")
-          .slice(0, 140);
-        const isBusy = busyId === note.id;
-        const meta = attachmentMetaByNoteId[String(note.id)];
-        const firstDoc = firstDocUrlsByNoteId[String(note.id)] ?? null;
-        const cover = coverUrls[note.id] ?? null;
-        const v = ((note.values ?? {}) as any) ?? {};
-        const dateRaw =
-          typeof v?._entry_date === "string" ? String(v._entry_date) : null;
-        const dateObj = dateRaw ? new Date(dateRaw + "T00:00:00") : new Date(note.updated_at);
-        const noteDate = dateObj.toLocaleDateString("es-ES", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "2-digit",
-        });
-
-        const isPdf = !!firstDoc && String(firstDoc.mime ?? "").includes("pdf");
-
-        return (
-          <div
+        {sorted.map((note) => (
+          <CompanyCard
             key={note.id}
-            className={cn(
-              "group relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-4 shadow-sm transition hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900 sm:p-5",
-              isBusy && "pointer-events-none opacity-60",
-            )}
-          >
-            {/* Arriba: nombre compañía */}
-            <div
-              className="mb-3 truncate px-10 text-center text-xl font-black uppercase tracking-tight text-zinc-900 dark:text-white sm:mb-4 sm:px-12 sm:text-2xl md:text-3xl"
-              title={companyName}
-            >
-              {companyName}
-            </div>
-
-            {/* Botón favorito */}
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => toggleFavorite(note)}
-              className={cn(
-                "absolute right-4 top-4 inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs font-medium backdrop-blur",
-                note.favorite
-                  ? "border-amber-200 bg-amber-50 text-amber-900"
-                  : "border-zinc-200 bg-white/70 text-zinc-700 hover:bg-white dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:bg-zinc-900",
-              )}
-              title={note.favorite ? "Quitar de favoritos" : "Marcar favorito"}
-            >
-              <Star className={cn("h-3.5 w-3.5", note.favorite && "fill-current")} />
-              Pin
-            </button>
-
-            {/* 2 columnas siempre */}
-            <div className="grid grid-cols-[minmax(0,1fr)_160px] gap-3 sm:grid-cols-[minmax(0,1fr)_44%] sm:gap-6">
-              {/* Izquierda */}
-              <div className="min-w-0">
-                <div className="mb-2 text-xs font-bold text-zinc-500 dark:text-zinc-300 sm:text-sm">
-                  Última Nota
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => startEdit(note)}
-                  className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 dark:bg-zinc-950 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-900 sm:px-4 sm:py-3 sm:text-sm"
-                  title="Toca para editar"
-                >
-                  <div className="font-semibold">{noteDate}</div>
-                  <div className="mt-1 text-xs leading-snug text-zinc-700 dark:text-zinc-200 sm:text-sm">
-                    {excerpt ? excerpt : "(sin contenido)"}
-                  </div>
-                </button>
-
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  {meta?.total ? (
-                    <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 sm:px-3 sm:py-1.5">
-                      <Paperclip className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      {meta.total}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">—</div>
-                  )}
-
-                  <div className="flex flex-wrap justify-end gap-1 sm:gap-2">
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => remove(note)}
-                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Eliminar</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Derecha: portada (contain) */}
-              <div className="flex items-center justify-center">
-                <div className="aspect-[3/4] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 shadow-md dark:border-zinc-800 dark:bg-zinc-950">
-                  {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      alt="Portada"
-                      src={cover}
-                      className="h-full w-full object-contain"
-                      loading="lazy"
-                    />
-                  ) : isPdf && firstDoc ? (
-                    <iframe
-                      title={firstDoc.filename}
-                      src={firstDoc.url}
-                      className="h-full w-full"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center px-4 text-center text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                      Sin portada seleccionada
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+            note={note}
+            coverUrl={coverUrls[note.id] ?? null}
+            meta={attachmentMetaByNoteId[String(note.id)] ?? null}
+            firstDoc={firstDocUrlsByNoteId[String(note.id)] ?? null}
+            busy={busyId === note.id}
+            setBusy={(b) => setBusyId(b ? note.id : null)}
+            onOpen={() => setOpenId(note.id)}
+            onRefresh={() => router.refresh()}
+          />
+        ))}
       </div>
 
-      {openNote ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => setOpenId(null)}
-        >
-          <div
-            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
-            onClick={(e) => e.stopPropagation()}
+      {openCompany ? (
+        <CompanyModal
+          note={openCompany}
+          coverUrl={coverUrls[openCompany.id] ?? null}
+          meta={attachmentMetaByNoteId[String(openCompany.id)] ?? null}
+          firstDoc={firstDocUrlsByNoteId[String(openCompany.id)] ?? null}
+          onClose={() => setOpenId(null)}
+          onBusy={(b) => setBusyId(b ? openCompany.id : null)}
+          onRefresh={() => router.refresh()}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CompanyCard({
+  note,
+  coverUrl,
+  meta,
+  firstDoc,
+  busy,
+  setBusy,
+  onOpen,
+  onRefresh,
+}: {
+  note: NoteListItem;
+  coverUrl: string | null;
+  meta: { total: number; images: number; docs: number; firstDocName?: string } | null;
+  firstDoc: { url: string; filename: string; mime: string } | null;
+  busy: boolean;
+  setBusy: (busy: boolean) => void;
+  onOpen: () => void;
+  onRefresh: () => void;
+}) {
+  const [companyName, setCompanyName] = useState(note.title ?? "");
+  const lastSavedNameRef = useRef(companyName);
+
+  useEffect(() => {
+    setCompanyName(note.title ?? "");
+    lastSavedNameRef.current = note.title ?? "";
+  }, [note.id, note.title]);
+
+  useEffect(() => {
+    const next = (companyName ?? "").trim();
+    const prev = (lastSavedNameRef.current ?? "").trim();
+    if (next === prev) return;
+    const t = window.setTimeout(async () => {
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/notes/${note.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: companyName }),
+        });
+        if (res.ok) {
+          lastSavedNameRef.current = companyName;
+          onRefresh();
+        }
+      } finally {
+        setBusy(false);
+      }
+    }, 450);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyName]);
+
+  const entries = sortEntriesDesc(toEntryArray(note.values));
+  const latest = entries[0] ?? null;
+  const latestDate = latest?.date ?? isoToday();
+  const latestText = (latest?.note ?? note.body ?? "").trim();
+  const excerpt = latestText.replace(/\s+/g, " ").slice(0, 140);
+
+  const isPdf = !!firstDoc && String(firstDoc.mime ?? "").includes("pdf");
+
+  return (
+    <div
+      className={cn(
+        "group relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-4 shadow-sm transition hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900 sm:p-5",
+        busy && "pointer-events-none opacity-60",
+      )}
+    >
+      {/* Nombre de la compañía (editable) */}
+      <input
+        value={companyName}
+        onChange={(e) => setCompanyName(e.target.value)}
+        placeholder="Nombre de la compañía…"
+        className="mb-3 w-full truncate rounded-2xl border border-transparent bg-transparent px-3 text-center text-lg font-black uppercase tracking-tight text-zinc-900 outline-none ring-zinc-300 focus:ring-2 dark:text-white dark:ring-zinc-700 sm:mb-4 sm:text-xl md:text-2xl"
+      />
+
+      <div className="grid grid-cols-[minmax(0,1fr)_160px] gap-3 sm:grid-cols-[minmax(0,1fr)_44%] sm:gap-6">
+        {/* Última Nota (abre modal) */}
+        <div className="min-w-0">
+          <div className="mb-2 text-xs font-bold text-zinc-500 dark:text-zinc-300 sm:text-sm">
+            Última Nota
+          </div>
+
+          <button
+            type="button"
+            onClick={onOpen}
+            className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 dark:bg-zinc-950 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-900 sm:px-4 sm:py-3 sm:text-sm"
           >
-            <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-              <div className="text-sm font-semibold">Editar nota</div>
-              <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                Orden: Fecha → Agente → Nota
+            <div className="font-semibold">{formatDdMmYy(latestDate)}</div>
+            <div className="mt-1 text-xs leading-snug text-zinc-700 dark:text-zinc-200 sm:text-sm">
+              {excerpt ? excerpt : "(sin contenido)"}
+            </div>
+          </button>
+
+          <div className="mt-3 flex items-center justify-between gap-2">
+            {meta?.total ? (
+              <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 sm:px-3 sm:py-1.5">
+                <Paperclip className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                {meta.total}
               </div>
+            ) : (
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">—</div>
+            )}
+          </div>
+        </div>
+
+        {/* Portada (contain) */}
+        <div className="flex items-center justify-center">
+          <div className="aspect-[3/4] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 shadow-md dark:border-zinc-800 dark:bg-zinc-950">
+            {coverUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img alt="Portada" src={coverUrl} className="h-full w-full object-contain" />
+            ) : isPdf && firstDoc ? (
+              <iframe title={firstDoc.filename} src={firstDoc.url} className="h-full w-full" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center px-4 text-center text-xs font-medium text-zinc-500 dark:text-zinc-400 sm:text-sm">
+                Sin portada
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompanyModal({
+  note,
+  coverUrl,
+  meta,
+  firstDoc,
+  onClose,
+  onBusy,
+  onRefresh,
+}: {
+  note: NoteListItem;
+  coverUrl: string | null;
+  meta: { total: number; images: number; docs: number; firstDocName?: string } | null;
+  firstDoc: { url: string; filename: string; mime: string } | null;
+  onClose: () => void;
+  onBusy: (busy: boolean) => void;
+  onRefresh: () => void;
+}) {
+  const [companyName, setCompanyName] = useState(note.title ?? "");
+  const [entries, setEntries] = useState<Entry[]>(() => sortEntriesDesc(toEntryArray(note.values)));
+  const [selectedId, setSelectedId] = useState<string | null>(entries[0]?.id ?? null);
+
+  const selected = entries.find((e) => e.id === selectedId) ?? null;
+  const [draftDate, setDraftDate] = useState<string>(selected?.date ?? isoToday());
+  const [draftAgent, setDraftAgent] = useState<string>(selected?.agent ?? "");
+  const [draftNote, setDraftNote] = useState<string>(selected?.note ?? "");
+
+  useEffect(() => {
+    setCompanyName(note.title ?? "");
+    const nextEntries = sortEntriesDesc(toEntryArray(note.values));
+    setEntries(nextEntries);
+    setSelectedId(nextEntries[0]?.id ?? null);
+    setDraftDate(nextEntries[0]?.date ?? isoToday());
+    setDraftAgent(nextEntries[0]?.agent ?? "");
+    setDraftNote(nextEntries[0]?.note ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.id]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setDraftDate(selected.date ?? isoToday());
+    setDraftAgent(selected.agent ?? "");
+    setDraftNote(selected.note ?? "");
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function startNew() {
+    setSelectedId(null);
+    setDraftDate(isoToday());
+    setDraftAgent("");
+    setDraftNote("");
+  }
+
+  async function saveCompanyName() {
+    onBusy(true);
+    try {
+      await fetch(`/api/notes/${note.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: companyName }),
+      });
+      onRefresh();
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  async function saveEntry() {
+    const date = (draftDate || isoToday()).slice(0, 10);
+    const agent = (draftAgent ?? "").trim();
+    const noteText = (draftNote ?? "").trim();
+    const now = new Date().toISOString();
+    const id = selectedId ?? (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
+
+    const nextEntry: Entry = {
+      id,
+      date,
+      agent,
+      note: noteText,
+      createdAt: selected?.createdAt ?? now,
+      updatedAt: now,
+    };
+
+    const nextEntries = sortEntriesDesc([...entries.filter((e) => e.id !== id), nextEntry]);
+    const nextValues = {
+      ...(((note.values ?? {}) as Record<string, unknown>) ?? {}),
+      _entries: nextEntries,
+    } as Record<string, unknown>;
+
+    const latest = nextEntries[0] ?? null;
+    const nextBody = latest ? `${latest.agent ? latest.agent + " - " : ""}${latest.note}` : "";
+
+    onBusy(true);
+    try {
+      const res = await fetch(`/api/notes/${note.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: companyName, body: nextBody, values: nextValues }),
+      });
+      if (!res.ok) throw new Error("No se pudo guardar");
+      setEntries(nextEntries);
+      setSelectedId(id);
+      onRefresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error guardando");
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  async function deleteEntry(entryId: string) {
+    const ok = confirm("¿Eliminar esta nota? (Sí/No)");
+    if (!ok) return;
+    const nextEntries = entries.filter((e) => e.id !== entryId);
+    const nextValues = {
+      ...(((note.values ?? {}) as Record<string, unknown>) ?? {}),
+      _entries: nextEntries,
+    } as Record<string, unknown>;
+    const latest = nextEntries[0] ?? null;
+    const nextBody = latest ? `${latest.agent ? latest.agent + " - " : ""}${latest.note}` : "";
+
+    onBusy(true);
+    try {
+      const res = await fetch(`/api/notes/${note.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: nextBody, values: nextValues }),
+      });
+      if (!res.ok) throw new Error("No se pudo borrar");
+      const sortedNext = sortEntriesDesc(nextEntries);
+      setEntries(sortedNext);
+      setSelectedId(sortedNext[0]?.id ?? null);
+      onRefresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error borrando");
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  async function deleteCompany() {
+    const ok = confirm("¿Eliminar esta compañía completa? (Sí/No)");
+    if (!ok) return;
+    onBusy(true);
+    try {
+      const res = await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("No se pudo eliminar");
+      onClose();
+      onRefresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error eliminando");
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  const isPdf = !!firstDoc && String(firstDoc.mime ?? "").includes("pdf");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+              Compañía
+            </div>
+            <input
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              onBlur={saveCompanyName}
+              className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
+              placeholder="Nombre de la compañía…"
+            />
+          </div>
+          <button
+            type="button"
+            className="ml-3 inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+            Cerrar
+          </button>
+        </div>
+
+        <div className="grid gap-4 p-4 md:grid-cols-[320px_1fr]">
+          {/* Lista de notas */}
+          <div className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-sm font-semibold">Todas las notas</div>
+              <button
+                type="button"
+                onClick={startNew}
+                className="rounded-xl bg-zinc-900 px-3 py-2 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              >
+                + Nueva
+              </button>
             </div>
 
-            <div className="space-y-3 p-4">
+            <div className="max-h-[55dvh] space-y-2 overflow-auto pr-1">
+              {entries.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
+                  Aún no hay notas. Crea la primera con “Nueva”.
+                </div>
+              ) : (
+                entries.map((e) => {
+                  const active = e.id === selectedId;
+                  const small = (e.note ?? "").replace(/\s+/g, " ").slice(0, 60);
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => setSelectedId(e.id)}
+                      className={cn(
+                        "w-full rounded-xl border px-3 py-2 text-left text-sm",
+                        active
+                          ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900"
+                          : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold opacity-90">
+                            {formatDdMmYy(e.date)}
+                          </div>
+                          <div className="mt-0.5 truncate text-xs opacity-80">
+                            {e.agent ? e.agent : "—"}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            deleteEntry(e.id);
+                          }}
+                          title="Borrar"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="mt-1 text-xs opacity-80">{small || "(sin texto)"}</div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Editor */}
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="mb-3 text-sm font-semibold">{selectedId ? "Editar nota" : "Nueva nota"}</div>
+
+            <div className="grid gap-3 md:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-200">
                   Fecha
@@ -307,7 +519,7 @@ export default function NotesList({
                   type="date"
                   value={draftDate}
                   onChange={(e) => setDraftDate(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-zinc-700"
                 />
               </label>
 
@@ -319,63 +531,77 @@ export default function NotesList({
                   value={draftAgent}
                   onChange={(e) => setDraftAgent(e.target.value)}
                   placeholder="Nombre del agente…"
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-200">
-                  Nota
-                </span>
-                <textarea
-                  value={draftNote}
-                  onChange={(e) => setDraftNote(e.target.value)}
-                  placeholder="Escribe la nota…"
-                  className="min-h-[140px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-zinc-700"
                 />
               </label>
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
+            <label className="mt-3 block">
+              <span className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                Nota
+              </span>
+              <textarea
+                value={draftNote}
+                onChange={(e) => setDraftNote(e.target.value)}
+                placeholder="Escribe la nota…"
+                className="min-h-[180px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-zinc-700"
+              />
+            </label>
+
+            {/* Controles abajo */}
+            <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
+                onClick={deleteCompany}
                 className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/40"
-                onClick={async () => {
-                  if (!openNote) return;
-                  if (!confirm("¿Eliminar esta nota?")) return;
-                  setBusyId(openNote.id);
-                  try {
-                    await fetch(`/api/notes/${openNote.id}`, { method: "DELETE" });
-                    setOpenId(null);
-                    router.refresh();
-                  } finally {
-                    setBusyId(null);
-                  }
-                }}
               >
-                Eliminar
+                Eliminar compañía
               </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOpenId(null)}
-                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                >
-                  Cerrar
-                </button>
-                <button
-                  type="button"
-                  onClick={saveQuickEdit}
-                  className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-                >
-                  Guardar
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={saveEntry}
+                className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              >
+                Guardar
+              </button>
             </div>
+
+            {/* Preview opcional */}
+            {(coverUrl || (isPdf && firstDoc) || meta?.total) ? (
+              <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                  Portada / Adjuntos
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="aspect-[3/4] overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
+                    {coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={coverUrl} alt="Portada" className="h-full w-full object-contain" />
+                    ) : isPdf && firstDoc ? (
+                      <iframe title={firstDoc.filename} src={firstDoc.url} className="h-full w-full" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
+                        Sin portada
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-xs text-zinc-600 dark:text-zinc-300">
+                    {meta?.total ? (
+                      <div className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
+                        <Paperclip className="h-4 w-4" /> {meta.total} adjuntos
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+                        No hay adjuntos.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }

@@ -30,12 +30,6 @@ export default function NoteEditor({ note }: { note: Note }) {
   const [values, setValues] = useState<Record<string, unknown>>(
     (note.values ?? {}) as Record<string, unknown>,
   );
-  const [entryDate, setEntryDate] = useState<string>(() => {
-    const v = (note.values ?? {}) as any;
-    return typeof v?._entry_date === "string"
-      ? String(v._entry_date)
-      : new Date().toISOString().slice(0, 10);
-  });
 
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const lastSavedRef = useRef<number>(Date.now());
@@ -58,14 +52,7 @@ export default function NoteEditor({ note }: { note: Note }) {
     setBody(note.body ?? "");
     setFavorite(!!note.favorite);
     setTags(note.tags ?? []);
-    const nextValues = (note.values ?? {}) as Record<string, unknown>;
-    setValues(nextValues);
-    const v: any = nextValues ?? {};
-    setEntryDate(
-      typeof v?._entry_date === "string"
-        ? String(v._entry_date)
-        : new Date().toISOString().slice(0, 10),
-    );
+    setValues((note.values ?? {}) as Record<string, unknown>);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id]);
 
@@ -110,46 +97,19 @@ export default function NoteEditor({ note }: { note: Note }) {
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="grid gap-2 md:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                Fecha
-              </span>
-              <input
-                type="date"
-                value={entryDate}
-                onChange={(e) => {
-                  const d = e.target.value;
-                  setEntryDate(d);
-                  setValues((prev) => ({ ...(prev ?? {}), _entry_date: d }));
-                }}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                Agente
-              </span>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Nombre del agente…"
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
-              />
-            </label>
-          </div>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Título…"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
+          />
           {note.template_snapshot ? null : (
-            <label className="mt-3 block">
-              <span className="mb-1 block text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                Nota
-              </span>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Escribe la nota…"
-                className="min-h-[220px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
-              />
-            </label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Escribe aquí…"
+              className="mt-3 min-h-[220px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
+            />
           )}
         </div>
 

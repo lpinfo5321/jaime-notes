@@ -3,8 +3,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { tryGetPublicEnv } from "@/lib/env";
 import ThemeToggle from "@/components/ThemeToggle";
-import CompanyNameButton from "@/components/CompanyNameButton";
-import { APP_NAME } from "@/lib/config";
 
 export default async function AppLayout({
   children,
@@ -25,12 +23,11 @@ export default async function AppLayout({
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <Link href="/app" className="text-sm font-semibold tracking-tight">
-              {APP_NAME}
+              Return Checks
             </Link>
           </div>
 
           <div className="flex items-center gap-2">
-            <CompanyNameButton className="hidden sm:inline-flex" />
             <ThemeToggle />
             <form action="/auth/logout" method="post">
               <button className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
