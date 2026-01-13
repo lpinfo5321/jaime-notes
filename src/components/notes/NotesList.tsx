@@ -130,6 +130,9 @@ export default function NotesList({
   const [confirmDel, setConfirmDel] = useState<{ id: string; title: string } | null>(
     null,
   );
+  const [reportForCompany, setReportForCompany] = useState<{ id: string; title: string } | null>(
+    null,
+  );
 
   const [items, setItems] = useState<NoteListItem[]>(notes);
 
@@ -285,6 +288,12 @@ export default function NotesList({
             setBusy={(b) => setBusyId(b ? note.id : null)}
             onOpenList={() => setOpen({ id: note.id, mode: "list" })}
             onOpenNew={() => setOpen({ id: note.id, mode: "new" })}
+            onOpenReport={() =>
+              setReportForCompany({
+                id: note.id,
+                title: (note.title ?? "").trim() || "Sin nombre",
+              })
+            }
             onPatch={(patch) => patchCompany(note.id, patch)}
             onLocalWrite={markLocalWrite}
             onDelete={() => askDeleteCompany(note.id)}
@@ -329,6 +338,13 @@ export default function NotesList({
           onConfirm={() => doDeleteCompany(confirmDel.id)}
         />
       ) : null}
+
+      {reportForCompany ? (
+        <ReportModal
+          companyTitle={reportForCompany.title}
+          onClose={() => setReportForCompany(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -342,6 +358,7 @@ function CompanyCard({
   setBusy,
   onOpenList,
   onOpenNew,
+  onOpenReport,
   onPatch,
   onLocalWrite,
   onDelete,
@@ -354,6 +371,7 @@ function CompanyCard({
   setBusy: (busy: boolean) => void;
   onOpenList: () => void;
   onOpenNew: () => void;
+  onOpenReport: () => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
   onLocalWrite: () => void;
   onDelete: () => void;
@@ -419,8 +437,6 @@ function CompanyCard({
   const latestText = (latest?.note ?? note.body ?? "").trim();
   const excerpt = latestText.replace(/\s+/g, " ").slice(0, 140);
 
-  const isPdf = !!firstDoc && String(firstDoc.mime ?? "").includes("pdf");
-
   return (
     <div
       className={cn(
@@ -482,18 +498,29 @@ function CompanyCard({
 
         {/* Portada (contain) */}
         <div className="flex items-center justify-center">
-          <div className="aspect-[3/4] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 shadow-md dark:border-zinc-800 dark:bg-zinc-950">
-            {coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img alt="Portada" src={coverUrl} className="h-full w-full object-contain" />
-            ) : isPdf && firstDoc ? (
-              <iframe title={firstDoc.filename} src={firstDoc.url} className="h-full w-full" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center px-4 text-center text-xs font-medium text-zinc-500 dark:text-zinc-400 sm:text-sm">
-                Sin portada
+          <button
+            type="button"
+            onClick={onOpenReport}
+            className="group/report aspect-[3/4] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-left shadow-md transition hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900 dark:focus:ring-zinc-700"
+            title="Abrir reporte (editar y ver imágenes)"
+          >
+            <div className="flex h-full w-full flex-col justify-between py-4">
+              <div>
+                <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                  Reporte
+                </div>
+                <div className="mt-1 text-lg font-black uppercase tracking-tight text-zinc-900 dark:text-white">
+                  Return Checks
+                </div>
+                <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                  Toca para abrir y editar
+                </div>
               </div>
-            )}
-          </div>
+              <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+                Abrir reporte →
+              </div>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -506,6 +533,74 @@ function CompanyCard({
           <Trash2 className="h-4 w-4" />
           Eliminar
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ReportModal({
+  companyTitle,
+  onClose,
+}: {
+  companyTitle: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="h-[92svh] w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-3 dark:border-zinc-800 sm:px-4">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+              Reporte
+            </div>
+            <div className="mt-0.5 truncate text-sm font-semibold">{companyTitle}</div>
+          </div>
+          <div className="ml-3 flex items-center gap-2">
+            <a
+              href="/appreporte/index.html"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={(e) => e.stopPropagation()}
+              title="Abrir en una pestaña nueva"
+            >
+              Abrir en pestaña
+            </a>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+              Cerrar
+            </button>
+          </div>
+        </div>
+
+        <div className="h-[calc(92svh-60px)] bg-zinc-100 dark:bg-zinc-950">
+          <iframe
+            title="Reporte Return Checks"
+            src="/appreporte/index.html"
+            className="h-full w-full"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"
+          />
+        </div>
       </div>
     </div>
   );
