@@ -78,6 +78,39 @@ function formatUsMmDdYy(iso: string) {
   });
 }
 
+function fitTextToSingleLineInput(
+  el: HTMLInputElement | null,
+  opts?: { minPx?: number },
+) {
+  if (!el) return;
+  const minPx = opts?.minPx ?? 12;
+
+  // Reset any previous override so we start from CSS font-size (responsive).
+  el.style.fontSize = "";
+
+  const maxPx = Number.parseFloat(window.getComputedStyle(el).fontSize || "0") || 16;
+  let lo = minPx;
+  let hi = Math.max(minPx, Math.floor(maxPx));
+
+  // If it already fits at max size, keep CSS default.
+  if (el.scrollWidth <= el.clientWidth) return;
+
+  // Binary search smallest font that fits.
+  // We want the biggest size that fits, so we search and keep best.
+  let best = lo;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    el.style.fontSize = `${mid}px`;
+    if (el.scrollWidth <= el.clientWidth) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  el.style.fontSize = `${best}px`;
+}
+
 export default function NotesList({
   notes,
   coverUrls,
@@ -327,11 +360,28 @@ function CompanyCard({
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const lastSavedNameRef = useRef(companyName);
+  const companyNameInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setCompanyName(note.title ?? "");
     lastSavedNameRef.current = note.title ?? "";
   }, [note.id, note.title]);
+
+  // Auto-fit company name so it stays on a single line (no ellipsis).
+  useEffect(() => {
+    const el = companyNameInputRef.current;
+    if (!el) return;
+    const raf = window.requestAnimationFrame(() =>
+      fitTextToSingleLineInput(el, { minPx: 12 }),
+    );
+    return () => window.cancelAnimationFrame(raf);
+  }, [companyName]);
+
+  useEffect(() => {
+    const onResize = () => fitTextToSingleLineInput(companyNameInputRef.current, { minPx: 12 });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     const next = (companyName ?? "").trim();
@@ -380,10 +430,11 @@ function CompanyCard({
     >
       {/* Nombre de la compañía (editable) */}
       <input
+        ref={companyNameInputRef}
         value={companyName}
         onChange={(e) => setCompanyName(e.target.value)}
         placeholder="Nombre de la compañía…"
-        className="mb-3 w-full truncate rounded-2xl border border-transparent bg-transparent px-3 text-center text-lg font-black uppercase tracking-tight text-zinc-900 outline-none ring-zinc-300 focus:ring-2 dark:text-white dark:ring-zinc-700 sm:mb-4 sm:text-xl md:text-2xl"
+        className="mb-3 w-full rounded-2xl border border-transparent bg-transparent px-3 text-center text-lg font-black uppercase tracking-tight text-zinc-900 outline-none ring-zinc-300 focus:ring-2 dark:text-white dark:ring-zinc-700 sm:mb-4 sm:text-xl md:text-2xl"
       />
 
       <div className="grid grid-cols-[minmax(0,1fr)_160px] gap-3 sm:grid-cols-[minmax(0,1fr)_44%] sm:gap-6">
@@ -639,6 +690,7 @@ function CompanyModal({
   onLocalWrite: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
+  const companyNameInputRef = useRef<HTMLInputElement | null>(null);
   const [entries, setEntries] = useState<Entry[]>(() => sortEntriesDesc(toEntryArray(note.values)));
   const [selectedId, setSelectedId] = useState<string | null>(entries[0]?.id ?? null);
 
@@ -657,6 +709,22 @@ function CompanyModal({
     setDraftNote(nextEntries[0]?.note ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id]);
+
+  // Auto-fit company name in the modal header too.
+  useEffect(() => {
+    const el = companyNameInputRef.current;
+    if (!el) return;
+    const raf = window.requestAnimationFrame(() =>
+      fitTextToSingleLineInput(el, { minPx: 12 }),
+    );
+    return () => window.cancelAnimationFrame(raf);
+  }, [companyName]);
+
+  useEffect(() => {
+    const onResize = () => fitTextToSingleLineInput(companyNameInputRef.current, { minPx: 12 });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     if (!selected) return;
@@ -820,6 +888,7 @@ function CompanyModal({
               Compañía
             </div>
             <input
+              ref={companyNameInputRef}
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               onBlur={saveCompanyName}
