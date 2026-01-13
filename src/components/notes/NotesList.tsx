@@ -130,9 +130,12 @@ export default function NotesList({
   const [confirmDel, setConfirmDel] = useState<{ id: string; title: string } | null>(
     null,
   );
-  const [reportForCompany, setReportForCompany] = useState<{ id: string; title: string } | null>(
-    null,
-  );
+  const [reportForCompany, setReportForCompany] = useState<{
+    id: string;
+    title: string;
+    values: Record<string, unknown> | null;
+    coverUrl: string | null;
+  } | null>(null);
 
   const [items, setItems] = useState<NoteListItem[]>(notes);
 
@@ -292,6 +295,8 @@ export default function NotesList({
               setReportForCompany({
                 id: note.id,
                 title: (note.title ?? "").trim() || "Sin nombre",
+                values: (note.values ?? null) as Record<string, unknown> | null,
+                coverUrl: coverUrls[note.id] ?? null,
               })
             }
             onPatch={(patch) => patchCompany(note.id, patch)}
@@ -341,7 +346,9 @@ export default function NotesList({
 
       {reportForCompany ? (
         <ReportModal
+          noteId={reportForCompany.id}
           companyTitle={reportForCompany.title}
+          initialReport={(reportForCompany.values as any)?._report ?? null}
           onClose={() => setReportForCompany(null)}
         />
       ) : null}
@@ -498,29 +505,51 @@ function CompanyCard({
 
         {/* Portada (contain) */}
         <div className="flex items-center justify-center">
-          <button
-            type="button"
-            onClick={onOpenReport}
-            className="group/report aspect-[3/4] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-left shadow-md transition hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900 dark:focus:ring-zinc-700"
-            title="Abrir reporte (editar y ver imágenes)"
-          >
-            <div className="flex h-full w-full flex-col justify-between py-4">
-              <div>
-                <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                  Reporte
-                </div>
-                <div className="mt-1 text-lg font-black uppercase tracking-tight text-zinc-900 dark:text-white">
-                  Return Checks
-                </div>
-                <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                  Toca para abrir y editar
+          {coverUrl ? (
+            <button
+              type="button"
+              onClick={onOpenReport}
+              className="group relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 shadow-md transition hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:ring-zinc-700"
+              title="Abrir reporte (editar y ver imágenes)"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt="Portada"
+                src={coverUrl}
+                className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-3">
+                <div className="text-[11px] font-semibold text-white/90">Reporte</div>
+                <div className="mt-1 inline-flex items-center rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white backdrop-blur">
+                  Abrir Return Checks →
                 </div>
               </div>
-              <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-                Abrir reporte →
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenReport}
+              className="group/report aspect-[3/4] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-left shadow-md transition hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900 dark:focus:ring-zinc-700"
+              title="Abrir reporte (editar y ver imágenes)"
+            >
+              <div className="flex h-full w-full flex-col justify-between py-4">
+                <div>
+                  <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                    Reporte
+                  </div>
+                  <div className="mt-1 text-lg font-black uppercase tracking-tight text-zinc-900 dark:text-white">
+                    Return Checks
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                    Toca para abrir y editar
+                  </div>
+                </div>
+                <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+                  Abrir reporte →
+                </div>
               </div>
-            </div>
-          </button>
+            </button>
+          )}
         </div>
       </div>
 
@@ -539,12 +568,19 @@ function CompanyCard({
 }
 
 function ReportModal({
+  noteId,
   companyTitle,
+  initialReport,
   onClose,
 }: {
+  noteId: string;
   companyTitle: string;
+  initialReport: any;
   onClose: () => void;
 }) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -552,6 +588,49 @@ function ReportModal({
       document.body.style.overflow = prev;
     };
   }, []);
+
+  useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      const data = ev?.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type === "rc:print") {
+        // parent-driven print (works better on mobile)
+        const w = iframeRef.current?.contentWindow;
+        try {
+          w?.focus();
+          w?.print();
+        } catch {}
+      }
+      if (data.type === "rc:save" && data.noteId === noteId) {
+        // Throttle saves to avoid spamming DB while typing
+        if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = window.setTimeout(async () => {
+          try {
+            await fetch(`/api/notes/${noteId}/report`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ payload: data.payload }),
+            });
+          } catch {
+            // ignore
+          }
+        }, 450);
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
+  }, [noteId]);
+
+  function printFromParent() {
+    const w = iframeRef.current?.contentWindow;
+    try {
+      w?.focus();
+      w?.print();
+    } catch {}
+  }
 
   return (
     <div
@@ -572,8 +651,19 @@ function ReportModal({
             <div className="mt-0.5 truncate text-sm font-semibold">{companyTitle}</div>
           </div>
           <div className="ml-3 flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={(e) => {
+                e.stopPropagation();
+                printFromParent();
+              }}
+              title="Imprimir reporte"
+            >
+              Imprimir
+            </button>
             <a
-              href="/appreporte/index.html"
+              href={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -596,9 +686,18 @@ function ReportModal({
         <div className="h-[calc(92svh-60px)] bg-zinc-100 dark:bg-zinc-950">
           <iframe
             title="Reporte Return Checks"
-            src="/appreporte/index.html"
+            ref={iframeRef}
+            src={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}`}
             className="h-full w-full"
             sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"
+            onLoad={() => {
+              try {
+                iframeRef.current?.contentWindow?.postMessage(
+                  { type: "rc:init", noteId, initialReport },
+                  "*",
+                );
+              } catch {}
+            }}
           />
         </div>
       </div>

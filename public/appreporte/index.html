@@ -528,6 +528,28 @@
       .topbarRight{width:auto}
     }
 
+    /* Mobile fine-tuning */
+    @media (max-width: 520px){
+      :root{
+        --paper-pad-x: 16px;
+        --paper-pad-y: 16px;
+      }
+      .layout{padding: 10px; gap: 10px;}
+      .topbar{padding: 10px 10px;}
+      .brandTitle b{font-size: 13px}
+      .brandTitle span{font-size: 11px}
+      .btn{padding: 9px 10px; border-radius: 12px;}
+      .search{padding: 9px 10px; border-radius: 12px;}
+      .search input{font-size: 13px;}
+      .paperTop{grid-template-columns: 1fr; gap: 12px;}
+      .companyName{font-size: 20px;}
+      .storeInfo{font-size: 12px;}
+      .titleCenter{font-size: 22px; margin: 12px 0 8px 0;}
+      table{font-size: 12px;}
+      .gridBlock td, .gridBlock th{padding: 7px 8px;}
+      .miniBlock td, .miniBlock th{padding: 7px 8px; font-size: 12px;}
+    }
+
     /* Print */
     @media print{
       body{background:#fff}
@@ -825,13 +847,20 @@
   <input id="importFile" type="file" accept="application/json" style="display:none" />
   <script>
     (() => {
-      const STORAGE_KEY = "returnedChecks.v2";
+      const qs = new URLSearchParams(location.search);
+      const noteId = qs.get("noteId") || "global";
+      const STORAGE_KEY = `returnedChecks.v2:${noteId}`;
 
       const state = {
         reports: [],
         activeId: null,
         query: ""
       };
+
+      // Parent sync (when embedded in the main app)
+      const canPostToParent = (() => {
+        try { return window.parent && window.parent !== window; } catch { return false; }
+      })();
 
       const el = {
         sidebar: document.getElementById("sidebar"),
@@ -970,15 +999,44 @@
         persist(true);
       };
 
+      const applyExternalPayload = (payload) => {
+        if (!payload || typeof payload !== "object") return false;
+        if (!Array.isArray(payload.reports)) return false;
+        state.reports = payload.reports;
+        state.activeId = payload.activeId || (state.reports[0]?.id ?? null);
+        return true;
+      };
+
       const persist = (silent=false) => {
         const payload = { reports: state.reports, activeId: state.activeId };
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+          // If embedded, notify parent so it can sync to Supabase for realtime across devices.
+          if (canPostToParent) {
+            try {
+              window.parent.postMessage(
+                { type: "rc:save", noteId, payload },
+                "*",
+              );
+            } catch {}
+          }
           if (!silent) showToast("Guardado");
         } catch {
           showToast("No se pudo guardar (storage lleno).");
         }
       };
+
+      // Receive init payload from parent (Supabase-synced) when embedded.
+      window.addEventListener("message", (ev) => {
+        const data = ev?.data;
+        if (!data || typeof data !== "object") return;
+        if (data.type !== "rc:init") return;
+        if (data.noteId && String(data.noteId) !== String(noteId)) return;
+        if (data.initialReport && applyExternalPayload(data.initialReport)) {
+          try { persist(true); } catch {}
+          try { renderAll(); } catch {}
+        }
+      });
 
       const scheduleSave = () => {
         clearTimeout(saveTimer);
@@ -1417,7 +1475,15 @@
 
       el.btnNewTop.addEventListener("click", addNewReport);
       el.btnDelete.addEventListener("click", deleteActiveReport);
-      el.btnPrint.addEventListener("click", () => window.print());
+      el.btnPrint.addEventListener("click", () => {
+        // Printing from inside a sandboxed iframe is often blocked on mobile.
+        // If embedded, ask the parent to trigger printing.
+        if (canPostToParent) {
+          try { window.parent.postMessage({ type: "rc:print", noteId }, "*"); } catch {}
+          return;
+        }
+        window.print();
+      });
       el.btnDuplicate.addEventListener("click", duplicateActiveReport);
 
       el.btnAddImages.addEventListener("click", () => el.imgPicker.click());
