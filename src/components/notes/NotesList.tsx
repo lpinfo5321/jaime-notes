@@ -78,47 +78,34 @@ export default function NotesList({
   attachmentMetaByNoteId,
   firstDocUrlsByNoteId,
 }: Props) {
-  const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [open, setOpen] = useState<{ id: string; mode: "list" | "new" } | null>(
     null,
   );
 
-  // Optimistic UI: keep a local copy so changes reflect instantly without a full refresh.
   const [items, setItems] = useState<NoteListItem[]>(notes);
-  useEffect(() => setItems(notes), [notes]);
 
-  const empty = notes.length === 0;
-  const sorted = useMemo(
-    () =>
-      [...items].sort(
-        (a, b) =>
-          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-      ),
-    [items],
-  );
+  useEffect(() => {
+    // Cuando cambia el servidor (búsqueda / navegación), resincroniza.
+    setItems(notes);
+  }, [notes]);
+
+  const empty = items.length === 0;
+  const sorted = useMemo(() => items, [items]);
 
   const openCompany = useMemo(() => {
     if (!open?.id) return null;
     return sorted.find((n) => n.id === open.id) ?? null;
   }, [open, sorted]);
 
-  function patchCompany(id: string, patch: Partial<NoteListItem>) {
+  function patchCompany(noteId: string, patch: Partial<NoteListItem>) {
     setItems((prev) =>
-      prev.map((n) =>
-        n.id === id
-          ? ({
-              ...n,
-              ...patch,
-              updated_at:
-                patch.updated_at ??
-                (patch.values || patch.title || patch.body
-                  ? new Date().toISOString()
-                  : n.updated_at),
-            } as NoteListItem)
-          : n,
-      ),
+      prev.map((n) => (n.id === noteId ? { ...n, ...patch } : n)),
     );
+  }
+
+  function removeCompany(noteId: string) {
+    setItems((prev) => prev.filter((n) => n.id !== noteId));
   }
 
   if (empty) {
@@ -166,6 +153,10 @@ export default function NotesList({
             onClose={() => setOpen(null)}
             onBusy={(b) => setBusyId(b ? openCompany.id : null)}
             onPatch={(patch) => patchCompany(openCompany.id, patch)}
+            onDeleteCompany={() => {
+              removeCompany(openCompany.id);
+              setOpen(null);
+            }}
           />
         )
       ) : null}
@@ -209,6 +200,8 @@ function CompanyCard({
     const t = window.setTimeout(async () => {
       setBusy(true);
       try {
+        // Update UI instantly
+        onPatch({ title: companyName });
         const res = await fetch(`/api/notes/${note.id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
@@ -216,7 +209,9 @@ function CompanyCard({
         });
         if (res.ok) {
           lastSavedNameRef.current = companyName;
-          onPatch({ title: companyName, updated_at: new Date().toISOString() });
+        } else {
+          // rollback if needed
+          onPatch({ title: lastSavedNameRef.current });
         }
       } finally {
         setBusy(false);
@@ -401,6 +396,7 @@ function CompanyModal({
   onClose,
   onBusy,
   onPatch,
+  onDeleteCompany,
 }: {
   note: NoteListItem;
   coverUrl: string | null;
@@ -410,6 +406,7 @@ function CompanyModal({
   onClose: () => void;
   onBusy: (busy: boolean) => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
+  onDeleteCompany: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const [entries, setEntries] = useState<Entry[]>(() => sortEntriesDesc(toEntryArray(note.values)));
@@ -463,12 +460,12 @@ function CompanyModal({
   async function saveCompanyName() {
     onBusy(true);
     try {
+      onPatch({ title: companyName });
       await fetch(`/api/notes/${note.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title: companyName }),
       });
-      onPatch({ title: companyName, updated_at: new Date().toISOString() });
     } finally {
       onBusy(false);
     }
@@ -509,12 +506,7 @@ function CompanyModal({
       if (!res.ok) throw new Error("No se pudo guardar");
       setEntries(nextEntries);
       setSelectedId(id);
-      onPatch({
-        title: companyName,
-        body: nextBody,
-        values: nextValues,
-        updated_at: new Date().toISOString(),
-      });
+      onPatch({ title: companyName, body: nextBody, values: nextValues });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error guardando");
     } finally {
@@ -544,11 +536,7 @@ function CompanyModal({
       const sortedNext = sortEntriesDesc(nextEntries);
       setEntries(sortedNext);
       setSelectedId(sortedNext[0]?.id ?? null);
-      onPatch({
-        body: nextBody,
-        values: nextValues,
-        updated_at: new Date().toISOString(),
-      });
+      onPatch({ body: nextBody, values: nextValues });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error borrando");
     } finally {
@@ -563,8 +551,7 @@ function CompanyModal({
     try {
       const res = await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("No se pudo eliminar");
-      onClose();
-      // La tarjeta se removerá al refrescar la página (navegación) o en el próximo fetch.
+      onDeleteCompany();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error eliminando");
     } finally {
