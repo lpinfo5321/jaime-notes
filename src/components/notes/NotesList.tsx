@@ -80,15 +80,17 @@ export default function NotesList({
 }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [open, setOpen] = useState<{ id: string; mode: "list" | "new" } | null>(
+    null,
+  );
 
   const empty = notes.length === 0;
   const sorted = useMemo(() => notes, [notes]);
 
   const openCompany = useMemo(() => {
-    if (!openId) return null;
-    return sorted.find((n) => n.id === openId) ?? null;
-  }, [openId, sorted]);
+    if (!open?.id) return null;
+    return sorted.find((n) => n.id === open.id) ?? null;
+  }, [open, sorted]);
 
   if (empty) {
     return (
@@ -112,7 +114,8 @@ export default function NotesList({
             firstDoc={firstDocUrlsByNoteId[String(note.id)] ?? null}
             busy={busyId === note.id}
             setBusy={(b) => setBusyId(b ? note.id : null)}
-            onOpen={() => setOpenId(note.id)}
+            onOpenList={() => setOpen({ id: note.id, mode: "list" })}
+            onOpenNew={() => setOpen({ id: note.id, mode: "new" })}
             onRefresh={() => router.refresh()}
           />
         ))}
@@ -124,7 +127,8 @@ export default function NotesList({
           coverUrl={coverUrls[openCompany.id] ?? null}
           meta={attachmentMetaByNoteId[String(openCompany.id)] ?? null}
           firstDoc={firstDocUrlsByNoteId[String(openCompany.id)] ?? null}
-          onClose={() => setOpenId(null)}
+          startOnNew={open?.mode === "new"}
+          onClose={() => setOpen(null)}
           onBusy={(b) => setBusyId(b ? openCompany.id : null)}
           onRefresh={() => router.refresh()}
         />
@@ -140,7 +144,8 @@ function CompanyCard({
   firstDoc,
   busy,
   setBusy,
-  onOpen,
+  onOpenList,
+  onOpenNew,
   onRefresh,
 }: {
   note: NoteListItem;
@@ -149,7 +154,8 @@ function CompanyCard({
   firstDoc: { url: string; filename: string; mime: string } | null;
   busy: boolean;
   setBusy: (busy: boolean) => void;
-  onOpen: () => void;
+  onOpenList: () => void;
+  onOpenNew: () => void;
   onRefresh: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
@@ -210,13 +216,23 @@ function CompanyCard({
       <div className="grid grid-cols-[minmax(0,1fr)_160px] gap-3 sm:grid-cols-[minmax(0,1fr)_44%] sm:gap-6">
         {/* Última Nota (abre modal) */}
         <div className="min-w-0">
-          <div className="mb-2 text-xs font-bold text-zinc-500 dark:text-zinc-300 sm:text-sm">
-            Última Nota
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-xs font-bold text-zinc-500 dark:text-zinc-300 sm:text-sm">
+              Última Nota
+            </div>
+            <button
+              type="button"
+              onClick={onOpenNew}
+              className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              title="Agregar nota"
+            >
+              + Nota
+            </button>
           </div>
 
           <button
             type="button"
-            onClick={onOpen}
+            onClick={onOpenList}
             className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 dark:bg-zinc-950 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-900 sm:px-4 sm:py-3 sm:text-sm"
           >
             <div className="font-semibold">{formatDdMmYy(latestDate)}</div>
@@ -262,6 +278,7 @@ function CompanyModal({
   coverUrl,
   meta,
   firstDoc,
+  startOnNew,
   onClose,
   onBusy,
   onRefresh,
@@ -270,6 +287,7 @@ function CompanyModal({
   coverUrl: string | null;
   meta: { total: number; images: number; docs: number; firstDocName?: string } | null;
   firstDoc: { url: string; filename: string; mime: string } | null;
+  startOnNew: boolean;
   onClose: () => void;
   onBusy: (busy: boolean) => void;
   onRefresh: () => void;
@@ -307,6 +325,21 @@ function CompanyModal({
     setDraftAgent("");
     setDraftNote("");
   }
+
+  // Mobile stability: lock background scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  // If user clicked "+ Nota", open directly in new-note mode
+  useEffect(() => {
+    if (startOnNew) startNew();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startOnNew]);
 
   async function saveCompanyName() {
     onBusy(true);
@@ -414,12 +447,17 @@ function CompanyModal({
   const isPdf = !!firstDoc && String(firstDoc.mime ?? "").includes("pdf");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+        role="dialog"
+        aria-modal="true"
+        className="h-[92svh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-3 dark:border-zinc-800 sm:px-4">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
               Compañía
@@ -442,7 +480,8 @@ function CompanyModal({
           </button>
         </div>
 
-        <div className="grid gap-4 p-4 md:grid-cols-[320px_1fr]">
+        <div className="h-[calc(92svh-60px)] overflow-auto p-3 sm:p-4">
+          <div className="grid gap-4 md:grid-cols-[320px_1fr]">
           {/* Lista de notas */}
           <div className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
             <div className="mb-2 flex items-center justify-between">
@@ -599,6 +638,7 @@ function CompanyModal({
                 </div>
               </div>
             ) : null}
+          </div>
           </div>
         </div>
       </div>
