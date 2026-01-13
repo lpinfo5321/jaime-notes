@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Paperclip, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 
 export type NoteListItem = {
   id: string;
@@ -78,10 +79,13 @@ export default function NotesList({
   attachmentMetaByNoteId,
   firstDocUrlsByNoteId,
 }: Props) {
+  const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [open, setOpen] = useState<{ id: string; mode: "list" | "new" } | null>(
     null,
   );
+  const [pendingRemote, setPendingRemote] = useState(false);
+  const suppressRemoteUntilRef = useRef<number>(0);
 
   const [items, setItems] = useState<NoteListItem[]>(notes);
 
@@ -97,6 +101,59 @@ export default function NotesList({
     if (!open?.id) return null;
     return sorted.find((n) => n.id === open.id) ?? null;
   }, [open, sorted]);
+
+  const markLocalWrite = () => {
+    suppressRemoteUntilRef.current = Date.now() + 1500;
+  };
+
+  // Realtime cross-device updates (Supabase Realtime)
+  useEffect(() => {
+    let isCancelled = false;
+    const supabase = createClient();
+    let channel: any = null;
+
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const userId = data?.user?.id;
+      if (!userId || isCancelled) return;
+
+      channel = supabase
+        .channel(`notes-live-${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notes",
+            filter: `user_id=eq.${userId}`,
+          },
+          () => {
+            if (Date.now() < suppressRemoteUntilRef.current) return;
+            // If a modal is open, defer refresh to avoid disrupting editing UX
+            if (open) {
+              setPendingRemote(true);
+              return;
+            }
+            router.refresh();
+          },
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      isCancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, open?.id]);
+
+  // If we deferred a refresh while the modal was open, do it once it closes
+  useEffect(() => {
+    if (!open && pendingRemote) {
+      setPendingRemote(false);
+      router.refresh();
+    }
+  }, [open, pendingRemote, router]);
 
   function patchCompany(noteId: string, patch: Partial<NoteListItem>) {
     setItems((prev) =>
@@ -133,6 +190,7 @@ export default function NotesList({
             onOpenList={() => setOpen({ id: note.id, mode: "list" })}
             onOpenNew={() => setOpen({ id: note.id, mode: "new" })}
             onPatch={(patch) => patchCompany(note.id, patch)}
+            onLocalWrite={markLocalWrite}
           />
         ))}
       </div>
@@ -157,6 +215,7 @@ export default function NotesList({
               removeCompany(openCompany.id);
               setOpen(null);
             }}
+            onLocalWrite={markLocalWrite}
           />
         )
       ) : null}
@@ -174,6 +233,7 @@ function CompanyCard({
   onOpenList,
   onOpenNew,
   onPatch,
+  onLocalWrite,
 }: {
   note: NoteListItem;
   coverUrl: string | null;
@@ -184,6 +244,7 @@ function CompanyCard({
   onOpenList: () => void;
   onOpenNew: () => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
+  onLocalWrite: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const lastSavedNameRef = useRef(companyName);
@@ -202,6 +263,7 @@ function CompanyCard({
       try {
         // Update UI instantly
         onPatch({ title: companyName });
+        onLocalWrite();
         const res = await fetch(`/api/notes/${note.id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
@@ -397,6 +459,7 @@ function CompanyModal({
   onBusy,
   onPatch,
   onDeleteCompany,
+  onLocalWrite,
 }: {
   note: NoteListItem;
   coverUrl: string | null;
@@ -407,6 +470,7 @@ function CompanyModal({
   onBusy: (busy: boolean) => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
   onDeleteCompany: () => void;
+  onLocalWrite: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const [entries, setEntries] = useState<Entry[]>(() => sortEntriesDesc(toEntryArray(note.values)));
@@ -461,6 +525,7 @@ function CompanyModal({
     onBusy(true);
     try {
       onPatch({ title: companyName });
+      onLocalWrite();
       await fetch(`/api/notes/${note.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -498,6 +563,7 @@ function CompanyModal({
 
     onBusy(true);
     try {
+      onLocalWrite();
       const res = await fetch(`/api/notes/${note.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -527,6 +593,7 @@ function CompanyModal({
 
     onBusy(true);
     try {
+      onLocalWrite();
       const res = await fetch(`/api/notes/${note.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -549,6 +616,7 @@ function CompanyModal({
     if (!ok) return;
     onBusy(true);
     try {
+      onLocalWrite();
       const res = await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("No se pudo eliminar");
       onDeleteCompany();
