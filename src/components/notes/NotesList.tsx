@@ -356,6 +356,7 @@ function CompanyCard({
   const entries = sortEntriesDesc(toEntryArray(note.values));
   const latest = entries[0] ?? null;
   const latestDate = latest?.date ?? isoToday();
+  const latestAgent = (latest?.agent ?? "").trim();
   const latestText = (latest?.note ?? note.body ?? "").trim();
   const excerpt = latestText.replace(/\s+/g, " ").slice(0, 140);
 
@@ -399,6 +400,11 @@ function CompanyCard({
             className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 dark:bg-zinc-950 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-900 sm:px-4 sm:py-3 sm:text-sm"
           >
             <div className="font-semibold">{formatDdMmYy(latestDate)}</div>
+            {latestAgent ? (
+              <div className="mt-0.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 sm:text-sm">
+                {latestAgent}
+              </div>
+            ) : null}
             <div className="mt-1 text-xs leading-snug text-zinc-700 dark:text-zinc-200 sm:text-sm">
               {excerpt ? excerpt : "(sin contenido)"}
             </div>
