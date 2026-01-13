@@ -84,13 +84,42 @@ export default function NotesList({
     null,
   );
 
+  // Optimistic UI: keep a local copy so changes reflect instantly without a full refresh.
+  const [items, setItems] = useState<NoteListItem[]>(notes);
+  useEffect(() => setItems(notes), [notes]);
+
   const empty = notes.length === 0;
-  const sorted = useMemo(() => notes, [notes]);
+  const sorted = useMemo(
+    () =>
+      [...items].sort(
+        (a, b) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+      ),
+    [items],
+  );
 
   const openCompany = useMemo(() => {
     if (!open?.id) return null;
     return sorted.find((n) => n.id === open.id) ?? null;
   }, [open, sorted]);
+
+  function patchCompany(id: string, patch: Partial<NoteListItem>) {
+    setItems((prev) =>
+      prev.map((n) =>
+        n.id === id
+          ? ({
+              ...n,
+              ...patch,
+              updated_at:
+                patch.updated_at ??
+                (patch.values || patch.title || patch.body
+                  ? new Date().toISOString()
+                  : n.updated_at),
+            } as NoteListItem)
+          : n,
+      ),
+    );
+  }
 
   if (empty) {
     return (
@@ -116,7 +145,7 @@ export default function NotesList({
             setBusy={(b) => setBusyId(b ? note.id : null)}
             onOpenList={() => setOpen({ id: note.id, mode: "list" })}
             onOpenNew={() => setOpen({ id: note.id, mode: "new" })}
-            onRefresh={() => router.refresh()}
+            onPatch={(patch) => patchCompany(note.id, patch)}
           />
         ))}
       </div>
@@ -136,7 +165,7 @@ export default function NotesList({
             startOnNew={open?.mode === "new"}
             onClose={() => setOpen(null)}
             onBusy={(b) => setBusyId(b ? openCompany.id : null)}
-            onRefresh={() => router.refresh()}
+            onPatch={(patch) => patchCompany(openCompany.id, patch)}
           />
         )
       ) : null}
@@ -153,7 +182,7 @@ function CompanyCard({
   setBusy,
   onOpenList,
   onOpenNew,
-  onRefresh,
+  onPatch,
 }: {
   note: NoteListItem;
   coverUrl: string | null;
@@ -163,7 +192,7 @@ function CompanyCard({
   setBusy: (busy: boolean) => void;
   onOpenList: () => void;
   onOpenNew: () => void;
-  onRefresh: () => void;
+  onPatch: (patch: Partial<NoteListItem>) => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const lastSavedNameRef = useRef(companyName);
@@ -187,7 +216,7 @@ function CompanyCard({
         });
         if (res.ok) {
           lastSavedNameRef.current = companyName;
-          onRefresh();
+          onPatch({ title: companyName, updated_at: new Date().toISOString() });
         }
       } finally {
         setBusy(false);
@@ -371,7 +400,7 @@ function CompanyModal({
   startOnNew,
   onClose,
   onBusy,
-  onRefresh,
+  onPatch,
 }: {
   note: NoteListItem;
   coverUrl: string | null;
@@ -380,7 +409,7 @@ function CompanyModal({
   startOnNew: boolean;
   onClose: () => void;
   onBusy: (busy: boolean) => void;
-  onRefresh: () => void;
+  onPatch: (patch: Partial<NoteListItem>) => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const [entries, setEntries] = useState<Entry[]>(() => sortEntriesDesc(toEntryArray(note.values)));
@@ -439,7 +468,7 @@ function CompanyModal({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title: companyName }),
       });
-      onRefresh();
+      onPatch({ title: companyName, updated_at: new Date().toISOString() });
     } finally {
       onBusy(false);
     }
@@ -480,7 +509,12 @@ function CompanyModal({
       if (!res.ok) throw new Error("No se pudo guardar");
       setEntries(nextEntries);
       setSelectedId(id);
-      onRefresh();
+      onPatch({
+        title: companyName,
+        body: nextBody,
+        values: nextValues,
+        updated_at: new Date().toISOString(),
+      });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error guardando");
     } finally {
@@ -510,7 +544,11 @@ function CompanyModal({
       const sortedNext = sortEntriesDesc(nextEntries);
       setEntries(sortedNext);
       setSelectedId(sortedNext[0]?.id ?? null);
-      onRefresh();
+      onPatch({
+        body: nextBody,
+        values: nextValues,
+        updated_at: new Date().toISOString(),
+      });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error borrando");
     } finally {
@@ -526,7 +564,7 @@ function CompanyModal({
       const res = await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("No se pudo eliminar");
       onClose();
-      onRefresh();
+      // La tarjeta se removerá al refrescar la página (navegación) o en el próximo fetch.
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error eliminando");
     } finally {
