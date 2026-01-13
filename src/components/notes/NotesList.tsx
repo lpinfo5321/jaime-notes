@@ -86,6 +86,10 @@ export default function NotesList({
   );
   const [pendingRemote, setPendingRemote] = useState(false);
   const suppressRemoteUntilRef = useRef<number>(0);
+  const idsRef = useRef<Set<string>>(new Set());
+  const [confirmDel, setConfirmDel] = useState<{ id: string; title: string } | null>(
+    null,
+  );
 
   const [items, setItems] = useState<NoteListItem[]>(notes);
 
@@ -96,6 +100,10 @@ export default function NotesList({
 
   const empty = items.length === 0;
   const sorted = useMemo(() => items, [items]);
+
+  useEffect(() => {
+    idsRef.current = new Set(items.map((n) => String(n.id)));
+  }, [items]);
 
   const openCompany = useMemo(() => {
     if (!open?.id) return null;
@@ -111,6 +119,7 @@ export default function NotesList({
     let isCancelled = false;
     const supabase = createClient();
     let channel: any = null;
+    let deleteChannel: any = null;
 
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -138,11 +147,35 @@ export default function NotesList({
           },
         )
         .subscribe();
+
+      // DELETE events sometimes don't include user_id (replica identity),
+      // so the filtered subscription above may miss deletes. Listen to deletes and
+      // only react if the deleted id belongs to our current list.
+      deleteChannel = supabase
+        .channel(`notes-live-delete-${userId}`)
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "notes" },
+          (payload: any) => {
+            if (Date.now() < suppressRemoteUntilRef.current) return;
+            const deletedId =
+              typeof payload?.old?.id === "string" ? String(payload.old.id) : null;
+            if (!deletedId) return;
+            if (!idsRef.current.has(deletedId)) return;
+            if (open) {
+              setPendingRemote(true);
+              return;
+            }
+            router.refresh();
+          },
+        )
+        .subscribe();
     })();
 
     return () => {
       isCancelled = true;
       if (channel) supabase.removeChannel(channel);
+      if (deleteChannel) supabase.removeChannel(deleteChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, open?.id]);
@@ -163,6 +196,29 @@ export default function NotesList({
 
   function removeCompany(noteId: string) {
     setItems((prev) => prev.filter((n) => n.id !== noteId));
+  }
+
+  function askDeleteCompany(id: string) {
+    const t = sorted.find((n) => n.id === id);
+    if (!t) return;
+    setConfirmDel({ id, title: (t.title ?? "").trim() || "Sin nombre" });
+  }
+
+  async function doDeleteCompany(id: string) {
+    suppressRemoteUntilRef.current = Date.now() + 1500;
+    setBusyId(id);
+    setConfirmDel(null);
+    // Optimista: quitar de UI al instante
+    removeCompany(id);
+    try {
+      const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("No se pudo eliminar");
+    } catch {
+      // Si falla, recargar para restaurar el estado real
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
   }
 
   if (empty) {
@@ -191,6 +247,7 @@ export default function NotesList({
             onOpenNew={() => setOpen({ id: note.id, mode: "new" })}
             onPatch={(patch) => patchCompany(note.id, patch)}
             onLocalWrite={markLocalWrite}
+            onDelete={() => askDeleteCompany(note.id)}
           />
         ))}
       </div>
@@ -219,6 +276,17 @@ export default function NotesList({
           />
         )
       ) : null}
+
+      {confirmDel ? (
+        <ConfirmDialog
+          title="Eliminar compañía"
+          message={`¿Seguro que quieres eliminar "${confirmDel.title}"?`}
+          confirmText="Sí, eliminar"
+          cancelText="No"
+          onCancel={() => setConfirmDel(null)}
+          onConfirm={() => doDeleteCompany(confirmDel.id)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -234,6 +302,7 @@ function CompanyCard({
   onOpenNew,
   onPatch,
   onLocalWrite,
+  onDelete,
 }: {
   note: NoteListItem;
   coverUrl: string | null;
@@ -245,6 +314,7 @@ function CompanyCard({
   onOpenNew: () => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
   onLocalWrite: () => void;
+  onDelete: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const lastSavedNameRef = useRef(companyName);
@@ -358,6 +428,76 @@ function CompanyCard({
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/40"
+        >
+          <Trash2 className="h-4 w-4" />
+          Eliminar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmText,
+  cancelText,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-3"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <div className="text-sm font-semibold">{title}</div>
+          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+            {message}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-4 py-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            {cancelText}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500"
+          >
+            {confirmText}
+          </button>
         </div>
       </div>
     </div>
