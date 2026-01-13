@@ -68,9 +68,14 @@ function sortEntriesDesc(entries: Entry[]) {
   });
 }
 
-function formatDdMmYy(iso: string) {
+function formatUsMmDdYy(iso: string) {
   const d = new Date((iso || isoToday()) + "T00:00:00");
-  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  // US style: MM/DD/YY
+  return d.toLocaleDateString("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "2-digit",
+  });
 }
 
 export default function NotesList({
@@ -404,7 +409,7 @@ function CompanyCard({
             className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 dark:bg-zinc-950 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-900 sm:px-4 sm:py-3 sm:text-sm"
           >
             <div className="flex items-baseline justify-between gap-2">
-              <div className="font-semibold">{formatDdMmYy(latestDate)}</div>
+              <div className="font-semibold">{formatUsMmDdYy(latestDate)}</div>
               {latestAgent ? (
                 <div className="truncate text-xs font-semibold text-zinc-700 dark:text-zinc-200 sm:text-sm">
                   {latestAgent}
@@ -583,7 +588,7 @@ function CompanyListModal({
                   >
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                        {formatDdMmYy(e.date)}
+                        {formatUsMmDdYy(e.date)}
                       </div>
                       <div className="text-xs text-zinc-500 dark:text-zinc-400">
                         {e.agent ? e.agent : "—"}
@@ -875,7 +880,7 @@ function CompanyModal({
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="text-xs font-semibold opacity-90">
-                            {formatDdMmYy(e.date)}
+                            {formatUsMmDdYy(e.date)}
                           </div>
                           <div className="mt-0.5 truncate text-xs opacity-80">
                             {e.agent ? e.agent : "—"}
