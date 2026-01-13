@@ -81,9 +81,11 @@ export default function NotesList({
 }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [open, setOpen] = useState<{ id: string; mode: "list" | "new" } | null>(
-    null,
-  );
+  const [open, setOpen] = useState<{
+    id: string;
+    mode: "list" | "new" | "edit";
+    entryId?: string;
+  } | null>(null);
   const [pendingRemote, setPendingRemote] = useState(false);
   const suppressRemoteUntilRef = useRef<number>(0);
   const idsRef = useRef<Set<string>>(new Set());
@@ -257,6 +259,7 @@ export default function NotesList({
           <CompanyListModal
             note={openCompany}
             onClose={() => setOpen(null)}
+            onEdit={(entryId) => setOpen({ id: openCompany.id, mode: "edit", entryId })}
           />
         ) : (
           <CompanyModal
@@ -265,6 +268,7 @@ export default function NotesList({
             meta={attachmentMetaByNoteId[String(openCompany.id)] ?? null}
             firstDoc={firstDocUrlsByNoteId[String(openCompany.id)] ?? null}
             startOnNew={open?.mode === "new"}
+            startOnEntryId={open?.mode === "edit" ? (open?.entryId ?? null) : null}
             onClose={() => setOpen(null)}
             onBusy={(b) => setBusyId(b ? openCompany.id : null)}
             onPatch={(patch) => patchCompany(openCompany.id, patch)}
@@ -515,9 +519,11 @@ function ConfirmDialog({
 function CompanyListModal({
   note,
   onClose,
+  onEdit,
 }: {
   note: NoteListItem;
   onClose: () => void;
+  onEdit: (entryId: string) => void;
 }) {
   const entries = sortEntriesDesc(toEntryArray(note.values));
 
@@ -586,6 +592,15 @@ function CompanyListModal({
                     <div className="mt-1 whitespace-pre-wrap text-sm">
                       {e.note ? e.note : "(sin texto)"}
                     </div>
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => onEdit(e.id)}
+                        className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        Editar
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -603,6 +618,7 @@ function CompanyModal({
   meta,
   firstDoc,
   startOnNew,
+  startOnEntryId,
   onClose,
   onBusy,
   onPatch,
@@ -614,6 +630,7 @@ function CompanyModal({
   meta: { total: number; images: number; docs: number; firstDocName?: string } | null;
   firstDoc: { url: string; filename: string; mime: string } | null;
   startOnNew: boolean;
+  startOnEntryId: string | null;
   onClose: () => void;
   onBusy: (busy: boolean) => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
@@ -668,6 +685,13 @@ function CompanyModal({
     if (startOnNew) startNew();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startOnNew]);
+
+  // If user wants to edit a specific entry (from list modal)
+  useEffect(() => {
+    if (!startOnEntryId) return;
+    setSelectedId(startOnEntryId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startOnEntryId]);
 
   async function saveCompanyName() {
     onBusy(true);
@@ -776,6 +800,7 @@ function CompanyModal({
   }
 
   const isPdf = !!firstDoc && String(firstDoc.mime ?? "").includes("pdf");
+  const isEditingExisting = !!selectedId && entries.some((e) => e.id === selectedId);
 
   return (
     <div
@@ -889,8 +914,14 @@ function CompanyModal({
                   type="date"
                   value={draftDate}
                   onChange={(e) => setDraftDate(e.target.value)}
+                  disabled={isEditingExisting}
                   className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-zinc-700"
                 />
+                {isEditingExisting ? (
+                  <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    La fecha se mantiene igual (fecha de creación).
+                  </div>
+                ) : null}
               </label>
 
               <label className="block">
