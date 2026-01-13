@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import NotesToolbar from "@/components/notes/NotesToolbar";
 import NotesList from "@/components/notes/NotesList";
 
 type NotesSearchParams = {
@@ -135,12 +134,6 @@ export default async function NotesPage({
 
   return (
     <div className="space-y-4">
-      <NotesToolbar
-        initial={{
-          q,
-        }}
-      />
-
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           Error cargando notas: {error.message}
