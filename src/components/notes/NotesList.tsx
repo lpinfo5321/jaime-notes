@@ -122,16 +122,23 @@ export default function NotesList({
       </div>
 
       {openCompany ? (
-        <CompanyModal
-          note={openCompany}
-          coverUrl={coverUrls[openCompany.id] ?? null}
-          meta={attachmentMetaByNoteId[String(openCompany.id)] ?? null}
-          firstDoc={firstDocUrlsByNoteId[String(openCompany.id)] ?? null}
-          startOnNew={open?.mode === "new"}
-          onClose={() => setOpen(null)}
-          onBusy={(b) => setBusyId(b ? openCompany.id : null)}
-          onRefresh={() => router.refresh()}
-        />
+        open?.mode === "list" ? (
+          <CompanyListModal
+            note={openCompany}
+            onClose={() => setOpen(null)}
+          />
+        ) : (
+          <CompanyModal
+            note={openCompany}
+            coverUrl={coverUrls[openCompany.id] ?? null}
+            meta={attachmentMetaByNoteId[String(openCompany.id)] ?? null}
+            firstDoc={firstDocUrlsByNoteId[String(openCompany.id)] ?? null}
+            startOnNew={open?.mode === "new"}
+            onClose={() => setOpen(null)}
+            onBusy={(b) => setBusyId(b ? openCompany.id : null)}
+            onRefresh={() => router.refresh()}
+          />
+        )
       ) : null}
     </div>
   );
@@ -247,9 +254,7 @@ function CompanyCard({
                 <Paperclip className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 {meta.total}
               </div>
-            ) : (
-              <div className="text-xs text-zinc-500 dark:text-zinc-400">—</div>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -264,6 +269,91 @@ function CompanyCard({
             ) : (
               <div className="flex h-full w-full items-center justify-center px-4 text-center text-xs font-medium text-zinc-500 dark:text-zinc-400 sm:text-sm">
                 Sin portada
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompanyListModal({
+  note,
+  onClose,
+}: {
+  note: NoteListItem;
+  onClose: () => void;
+}) {
+  const entries = sortEntriesDesc(toEntryArray(note.values));
+
+  // lock background scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="h-[92svh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-3 dark:border-zinc-800 sm:px-4">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+              Compañía
+            </div>
+            <div className="mt-0.5 truncate text-sm font-semibold">
+              {(note.title ?? "").trim() || "Sin nombre"}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="ml-3 inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+            Cerrar
+          </button>
+        </div>
+
+        <div className="h-[calc(92svh-60px)] overflow-auto p-3 sm:p-4">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="mb-2 text-sm font-semibold">Notas</div>
+
+            {entries.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
+                No hay notas todavía.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {entries.map((e) => (
+                  <div
+                    key={e.id}
+                    className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                        {formatDdMmYy(e.date)}
+                      </div>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {e.agent ? e.agent : "—"}
+                      </div>
+                    </div>
+                    <div className="mt-1 whitespace-pre-wrap text-sm">
+                      {e.note ? e.note : "(sin texto)"}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
