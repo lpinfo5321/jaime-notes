@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Paperclip, Trash2, X } from "lucide-react";
+import { Paperclip, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
@@ -408,15 +408,13 @@ function CompanyCard({
             onClick={onOpenList}
             className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 dark:bg-zinc-950 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-900 sm:px-4 sm:py-3 sm:text-sm"
           >
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="font-semibold">{formatUsMmDdYy(latestDate)}</div>
-              {latestAgent ? (
-                <div className="truncate text-xs font-semibold text-zinc-700 dark:text-zinc-200 sm:text-sm">
-                  {latestAgent}
-                </div>
-              ) : null}
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200/70 bg-white/70 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300 sm:px-3 sm:py-1.5 sm:text-xs">
+              <div className="tabular-nums">{formatUsMmDdYy(latestDate)}</div>
+              <div className="min-w-0 truncate text-zinc-800 dark:text-zinc-100">
+                {latestAgent ? latestAgent : "—"}
+              </div>
             </div>
-            <div className="mt-1 text-xs leading-snug text-zinc-700 dark:text-zinc-200 sm:text-sm">
+            <div className="mt-2 border-t border-zinc-200/60 pt-2 text-xs leading-snug text-zinc-700 dark:border-zinc-800 dark:text-zinc-200 sm:text-sm">
               {excerpt ? excerpt : "(sin contenido)"}
             </div>
           </button>
@@ -586,15 +584,13 @@ function CompanyListModal({
                     key={e.id}
                     className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
                   >
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                        {formatUsMmDdYy(e.date)}
-                      </div>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200/70 bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 sm:text-xs">
+                      <div className="tabular-nums">{formatUsMmDdYy(e.date)}</div>
+                      <div className="min-w-0 truncate text-zinc-700 dark:text-zinc-200">
                         {e.agent ? e.agent : "—"}
                       </div>
                     </div>
-                    <div className="mt-1 whitespace-pre-wrap text-sm">
+                    <div className="mt-2 whitespace-pre-wrap border-t border-zinc-200/70 pt-2 text-sm dark:border-zinc-800">
                       {e.note ? e.note : "(sin texto)"}
                     </div>
                     <div className="mt-3 flex justify-end">
