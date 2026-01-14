@@ -434,7 +434,73 @@
 
   <div class="shell">
     <div style="width:min(var(--paper-w),100%);">
-      <div class="paper" id="paper"></div>
+      <div class="paper" id="paper">
+        <div class="paperTop">
+          <div class="companyBlock">
+            <input class="companyName" data-field="companyName" placeholder="COMPANY NAME" />
+            <div class="subline">
+              <span>Last updated:</span>
+              <span data-live="updatedAt">—</span>
+            </div>
+          </div>
+
+          <div class="storeInfo">
+            <div class="storeHeader">
+              <img
+                class="lpLogo"
+                src="/appreporte/lp-logo.png"
+                alt="La Primavera"
+                loading="eager"
+                onerror="this.style.display='none'"
+              />
+            </div>
+            <b>LA PRIMAVERA SUPERMARKET INC</b><br/>
+            CHECK CASHING SERVICES<br/>
+            901 N WASHINGTON BLVD<br/>
+            SARASOTA FL, 34236<br/>
+            941 366 5321
+          </div>
+        </div>
+
+        <div class="titleCenter">RETURNED CHECK REPORT</div>
+
+        <table class="gridBlock">
+          <tr><td class="labelCell">DATE CASHED</td><td class="valueCell"><input data-field="dateCashed" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">DATE OF DEPOSIT</td><td class="valueCell"><input data-field="dateDeposit" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">DATE RETURNED</td><td class="valueCell"><input data-field="dateReturned" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">PAYEE</td><td class="valueCell"><input data-field="payee" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">CHECK NUMBER</td><td class="valueCell"><input data-field="checkNumber" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">MAKER/PAYOR</td><td class="valueCell"><input data-field="makerPayor" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">REJECT REASON</td><td class="valueCell"><input data-field="rejectReason" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">CUSTOMER CONTACT</td><td class="valueCell"><input data-field="customerContact" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" placeholder="RELLENAR" /></td></tr>
+        </table>
+
+        <div class="moneyRow">
+          <table class="miniBlock">
+            <tr><td class="labelCell">CHECK AMOUNT</td><td class="valueCell"><input data-field="checkAmount" placeholder="$0.00" /></td></tr>
+            <tr><td class="labelCell">RETURNED CHECK FEE</td><td class="valueCell"><input data-field="returnedFee" placeholder="$0.00" /></td></tr>
+            <tr><td class="labelCell">TOTAL DUE</td><td class="valueCell"><input data-field="totalDue" placeholder="$0.00" readonly /></td></tr>
+          </table>
+          <table class="miniBlock">
+            <tr><td class="labelCell">DATE FEE PAID</td><td class="valueCell"><input data-field="dateFeePaid" placeholder="RELLENAR" /></td></tr>
+            <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="feePaymentMethod" placeholder="RELLENAR" /></td></tr>
+            <tr><td class="labelCell">DATE CHECK PAID</td><td class="valueCell"><input data-field="dateCheckPaid" placeholder="RELLENAR" /></td></tr>
+            <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="checkPaymentMethod" placeholder="RELLENAR" /></td></tr>
+          </table>
+        </div>
+
+        <div style="margin-top:16px;">
+          <table class="miniBlock">
+            <tr>
+              <td class="labelCell">DATE COMPLETED</td>
+              <td class="valueCell"><input data-field="dateCompleted" placeholder="RELLENAR" /></td>
+              <td class="labelCell" style="width:22%">AGENT</td>
+              <td class="valueCell"><input data-field="agentCompleted" placeholder="RELLENAR" /></td>
+            </tr>
+          </table>
+        </div>
+      </div>
 
       <div class="imagesSection">
         <div class="imagesHead">
@@ -448,76 +514,6 @@
       </div>
     </div>
   </div>
-
-  <template id="paperTemplate">
-    <div>
-      <div class="paperTop">
-        <div class="companyBlock">
-          <input class="companyName" data-field="companyName" placeholder="COMPANY NAME" />
-          <div class="subline">
-            <span>Last updated:</span>
-            <span data-live="updatedAt">—</span>
-          </div>
-        </div>
-
-        <div class="storeInfo">
-          <div class="storeHeader">
-            <img
-              class="lpLogo"
-              src="/appreporte/lp-logo.png"
-              alt="La Primavera"
-              loading="eager"
-              onerror="this.style.display='none'"
-            />
-          </div>
-          <b>LA PRIMAVERA SUPERMARKET INC</b><br/>
-          CHECK CASHING SERVICES<br/>
-          901 N WASHINGTON BLVD<br/>
-          SARASOTA FL, 34236<br/>
-          941 366 5321
-        </div>
-      </div>
-
-      <div class="titleCenter">RETURNED CHECK REPORT</div>
-
-      <table class="gridBlock">
-        <tr><td class="labelCell">DATE CASHED</td><td class="valueCell"><input data-field="dateCashed" placeholder="RELLENAR" /></td></tr>
-        <tr><td class="labelCell">DATE OF DEPOSIT</td><td class="valueCell"><input data-field="dateDeposit" placeholder="RELLENAR" /></td></tr>
-        <tr><td class="labelCell">DATE RETURNED</td><td class="valueCell"><input data-field="dateReturned" placeholder="RELLENAR" /></td></tr>
-        <tr><td class="labelCell">PAYEE</td><td class="valueCell"><input data-field="payee" placeholder="RELLENAR" /></td></tr>
-        <tr><td class="labelCell">CHECK NUMBER</td><td class="valueCell"><input data-field="checkNumber" placeholder="RELLENAR" /></td></tr>
-        <tr><td class="labelCell">MAKER/PAYOR</td><td class="valueCell"><input data-field="makerPayor" placeholder="RELLENAR" /></td></tr>
-        <tr><td class="labelCell">REJECT REASON</td><td class="valueCell"><input data-field="rejectReason" placeholder="RELLENAR" /></td></tr>
-        <tr><td class="labelCell">CUSTOMER CONTACT</td><td class="valueCell"><input data-field="customerContact" placeholder="RELLENAR" /></td></tr>
-        <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" placeholder="RELLENAR" /></td></tr>
-      </table>
-
-      <div class="moneyRow">
-        <table class="miniBlock">
-          <tr><td class="labelCell">CHECK AMOUNT</td><td class="valueCell"><input data-field="checkAmount" placeholder="$0.00" /></td></tr>
-          <tr><td class="labelCell">RETURNED CHECK FEE</td><td class="valueCell"><input data-field="returnedFee" placeholder="$0.00" /></td></tr>
-          <tr><td class="labelCell">TOTAL DUE</td><td class="valueCell"><input data-field="totalDue" placeholder="$0.00" readonly /></td></tr>
-        </table>
-        <table class="miniBlock">
-          <tr><td class="labelCell">DATE FEE PAID</td><td class="valueCell"><input data-field="dateFeePaid" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="feePaymentMethod" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">DATE CHECK PAID</td><td class="valueCell"><input data-field="dateCheckPaid" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="checkPaymentMethod" placeholder="RELLENAR" /></td></tr>
-        </table>
-      </div>
-
-      <div style="margin-top:16px;">
-        <table class="miniBlock">
-          <tr>
-            <td class="labelCell">DATE COMPLETED</td>
-            <td class="valueCell"><input data-field="dateCompleted" placeholder="RELLENAR" /></td>
-            <td class="labelCell" style="width:22%">AGENT</td>
-            <td class="valueCell"><input data-field="agentCompleted" placeholder="RELLENAR" /></td>
-          </tr>
-        </table>
-      </div>
-    </div>
-  </template>
 
   <!-- Image modal -->
   <div class="modal" id="modal">
@@ -573,7 +569,6 @@
 
       const el = {
         paper: document.getElementById("paper"),
-        paperTemplate: document.getElementById("paperTemplate"),
         lastSaved: document.getElementById("lastSaved"),
         btnPrint: document.getElementById("btnPrint"),
         btnAddImages: document.getElementById("btnAddImages"),
@@ -590,6 +585,7 @@
 
       let report = null; // {id, createdAt, updatedAt, fields, images}
       let activePaper = null;
+      let paperWired = false;
       let saveTimer = null;
       let toastTimer = null;
       let modalImageId = null;
@@ -697,78 +693,65 @@
         report.fields.totalDue = formatMoney(total);
       };
 
-      const buildPaper = () => {
-        if (!el.paperTemplate || !("content" in el.paperTemplate)) {
-          const div = document.createElement("div");
-          div.style.padding = "14px";
-          div.innerHTML =
-            "<b>Reporte no se pudo renderizar.</b><div style='opacity:.7;margin-top:6px;'>No se encontró el template del reporte.</div>";
-          return div;
-        }
-        const frag = el.paperTemplate.content.cloneNode(true);
-        const node =
-          frag.firstElementChild ||
-          (frag.childNodes && frag.childNodes.length
-            ? Array.from(frag.childNodes).find((n) => n && n.nodeType === 1)
-            : null);
-        if (!node) {
-          const div = document.createElement("div");
-          div.style.padding = "14px";
-          div.innerHTML =
-            "<b>Reporte no se pudo renderizar.</b><div style='opacity:.7;margin-top:6px;'>Revisa que el template del reporte exista.</div>";
-          return div;
-        }
-        const updated = node.querySelector('[data-live="updatedAt"]');
+      const syncPaperFromReport = () => {
+        if (!activePaper) return;
+        const updated = activePaper.querySelector('[data-live="updatedAt"]');
         if (updated) updated.textContent = fmtDateTime(report?.updatedAt);
 
-        const inputs = node.querySelectorAll("[data-field]");
-        inputs.forEach(inp => {
+        const inputs = activePaper.querySelectorAll("[data-field]");
+        inputs.forEach((inp) => {
           const key = inp.getAttribute("data-field");
           const val = ((report?.fields || {})[key] ?? "");
           if (inp.tagName === "INPUT") inp.value = val;
-          if (key === "totalDue") inp.setAttribute("readonly","readonly");
+          if (key === "totalDue") inp.setAttribute("readonly", "readonly");
         });
-        return node;
       };
 
       const renderPaper = () => {
         try {
           // Make sure report always has expected shape
           report = ensureReportShape(report);
-          el.paper.innerHTML = "";
-          activePaper = buildPaper();
-          el.paper.appendChild(activePaper);
+          activePaper = el.paper;
+          if (!activePaper) return;
+          syncPaperFromReport();
 
-          activePaper.addEventListener("input", (e) => {
-            const t = e.target;
-            const key = t?.getAttribute?.("data-field");
-            if (!key) return;
-            if (key === "totalDue") return;
-            report.fields[key] = (t.tagName === "INPUT") ? t.value : "";
-            if (key === "checkAmount" || key === "returnedFee") {
-              computeTotalDue();
-              const totalEl = activePaper.querySelector('[data-field="totalDue"]');
-              if (totalEl) totalEl.value = report.fields.totalDue;
-            }
-            scheduleSave();
-          });
-
-          activePaper.addEventListener("blur", (e) => {
-            const t = e.target;
-            if (!(t instanceof HTMLInputElement)) return;
-            const key = t.getAttribute("data-field");
-            if (!key) return;
-            if (key === "checkAmount" || key === "returnedFee") {
-              const n = moneyToNumber(t.value);
-              const pretty = formatMoney(n);
-              t.value = pretty;
-              report.fields[key] = pretty;
-              computeTotalDue();
-              const totalEl = activePaper.querySelector('[data-field="totalDue"]');
-              if (totalEl) totalEl.value = report.fields.totalDue;
+          if (!paperWired) {
+            paperWired = true;
+            activePaper.addEventListener("input", (e) => {
+              const t = e.target;
+              const key = t?.getAttribute?.("data-field");
+              if (!key) return;
+              if (key === "totalDue") return;
+              report.fields[key] = t.value ?? "";
+              if (key === "checkAmount" || key === "returnedFee") {
+                computeTotalDue();
+                const totalEl = activePaper.querySelector('[data-field="totalDue"]');
+                if (totalEl) totalEl.value = report.fields.totalDue;
+              }
               scheduleSave();
-            }
-          }, true);
+            });
+
+            activePaper.addEventListener(
+              "blur",
+              (e) => {
+                const t = e.target;
+                if (!(t instanceof HTMLInputElement)) return;
+                const key = t.getAttribute("data-field");
+                if (!key) return;
+                if (key === "checkAmount" || key === "returnedFee") {
+                  const n = moneyToNumber(t.value);
+                  const pretty = formatMoney(n);
+                  t.value = pretty;
+                  report.fields[key] = pretty;
+                  computeTotalDue();
+                  const totalEl = activePaper.querySelector('[data-field="totalDue"]');
+                  if (totalEl) totalEl.value = report.fields.totalDue;
+                  scheduleSave();
+                }
+              },
+              true,
+            );
+          }
         } catch {
           if (el.paper) {
             el.paper.innerHTML =
