@@ -173,6 +173,11 @@
       font-size: 13px;
       padding:0;
     }
+    .valueCell input::placeholder{
+      color: rgba(17,24,39,.35);
+      font-weight: 700;
+      letter-spacing: .1px;
+    }
 
     .moneyRow{
       display:grid;
@@ -330,21 +335,39 @@
 
     /* Print */
     @media print{
+      @page { size: letter; margin: 0.35in; }
+      html, body { height: auto !important; }
       body{background:#fff}
       .topbar{display:none !important}
       .imagesHead{display:none !important}
       .miniBtn{display:none !important}
+      .shell{padding:0 !important}
+      .imagesSection{margin-top:0 !important}
+      /* Never print placeholder helper text */
+      input::placeholder{ color: transparent !important; }
+
+      /* Each section = one page */
+      #paper{ break-after: page; page-break-after: always; }
+      #imagePages .imagePaper{ break-before: page; page-break-before: always; break-after: page; page-break-after: always; }
+      #imagePages .imagePaper:last-child{ break-after: auto; page-break-after: auto; }
+
       .paper{
         box-shadow:none !important;
         border: 1px solid #000 !important;
         border-radius:0 !important;
-        width: 8.5in !important;
+        width: 100% !important;
+        max-width: none !important;
+        overflow: visible !important;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
       }
       .imageBody img{
         box-shadow:none !important;
         border:1px solid #000 !important;
         border-radius:0 !important;
         background:#fff !important;
+        max-height: 9.6in !important;
+        object-fit: contain !important;
       }
     }
   </style>
@@ -406,15 +429,15 @@
       <div class="titleCenter">RETURNED CHECK REPORT</div>
 
       <table class="gridBlock">
-        <tr><td class="labelCell">DATE CASHED</td><td class="valueCell"><input data-field="dateCashed" /></td></tr>
-        <tr><td class="labelCell">DATE OF DEPOSIT</td><td class="valueCell"><input data-field="dateDeposit" /></td></tr>
-        <tr><td class="labelCell">DATE RETURNED</td><td class="valueCell"><input data-field="dateReturned" /></td></tr>
-        <tr><td class="labelCell">PAYEE</td><td class="valueCell"><input data-field="payee" /></td></tr>
-        <tr><td class="labelCell">CHECK NUMBER</td><td class="valueCell"><input data-field="checkNumber" /></td></tr>
-        <tr><td class="labelCell">MAKER/PAYOR</td><td class="valueCell"><input data-field="makerPayor" /></td></tr>
-        <tr><td class="labelCell">REJECT REASON</td><td class="valueCell"><input data-field="rejectReason" /></td></tr>
-        <tr><td class="labelCell">CUSTOMER CONTACT</td><td class="valueCell"><input data-field="customerContact" /></td></tr>
-        <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" /></td></tr>
+        <tr><td class="labelCell">DATE CASHED</td><td class="valueCell"><input data-field="dateCashed" placeholder="RELLENAR" /></td></tr>
+        <tr><td class="labelCell">DATE OF DEPOSIT</td><td class="valueCell"><input data-field="dateDeposit" placeholder="RELLENAR" /></td></tr>
+        <tr><td class="labelCell">DATE RETURNED</td><td class="valueCell"><input data-field="dateReturned" placeholder="RELLENAR" /></td></tr>
+        <tr><td class="labelCell">PAYEE</td><td class="valueCell"><input data-field="payee" placeholder="RELLENAR" /></td></tr>
+        <tr><td class="labelCell">CHECK NUMBER</td><td class="valueCell"><input data-field="checkNumber" placeholder="RELLENAR" /></td></tr>
+        <tr><td class="labelCell">MAKER/PAYOR</td><td class="valueCell"><input data-field="makerPayor" placeholder="RELLENAR" /></td></tr>
+        <tr><td class="labelCell">REJECT REASON</td><td class="valueCell"><input data-field="rejectReason" placeholder="RELLENAR" /></td></tr>
+        <tr><td class="labelCell">CUSTOMER CONTACT</td><td class="valueCell"><input data-field="customerContact" placeholder="RELLENAR" /></td></tr>
+        <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" placeholder="RELLENAR" /></td></tr>
       </table>
 
       <div class="moneyRow">
@@ -424,10 +447,10 @@
           <tr><td class="labelCell">TOTAL DUE</td><td class="valueCell"><input data-field="totalDue" placeholder="$0.00" readonly /></td></tr>
         </table>
         <table class="miniBlock">
-          <tr><td class="labelCell">DATE FEE PAID</td><td class="valueCell"><input data-field="dateFeePaid" /></td></tr>
-          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="feePaymentMethod" /></td></tr>
-          <tr><td class="labelCell">DATE CHECK PAID</td><td class="valueCell"><input data-field="dateCheckPaid" /></td></tr>
-          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="checkPaymentMethod" /></td></tr>
+          <tr><td class="labelCell">DATE FEE PAID</td><td class="valueCell"><input data-field="dateFeePaid" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="feePaymentMethod" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">DATE CHECK PAID</td><td class="valueCell"><input data-field="dateCheckPaid" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="checkPaymentMethod" placeholder="RELLENAR" /></td></tr>
         </table>
       </div>
 
@@ -435,9 +458,9 @@
         <table class="miniBlock">
           <tr>
             <td class="labelCell">DATE COMPLETED</td>
-            <td class="valueCell"><input data-field="dateCompleted" /></td>
+            <td class="valueCell"><input data-field="dateCompleted" placeholder="RELLENAR" /></td>
             <td class="labelCell" style="width:22%">AGENT</td>
-            <td class="valueCell"><input data-field="agentCompleted" /></td>
+            <td class="valueCell"><input data-field="agentCompleted" placeholder="RELLENAR" /></td>
           </tr>
         </table>
       </div>
