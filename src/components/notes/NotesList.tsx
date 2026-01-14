@@ -643,6 +643,14 @@ function ReportModal({
   const saveTimerRef = useRef<number | null>(null);
   const preparedResolverRef = useRef<((ok: boolean) => void) | null>(null);
 
+  function postToIframe(message: unknown) {
+    try {
+      iframeRef.current?.contentWindow?.postMessage(message, "*");
+    } catch {
+      // ignore
+    }
+  }
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -691,14 +699,10 @@ function ReportModal({
     };
   }, [noteId]);
 
-  // Keep report company name synced while modal is open
   useEffect(() => {
-    try {
-      iframeRef.current?.contentWindow?.postMessage(
-        { type: "rc:setCompanyName", companyName: companyTitle },
-        "*",
-      );
-    } catch {}
+    // keep report company name in sync with note title
+    postToIframe({ type: "rc:setCompanyName", companyName: companyTitle });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyTitle]);
 
   async function printFromParent() {
@@ -820,14 +824,8 @@ function ReportModal({
             sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"
             onLoad={() => {
               try {
-                iframeRef.current?.contentWindow?.postMessage(
-                  { type: "rc:init", noteId, initialReport },
-                  "*",
-                );
-                iframeRef.current?.contentWindow?.postMessage(
-                  { type: "rc:setCompanyName", companyName: companyTitle },
-                  "*",
-                );
+                postToIframe({ type: "rc:init", noteId, initialReport });
+                postToIframe({ type: "rc:setCompanyName", companyName: companyTitle });
               } catch {}
             }}
           />
@@ -1359,43 +1357,6 @@ function CompanyModal({
             <div className="mt-4">
               <AttachmentsPanel noteId={note.id} />
             </div>
-
-            {/* Imágenes del Reporte (las que se agregan dentro del reporte) */}
-            {Array.isArray(((note.values ?? {}) as any)?._report?.payload?.images) &&
-            (((note.values ?? {}) as any)?._report?.payload?.images?.length ?? 0) ? (
-              <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                    Imágenes del reporte
-                  </div>
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {((note.values ?? {}) as any)?._report?.payload?.images?.length ?? 0}
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-                  {(((note.values ?? {}) as any)?._report?.payload?.images ?? []).map(
-                    (im: any, idx: number) => (
-                      <div
-                        key={String(im?.id ?? idx)}
-                        className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950"
-                        title={typeof im?.name === "string" ? im.name : "Imagen"}
-                      >
-                        {typeof im?.dataUrl === "string" && im.dataUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={im.dataUrl}
-                            alt={typeof im?.name === "string" ? im.name : "Imagen"}
-                            className="aspect-square h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="aspect-square w-full" />
-                        )}
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-            ) : null}
           </div>
           </div>
         </div>

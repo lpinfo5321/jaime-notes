@@ -86,11 +86,17 @@ export default async function NotesPage({
     }
   }
 
-  // Portada: preferimos values._cover.path, si no, la primera imagen adjunta
+  // Portada: preferimos values._coverInline.dataUrl; si no, values._cover.path; si no, la primera imagen adjunta
   const coverUrls: Record<string, string> = {};
   const coverPaths: Record<string, string> = {};
   for (const n of safeNotes as any[]) {
     const id = String(n.id);
+    const inline =
+      typeof n?.values?._coverInline?.dataUrl === "string" ? String(n.values._coverInline.dataUrl) : null;
+    if (inline && inline.startsWith("data:image/")) {
+      coverUrls[id] = inline;
+      continue;
+    }
     const cover = n?.values?._cover;
     const fromValues =
       cover?.path && typeof cover.path === "string" ? String(cover.path) : null;

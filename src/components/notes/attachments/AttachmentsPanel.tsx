@@ -26,6 +26,13 @@ type Attachment = {
 
 // (note.values) shape we use: { _imageOrder?: string[] }
 
+type ReportImage = {
+  id: string;
+  name: string;
+  dataUrl: string;
+  createdAt?: string;
+};
+
 function sanitizeName(name: string) {
   return name
     .trim()
@@ -57,6 +64,9 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [coverPath, setCoverPath] = useState<string | null>(null);
   const [imageOrderIds, setImageOrderIds] = useState<string[]>([]);
+  const [coverInline, setCoverInline] = useState<string | null>(null);
+  const [reportImages, setReportImages] = useState<ReportImage[]>([]);
+  const [reportImageOrderIds, setReportImageOrderIds] = useState<string[]>([]);
   const [preview, setPreview] = useState<{
     url: string;
     mime: string;
@@ -114,17 +124,41 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
       .select("values")
       .eq("id", noteId)
       .single();
+    const values = ((noteRow as any)?.values ?? {}) as Record<string, unknown>;
     const cp =
-      (noteRow as any)?.values?._cover?.path &&
-      typeof (noteRow as any).values._cover.path === "string"
-        ? String((noteRow as any).values._cover.path)
+      (values as any)?._cover?.path && typeof (values as any)._cover.path === "string"
+        ? String((values as any)._cover.path)
         : null;
     setCoverPath(cp);
 
-    const savedOrder = Array.isArray((noteRow as any)?.values?._imageOrder)
-      ? ((noteRow as any).values._imageOrder as string[])
+    const inline =
+      typeof (values as any)?._coverInline?.dataUrl === "string"
+        ? String((values as any)._coverInline.dataUrl)
+        : null;
+    setCoverInline(inline);
+
+    const savedOrder = Array.isArray((values as any)?._imageOrder)
+      ? ((values as any)._imageOrder as string[])
       : null;
     if (savedOrder) setImageOrderIds(savedOrder);
+
+    const repImgs = Array.isArray((values as any)?._report?.payload?.images)
+      ? (((values as any)._report.payload.images as any[]) || [])
+          .map((im) => ({
+            id: typeof im?.id === "string" ? im.id : "",
+            name: typeof im?.name === "string" ? im.name : "Imagen",
+            dataUrl: typeof im?.dataUrl === "string" ? im.dataUrl : "",
+            createdAt: typeof im?.createdAt === "string" ? im.createdAt : undefined,
+          }))
+          .filter((im) => !!im.id && !!im.dataUrl)
+      : [];
+    setReportImages(repImgs);
+
+    const savedReportOrder = Array.isArray((values as any)?._reportImageOrder)
+      ? ((values as any)._reportImageOrder as string[])
+      : null;
+    if (savedReportOrder) setReportImageOrderIds(savedReportOrder);
+    else setReportImageOrderIds(repImgs.map((x) => x.id));
 
     const { data, error: err } = await supabase
       .from("attachments")
@@ -168,6 +202,59 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
       }
     }
   }
+
+  async function setInlineCover(img: ReportImage) {
+    if (!img?.dataUrl) return;
+    try {
+      const { data: noteRow } = await supabase
+        .from("notes")
+        .select("values")
+        .eq("id", noteId)
+        .single();
+      const prev = ((noteRow as any)?.values ?? {}) as Record<string, unknown>;
+      const next = {
+        ...prev,
+        _coverInline: {
+          dataUrl: img.dataUrl,
+          filename: img.name,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+      await supabase.from("notes").update({ values: next }).eq("id", noteId);
+      setCoverInline(img.dataUrl);
+      // if an inline cover is set, we treat it as active cover
+      setCoverPath(null);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function saveReportImageOrder(nextIds: string[]) {
+    try {
+      const { data: noteRow } = await supabase
+        .from("notes")
+        .select("values")
+        .eq("id", noteId)
+        .single();
+      const prev = ((noteRow as any)?.values ?? {}) as Record<string, unknown>;
+      const next = {
+        ...prev,
+        _reportImageOrder: nextIds,
+        _reportImageOrderUpdatedAt: new Date().toISOString(),
+      };
+      await supabase.from("notes").update({ values: next }).eq("id", noteId);
+    } catch {
+      // ignore
+    }
+  }
+
+  const orderedReportImages = useMemo(() => {
+    const byId = new Map(reportImages.map((x) => [x.id, x]));
+    const ids = reportImages.map((x) => x.id);
+    const order = (reportImageOrderIds ?? []).filter((id) => ids.includes(id));
+    const remaining = ids.filter((id) => !order.includes(id));
+    return [...order, ...remaining].map((id) => byId.get(id)!).filter(Boolean);
+  }, [reportImages, reportImageOrderIds]);
 
   useEffect(() => {
     refresh();
@@ -434,6 +521,65 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
       {error ? (
         <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
           {error}
+        </div>
+      ) : null}
+
+      {/* Imágenes del reporte */}
+      {orderedReportImages.length ? (
+        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-sm font-semibold">Imágenes del reporte</div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+              Arrastra para ordenar · Click = Portada
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(event) => {
+                const { active, over } = event;
+                if (!over || active.id === over.id) return;
+                setReportImageOrderIds((prev) => {
+                  const oldIndex = prev.indexOf(String(active.id));
+                  const newIndex = prev.indexOf(String(over.id));
+                  if (oldIndex < 0 || newIndex < 0) return prev;
+                  const next = arrayMove(prev, oldIndex, newIndex);
+                  void saveReportImageOrder(next);
+                  return next;
+                });
+              }}
+            >
+              <SortableContext items={reportImageOrderIds} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+                  {orderedReportImages.map((im) => {
+                    const isCover = !!coverInline && coverInline === im.dataUrl;
+                    return (
+                      <button
+                        key={im.id}
+                        type="button"
+                        className={cn(
+                          "relative overflow-hidden rounded-xl border bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950",
+                          isCover ? "border-amber-400" : "border-zinc-200",
+                        )}
+                        onClick={() => setInlineCover(im)}
+                        title="Click para usar como portada"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={im.dataUrl} alt={im.name} className="aspect-square w-full object-cover" />
+                        {isCover ? (
+                          <div className="absolute left-2 top-2 rounded-full bg-amber-500/90 px-2 py-0.5 text-[11px] font-bold text-white">
+                            Portada
+                          </div>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
         </div>
       ) : null}
 
