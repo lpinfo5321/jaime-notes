@@ -322,6 +322,75 @@
       box-shadow: 0 18px 50px rgba(0,0,0,.35);
     }
 
+    /* Lists modal (editable dropdown options) */
+    .listModal{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:1000;
+      padding: 16px;
+    }
+    .listModal.show{display:flex}
+    .listModalCard{
+      width: min(760px, 100%);
+      background:#fff;
+      border-radius: 18px;
+      border:1px solid rgba(229,231,235,.95);
+      box-shadow: 0 30px 80px rgba(0,0,0,.22);
+      overflow:hidden;
+    }
+    .listModalTop{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding: 10px 12px;
+      border-bottom:1px solid rgba(229,231,235,.95);
+    }
+    .listModalTop b{font-size:13px}
+    .listModalBody{
+      padding: 12px;
+      background: #fff;
+    }
+    .listGrid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media (min-width: 720px){
+      .listGrid{grid-template-columns: 1fr 1fr;}
+    }
+    .listBox{
+      border:1px solid rgba(229,231,235,.95);
+      border-radius: 16px;
+      padding: 12px;
+      background: rgba(244,246,251,.6);
+    }
+    .listBoxHead{display:flex; align-items:baseline; justify-content:space-between; gap:10px;}
+    .listBoxHead b{font-size:12px; text-transform:uppercase; letter-spacing:.6px;}
+    .listBoxHead span{font-size:12px; color: var(--muted);}
+    .listAddRow{display:flex; gap:8px; margin-top:10px;}
+    .listAddRow input{
+      flex:1;
+      border:1px solid var(--line);
+      border-radius: 12px;
+      padding: 9px 10px;
+      font-size: 13px;
+      outline: none;
+      background:#fff;
+    }
+    .optList{margin-top:10px; display:flex; flex-direction:column; gap:8px; max-height: 260px; overflow:auto;}
+    .optRow{display:flex; gap:8px; align-items:center;}
+    .optRow input{
+      flex:1;
+      border:1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 13px;
+      outline:none;
+      background:#fff;
+    }
+    .optRow button{padding:8px 10px; border-radius:12px;}
+
     /* Mobile */
     @media (max-width: 520px){
       :root{
@@ -428,6 +497,7 @@
       <div class="pill" id="lastSaved">Sin cambios</div>
       <input id="imgPicker" type="file" accept="image/*" multiple style="display:none" />
       <button class="btn" id="btnAddImages">Agregar imágenes</button>
+      <button class="btn" id="btnLists">Listas</button>
       <button class="btn btnPrimary" id="btnPrint">Imprimir</button>
     </div>
   </div>
@@ -487,7 +557,7 @@
         <tr><td class="labelCell">PAYEE</td><td class="valueCell"><input data-field="payee" /></td></tr>
         <tr><td class="labelCell">CHECK NUMBER</td><td class="valueCell"><input data-field="checkNumber" /></td></tr>
         <tr><td class="labelCell">MAKER/PAYOR</td><td class="valueCell"><input data-field="makerPayor" /></td></tr>
-        <tr><td class="labelCell">REJECT REASON</td><td class="valueCell"><input data-field="rejectReason" /></td></tr>
+        <tr><td class="labelCell">REJECT REASON</td><td class="valueCell"><input data-field="rejectReason" list="rejectReasonList" /></td></tr>
         <tr><td class="labelCell">CUSTOMER CONTACT</td><td class="valueCell"><input data-field="customerContact" /></td></tr>
         <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" /></td></tr>
       </table>
@@ -500,9 +570,9 @@
         </table>
         <table class="miniBlock">
           <tr><td class="labelCell">DATE FEE PAID</td><td class="valueCell"><input data-field="dateFeePaid" /></td></tr>
-          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="feePaymentMethod" /></td></tr>
+          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="feePaymentMethod" list="paymentMethodList" /></td></tr>
           <tr><td class="labelCell">DATE CHECK PAID</td><td class="valueCell"><input data-field="dateCheckPaid" /></td></tr>
-          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="checkPaymentMethod" /></td></tr>
+          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="checkPaymentMethod" list="paymentMethodList" /></td></tr>
         </table>
       </div>
 
@@ -519,6 +589,10 @@
     </div>
   </template>
 
+  <!-- Datalists for dropdown-like inputs -->
+  <datalist id="rejectReasonList"></datalist>
+  <datalist id="paymentMethodList"></datalist>
+
   <!-- Image modal -->
   <div class="modal" id="modal">
     <div class="modalCard">
@@ -531,6 +605,48 @@
       </div>
       <div class="modalBody">
         <img id="modalImg" alt="preview" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Lists editor modal -->
+  <div class="listModal" id="listModal">
+    <div class="listModalCard">
+      <div class="listModalTop">
+        <b>Listas (desplegables)</b>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn" id="listModalClose">Cerrar</button>
+        </div>
+      </div>
+      <div class="listModalBody">
+        <div class="listGrid">
+          <div class="listBox">
+            <div class="listBoxHead">
+              <b>Reject reason</b>
+              <span id="rrCount">0</span>
+            </div>
+            <div class="listAddRow">
+              <input id="rrNew" placeholder="Agregar opción…" />
+              <button class="btn btnPrimary" id="rrAdd">Agregar</button>
+            </div>
+            <div class="optList" id="rrList"></div>
+          </div>
+
+          <div class="listBox">
+            <div class="listBoxHead">
+              <b>Form of payment</b>
+              <span id="pmCount">0</span>
+            </div>
+            <div class="listAddRow">
+              <input id="pmNew" placeholder="Agregar opción…" />
+              <button class="btn btnPrimary" id="pmAdd">Agregar</button>
+            </div>
+            <div class="optList" id="pmList"></div>
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:var(--muted);">
+          Tip: escribe para filtrar, o selecciona desde la flecha del input.
+        </div>
       </div>
     </div>
   </div>
@@ -573,10 +689,25 @@
         lastSaved: document.getElementById("lastSaved"),
         btnPrint: document.getElementById("btnPrint"),
         btnAddImages: document.getElementById("btnAddImages"),
+        btnLists: document.getElementById("btnLists"),
         imgPicker: document.getElementById("imgPicker"),
         imagePages: document.getElementById("imagePages"),
         imagesEmpty: document.getElementById("imagesEmpty"),
         attCount: document.getElementById("attCount"),
+        rejectReasonList: document.getElementById("rejectReasonList"),
+        paymentMethodList: document.getElementById("paymentMethodList"),
+
+        listModal: document.getElementById("listModal"),
+        listModalClose: document.getElementById("listModalClose"),
+        rrCount: document.getElementById("rrCount"),
+        rrNew: document.getElementById("rrNew"),
+        rrAdd: document.getElementById("rrAdd"),
+        rrList: document.getElementById("rrList"),
+        pmCount: document.getElementById("pmCount"),
+        pmNew: document.getElementById("pmNew"),
+        pmAdd: document.getElementById("pmAdd"),
+        pmList: document.getElementById("pmList"),
+
         modal: document.getElementById("modal"),
         modalImg: document.getElementById("modalImg"),
         modalTitle: document.getElementById("modalTitle"),
@@ -649,9 +780,93 @@
             updatedAt: maybe.updatedAt || nowISO(),
             fields: maybe.fields || {},
             images: maybe.images || [],
+            lists: maybe.lists || null,
           };
         }
         return null;
+      };
+
+      const DEFAULT_REJECT_REASONS = [
+        "NSF",
+        "STOP PAYMENT",
+        "DUPLICATE",
+        "ACCOUNT CLOSED",
+        "REFER TO MAKER",
+      ];
+      const DEFAULT_PAYMENT_METHODS = ["PAID CASH", "PAID CHECK", "REDEPOSITED"];
+
+      const ensureLists = () => {
+        report.lists = report.lists && typeof report.lists === "object" ? report.lists : {};
+        if (!Array.isArray(report.lists.rejectReasons)) report.lists.rejectReasons = [...DEFAULT_REJECT_REASONS];
+        if (!Array.isArray(report.lists.paymentMethods)) report.lists.paymentMethods = [...DEFAULT_PAYMENT_METHODS];
+      };
+
+      const renderDatalists = () => {
+        ensureLists();
+        el.rejectReasonList.innerHTML = (report.lists.rejectReasons || [])
+          .map((x) => `<option value="${String(x).replace(/"/g, "&quot;")}"></option>`)
+          .join("");
+        el.paymentMethodList.innerHTML = (report.lists.paymentMethods || [])
+          .map((x) => `<option value="${String(x).replace(/"/g, "&quot;")}"></option>`)
+          .join("");
+      };
+
+      const renderListsEditor = () => {
+        ensureLists();
+        const rr = report.lists.rejectReasons || [];
+        const pm = report.lists.paymentMethods || [];
+        el.rrCount.textContent = `${rr.length}`;
+        el.pmCount.textContent = `${pm.length}`;
+
+        el.rrList.innerHTML = "";
+        rr.forEach((val, idx) => {
+          const row = document.createElement("div");
+          row.className = "optRow";
+          const input = document.createElement("input");
+          input.value = String(val);
+          input.addEventListener("change", () => {
+            report.lists.rejectReasons[idx] = input.value.trim().toUpperCase();
+            scheduleSave();
+            renderDatalists();
+          });
+          const del = document.createElement("button");
+          del.className = "btn btnDanger";
+          del.textContent = "Borrar";
+          del.addEventListener("click", () => {
+            report.lists.rejectReasons.splice(idx, 1);
+            scheduleSave();
+            renderDatalists();
+            renderListsEditor();
+          });
+          row.appendChild(input);
+          row.appendChild(del);
+          el.rrList.appendChild(row);
+        });
+
+        el.pmList.innerHTML = "";
+        pm.forEach((val, idx) => {
+          const row = document.createElement("div");
+          row.className = "optRow";
+          const input = document.createElement("input");
+          input.value = String(val);
+          input.addEventListener("change", () => {
+            report.lists.paymentMethods[idx] = input.value.trim().toUpperCase();
+            scheduleSave();
+            renderDatalists();
+          });
+          const del = document.createElement("button");
+          del.className = "btn btnDanger";
+          del.textContent = "Borrar";
+          del.addEventListener("click", () => {
+            report.lists.paymentMethods.splice(idx, 1);
+            scheduleSave();
+            renderDatalists();
+            renderListsEditor();
+          });
+          row.appendChild(input);
+          row.appendChild(del);
+          el.pmList.appendChild(row);
+        });
       };
 
       const persist = (silent=false) => {
@@ -711,9 +926,18 @@
         if (digits.length < 10) return s;
         const d10 = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits.slice(-10);
         const p = `${d10.slice(0,3)}-${d10.slice(3,6)}-${d10.slice(6,10)}`;
-        // Keep name part if user typed one before digits
+        // Keep name part (and separate with "#") if user typed one
         const namePart = s.replace(/[0-9()\-\s+.]/g, " ").replace(/\s+/g, " ").trim();
-        return namePart ? `${namePart} ${p}` : p;
+        const cleanName = namePart.replace(/\s*#\s*$/g, "").trim();
+        return cleanName ? `${cleanName} #${p}` : p;
+      };
+
+      const formatCheckNumberSmart = (raw) => {
+        const s = String(raw ?? "").trim();
+        if (!s) return "";
+        const digits = s.replace(/\D/g, "");
+        if (!digits) return s;
+        return "#" + digits;
       };
 
       const buildPaper = () => {
@@ -736,6 +960,7 @@
         el.paper.innerHTML = "";
         activePaper = buildPaper();
         el.paper.appendChild(activePaper);
+        renderDatalists();
 
         activePaper.addEventListener("input", (e) => {
           const t = e.target;
@@ -788,6 +1013,16 @@
           // Auto-format phone numbers (keep optional name)
           if (key === "customerContact" || key === "companyContact") {
             const next = formatPhoneSmart(t.value);
+            if (next !== t.value) {
+              t.value = next;
+              report.fields[key] = next;
+              scheduleSave();
+            }
+          }
+
+          // Auto-format check number (#12345)
+          if (key === "checkNumber") {
+            const next = formatCheckNumberSmart(t.value);
             if (next !== t.value) {
               t.value = next;
               report.fields[key] = next;
@@ -995,6 +1230,37 @@
         window.print();
       });
 
+      el.btnLists.addEventListener("click", () => {
+        renderListsEditor();
+        el.listModal.classList.add("show");
+      });
+      el.listModalClose.addEventListener("click", () => {
+        el.listModal.classList.remove("show");
+      });
+      el.listModal.addEventListener("click", (e) => {
+        if (e.target === el.listModal) el.listModalClose.click();
+      });
+      el.rrAdd.addEventListener("click", () => {
+        const v = String(el.rrNew.value || "").trim().toUpperCase();
+        if (!v) return;
+        ensureLists();
+        report.lists.rejectReasons.unshift(v);
+        el.rrNew.value = "";
+        scheduleSave();
+        renderDatalists();
+        renderListsEditor();
+      });
+      el.pmAdd.addEventListener("click", () => {
+        const v = String(el.pmNew.value || "").trim().toUpperCase();
+        if (!v) return;
+        ensureLists();
+        report.lists.paymentMethods.unshift(v);
+        el.pmNew.value = "";
+        scheduleSave();
+        renderDatalists();
+        renderListsEditor();
+      });
+
       el.modalClose.addEventListener("click", () => {
         modalImageId = null;
         el.modal.classList.remove("show");
@@ -1016,6 +1282,7 @@
       // Boot
       report = load();
       applyCompanyNameFromNote();
+      ensureLists();
       computeTotalDue();
       persist(true);
       renderPaper();
