@@ -186,15 +186,6 @@
       font-size: 13px;
       padding:0;
     }
-    .valueCell select{
-      width:100%;
-      border:0;
-      outline:0;
-      background:transparent;
-      font-size: 13px;
-      padding:0;
-      appearance: none;
-    }
     .valueCell input::placeholder{
       color: rgba(17,24,39,.35);
       font-weight: 700;
@@ -509,13 +500,9 @@
         </table>
         <table class="miniBlock">
           <tr><td class="labelCell">DATE FEE PAID</td><td class="valueCell"><input data-field="dateFeePaid" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell">
-            <select data-field="feePaymentMethod"></select>
-          </td></tr>
+          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="feePaymentMethod" placeholder="RELLENAR" /></td></tr>
           <tr><td class="labelCell">DATE CHECK PAID</td><td class="valueCell"><input data-field="dateCheckPaid" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell">
-            <select data-field="checkPaymentMethod"></select>
-          </td></tr>
+          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="checkPaymentMethod" placeholder="RELLENAR" /></td></tr>
         </table>
       </div>
 
@@ -603,16 +590,11 @@
       let toastTimer = null;
       let modalImageId = null;
 
-      const applyCompanyName = (name) => {
-        const v = (name || "").trim();
-        const up = v ? v.toUpperCase() : "";
+      const applyCompanyNameFromNote = () => {
         if (!report) return;
+        if (!initialCompanyName) return;
         report.fields = report.fields || {};
-        report.fields.companyName = up;
-        try {
-          const input = document.querySelector('input[data-field="companyName"]');
-          if (input) input.value = up;
-        } catch {}
+        report.fields.companyName = initialCompanyName.toUpperCase();
       };
 
       const blankReport = () => ({
@@ -642,52 +624,6 @@
         },
         images: [] // {id, name, dataUrl, createdAt}
       });
-
-      const defaultOptions = {
-        feePaymentMethod: ["PAID CASH", "PAID CHECK"],
-        checkPaymentMethod: ["PAID CASH", "PAID CHECK", "REDEPOSITED"],
-      };
-
-      const getOptions = (key) => {
-        if (!report) return defaultOptions[key] || [];
-        const opt = report.options && report.options[key];
-        return Array.isArray(opt) && opt.length ? opt : (defaultOptions[key] || []);
-      };
-
-      const ensureSelectOptions = (selectEl, key) => {
-        if (!selectEl) return;
-        const current = String(report?.fields?.[key] ?? "");
-        const opts = getOptions(key);
-        selectEl.innerHTML = "";
-
-        const empty = document.createElement("option");
-        empty.value = "";
-        empty.textContent = "RELLENAR";
-        selectEl.appendChild(empty);
-
-        for (const o of opts) {
-          const opt = document.createElement("option");
-          opt.value = String(o);
-          opt.textContent = String(o);
-          selectEl.appendChild(opt);
-        }
-
-        const add = document.createElement("option");
-        add.value = "__add__";
-        add.textContent = "➕ Agregar…";
-        selectEl.appendChild(add);
-
-        selectEl.value = current && opts.includes(current) ? current : (current || "");
-      };
-
-      const addCustomOption = (key, value) => {
-        const v = String(value || "").trim().toUpperCase();
-        if (!v) return;
-        report.options = report.options && typeof report.options === "object" ? report.options : {};
-        const list = Array.isArray(report.options[key]) ? report.options[key] : [];
-        if (!list.includes(v)) list.push(v);
-        report.options[key] = list;
-      };
 
       const normalizeFromLegacy = (maybe) => {
         // If coming from older multi-report payload, pick active or first.
@@ -751,13 +687,12 @@
         const updated = node.querySelector('[data-live="updatedAt"]');
         if (updated) updated.textContent = fmtDateTime(report.updatedAt);
 
-        const controls = node.querySelectorAll("[data-field]");
-        controls.forEach((el) => {
-          const key = el.getAttribute("data-field");
+        const inputs = node.querySelectorAll("[data-field]");
+        inputs.forEach(inp => {
+          const key = inp.getAttribute("data-field");
           const val = (report.fields[key] ?? "");
-          if (el.tagName === "INPUT") el.value = val;
-          if (el.tagName === "SELECT") ensureSelectOptions(el, key);
-          if (key === "totalDue" || key === "companyName") el.setAttribute("readonly","readonly");
+          if (inp.tagName === "INPUT") inp.value = val;
+          if (key === "totalDue") inp.setAttribute("readonly","readonly");
         });
         return node;
       };
@@ -767,39 +702,19 @@
         activePaper = buildPaper();
         el.paper.appendChild(activePaper);
 
-        const onEdit = (e) => {
+        activePaper.addEventListener("input", (e) => {
           const t = e.target;
           const key = t?.getAttribute?.("data-field");
           if (!key) return;
           if (key === "totalDue") return;
-          if (t.tagName === "SELECT") {
-            const v = t.value;
-            if (v === "__add__") {
-              const next = prompt("Nueva opción:", "");
-              if (next) {
-                addCustomOption(key, next);
-                report.fields[key] = String(next).trim().toUpperCase();
-              } else {
-                // revert selection
-                report.fields[key] = report.fields[key] ?? "";
-              }
-              // rebuild options and selection
-              ensureSelectOptions(t, key);
-            } else {
-              report.fields[key] = v;
-            }
-          } else {
-            report.fields[key] = (t.tagName === "INPUT") ? t.value : "";
-          }
+          report.fields[key] = (t.tagName === "INPUT") ? t.value : "";
           if (key === "checkAmount" || key === "returnedFee") {
             computeTotalDue();
             const totalEl = activePaper.querySelector('[data-field="totalDue"]');
             if (totalEl) totalEl.value = report.fields.totalDue;
           }
           scheduleSave();
-        };
-        activePaper.addEventListener("input", onEdit);
-        activePaper.addEventListener("change", onEdit);
+        });
 
         activePaper.addEventListener("blur", (e) => {
           const t = e.target;
@@ -967,9 +882,16 @@
       window.addEventListener("message", (ev) => {
         const data = ev?.data;
         if (!data || typeof data !== "object") return;
-        if (data.type === "rc:companyName") {
-          applyCompanyName(data.name);
-          scheduleSave();
+        if (data.type === "rc:setCompanyName") {
+          // Parent tells us the note/company name changed; keep in sync.
+          try {
+            const nextName = String((data as any).companyName ?? "").trim();
+            if (nextName) {
+              report.fields.companyName = nextName.toUpperCase();
+              scheduleSave();
+              renderPaper();
+            }
+          } catch {}
           return;
         }
         if (data.type === "rc:preparePrint") {
@@ -986,8 +908,7 @@
         const norm = normalizeFromLegacy(data.initialReport);
         if (norm) {
           report = norm;
-          // Always sync company name from note title (authoritative)
-          applyCompanyName(data.companyTitle || initialCompanyName);
+          applyCompanyNameFromNote();
           computeTotalDue();
           persist(true);
           renderPaper();
@@ -1031,6 +952,7 @@
 
       // Boot
       report = load();
+      applyCompanyNameFromNote();
       computeTotalDue();
       persist(true);
       renderPaper();

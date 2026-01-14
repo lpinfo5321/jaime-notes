@@ -108,19 +108,6 @@ function getTotalDueFromValues(values: Record<string, unknown> | null | undefine
   return { text: formatUsd(cents), isSet: true };
 }
 
-function getReportCoverDataUrl(values: Record<string, unknown> | null | undefined): string | null {
-  const payload = (values as any)?._report?.payload;
-  const images = Array.isArray(payload?.images) ? payload.images : [];
-  if (!images.length) return null;
-  const coverId =
-    typeof (values as any)?._reportCoverImageId === "string"
-      ? String((values as any)._reportCoverImageId)
-      : null;
-  const pick = coverId ? images.find((im: any) => String(im?.id) === coverId) : images[0];
-  const url = pick?.dataUrl;
-  return typeof url === "string" && url.startsWith("data:image/") ? url : null;
-}
-
 function fitTextToSingleLineInput(
   el: HTMLInputElement | null,
   opts?: { minPx?: number },
@@ -494,9 +481,6 @@ function CompanyCard({
   const excerpt = latestText.replace(/\s+/g, " ").slice(0, 140);
   const totalDue = getTotalDueFromValues(note.values);
 
-  const reportCover = getReportCoverDataUrl(note.values);
-  const coverSrc = reportCover ?? coverUrl;
-
   return (
     <div
       className={cn(
@@ -580,7 +564,7 @@ function CompanyCard({
 
         {/* Portada (contain) */}
         <div className="flex items-center justify-center">
-          {coverSrc ? (
+          {coverUrl ? (
             <button
               type="button"
               onClick={onOpenReport}
@@ -590,7 +574,7 @@ function CompanyCard({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 alt="Portada"
-                src={coverSrc}
+                src={coverUrl}
                 className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
               />
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-3">
@@ -659,26 +643,6 @@ function ReportModal({
   const saveTimerRef = useRef<number | null>(null);
   const preparedResolverRef = useRef<((ok: boolean) => void) | null>(null);
 
-  const companyTitleUpper = (companyTitle ?? "").trim().toUpperCase();
-
-  function withCompanyName(payload: unknown) {
-    if (!payload || typeof payload !== "object") return payload;
-    const p: any = payload;
-    if (!p.fields || typeof p.fields !== "object") p.fields = {};
-    p.fields.companyName = companyTitleUpper;
-    return p;
-  }
-
-  useEffect(() => {
-    // Keep report company name synced with note title
-    try {
-      iframeRef.current?.contentWindow?.postMessage(
-        { type: "rc:companyName", name: companyTitleUpper },
-        "*",
-      );
-    } catch {}
-  }, [companyTitleUpper]);
-
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -700,10 +664,9 @@ function ReportModal({
         preparedResolverRef.current = null;
       }
       if (data.type === "rc:save" && data.noteId === noteId) {
-        const nextPayload = withCompanyName((data as any).payload);
         // Update UI immediately (card should reflect total without refresh)
         try {
-          onLocalReportUpdate(nextPayload);
+          onLocalReportUpdate((data as any).payload);
         } catch {}
 
         // Throttle saves to avoid spamming DB while typing
@@ -713,7 +676,7 @@ function ReportModal({
             await fetch(`/api/notes/${noteId}/report`, {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ payload: nextPayload }),
+              body: JSON.stringify({ payload: data.payload }),
             });
           } catch {
             // ignore
@@ -727,6 +690,16 @@ function ReportModal({
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
   }, [noteId]);
+
+  // Keep report company name synced while modal is open
+  useEffect(() => {
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "rc:setCompanyName", companyName: companyTitle },
+        "*",
+      );
+    } catch {}
+  }, [companyTitle]);
 
   async function printFromParent() {
     const w = iframeRef.current?.contentWindow ?? null;
@@ -848,7 +821,11 @@ function ReportModal({
             onLoad={() => {
               try {
                 iframeRef.current?.contentWindow?.postMessage(
-                  { type: "rc:init", noteId, initialReport: withCompanyName(initialReport), companyTitle },
+                  { type: "rc:init", noteId, initialReport },
+                  "*",
+                );
+                iframeRef.current?.contentWindow?.postMessage(
+                  { type: "rc:setCompanyName", companyName: companyTitle },
                   "*",
                 );
               } catch {}
@@ -1382,6 +1359,43 @@ function CompanyModal({
             <div className="mt-4">
               <AttachmentsPanel noteId={note.id} />
             </div>
+
+            {/* Imágenes del Reporte (las que se agregan dentro del reporte) */}
+            {Array.isArray(((note.values ?? {}) as any)?._report?.payload?.images) &&
+            (((note.values ?? {}) as any)?._report?.payload?.images?.length ?? 0) ? (
+              <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                    Imágenes del reporte
+                  </div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {((note.values ?? {}) as any)?._report?.payload?.images?.length ?? 0}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+                  {(((note.values ?? {}) as any)?._report?.payload?.images ?? []).map(
+                    (im: any, idx: number) => (
+                      <div
+                        key={String(im?.id ?? idx)}
+                        className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950"
+                        title={typeof im?.name === "string" ? im.name : "Imagen"}
+                      >
+                        {typeof im?.dataUrl === "string" && im.dataUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={im.dataUrl}
+                            alt={typeof im?.name === "string" ? im.name : "Imagen"}
+                            className="aspect-square h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="aspect-square w-full" />
+                        )}
+                      </div>
+                    ),
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
           </div>
         </div>
