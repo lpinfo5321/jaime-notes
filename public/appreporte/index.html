@@ -139,6 +139,17 @@
       color:#111827;
     }
     .storeInfo b{letter-spacing:.4px;}
+    .storeHeader{
+      display:flex;
+      justify-content:flex-end;
+      margin-bottom: 6px;
+    }
+    .lpLogo{
+      width: 170px;
+      max-width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
 
     .titleCenter{
       margin: 16px 0 10px 0;
@@ -324,6 +335,7 @@
       .paperTop{grid-template-columns: 1fr; gap: 12px;}
       .companyName{font-size: 18px;}
       .storeInfo{font-size: 11.5px;}
+      .lpLogo{width: 140px;}
       .titleCenter{font-size: 20px; margin: 12px 0 8px 0;}
       table{font-size: 11.5px;}
       .labelCell{font-size: 10px; width: 34%;}
@@ -394,6 +406,10 @@
         break-inside: avoid-page;
         page-break-inside: avoid;
       }
+      .lpLogo{
+        width: 180px !important;
+        height: auto !important;
+      }
     }
   </style>
 </head>
@@ -443,6 +459,15 @@
         </div>
 
         <div class="storeInfo">
+          <div class="storeHeader">
+            <img
+              class="lpLogo"
+              src="/appreporte/lp-logo.png"
+              alt="La Primavera"
+              loading="eager"
+              onerror="this.style.display='none'"
+            />
+          </div>
           <b>LA PRIMAVERA SUPERMARKET INC</b><br/>
           CHECK CASHING SERVICES<br/>
           901 N WASHINGTON BLVD<br/>
