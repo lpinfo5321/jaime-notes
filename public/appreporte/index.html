@@ -348,8 +348,9 @@
 
       /* Each section = one page */
       #paper{ break-after: page; page-break-after: always; }
-      /* Use break-before only to avoid extra blank pages */
-      #imagePages .imagePaper{ break-before: page; page-break-before: always; }
+      /* Each image = one page (avoid blank pages from break-before) */
+      #imagePages .imagePaper{ break-after: page; page-break-after: always; }
+      #imagePages .imagePaper:last-child{ break-after: auto; page-break-after: auto; }
 
       /* Image pages: print only the image (no header), no padding so it fills */
       #imagePages .imageTop{ display:none !important; }
@@ -368,14 +369,14 @@
         display:flex !important;
         align-items:center !important;
         justify-content:center !important;
-        /* 11in page height - 0.7in margins = 10.3in (safe a bit lower) */
-        height: 10.2in !important;
+        height: auto !important;
       }
       #imagePages .imageBody img{
         width: auto !important;
         max-width: 100% !important;
         height: auto !important;
-        max-height: 100% !important;
+        /* 11in page height - 0.7in margins = 10.3in (safe a bit lower) */
+        max-height: 10.2in !important;
         object-fit: contain !important;
         border: 0 !important;
         border-radius: 0 !important;

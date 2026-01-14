@@ -595,11 +595,7 @@ function ReportModal({
       if (!data || typeof data !== "object") return;
       if (data.type === "rc:print") {
         // parent-driven print (works better on mobile)
-        const w = iframeRef.current?.contentWindow;
-        try {
-          w?.focus();
-          w?.print();
-        } catch {}
+        void printFromParent();
       }
       if (data.type === "rc:save" && data.noteId === noteId) {
         // Throttle saves to avoid spamming DB while typing
@@ -624,8 +620,40 @@ function ReportModal({
     };
   }, [noteId]);
 
-  function printFromParent() {
-    const w = iframeRef.current?.contentWindow;
+  async function printFromParent() {
+    const w = iframeRef.current?.contentWindow ?? null;
+    const doc = iframeRef.current?.contentDocument ?? null;
+
+    try {
+      // Wait for fonts + images so print doesn't create blank pages.
+      const fontsReady = (doc as any)?.fonts?.ready;
+      if (fontsReady && typeof fontsReady.then === "function") {
+        await fontsReady.catch(() => undefined);
+      }
+
+      const imgs = Array.from(doc?.images ?? []);
+      await Promise.all(
+        imgs.map((img) =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => {
+                img.addEventListener("load", () => resolve(), { once: true });
+                img.addEventListener("error", () => resolve(), { once: true });
+              }),
+        ),
+      );
+
+      await Promise.all(
+        imgs.map((img) =>
+          typeof (img as any).decode === "function"
+            ? (img as any).decode().catch(() => undefined)
+            : Promise.resolve(),
+        ),
+      );
+    } catch {
+      // ignore
+    }
+
     try {
       w?.focus();
       w?.print();
@@ -656,7 +684,7 @@ function ReportModal({
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={(e) => {
                 e.stopPropagation();
-                printFromParent();
+                void printFromParent();
               }}
               title="Imprimir reporte"
             >
