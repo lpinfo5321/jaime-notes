@@ -580,6 +580,7 @@ function ReportModal({
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const preparedResolverRef = useRef<((ok: boolean) => void) | null>(null);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -596,6 +597,10 @@ function ReportModal({
       if (data.type === "rc:print") {
         // parent-driven print (works better on mobile)
         void printFromParent();
+      }
+      if (data.type === "rc:prepared" && (data as any).noteId === noteId) {
+        preparedResolverRef.current?.(true);
+        preparedResolverRef.current = null;
       }
       if (data.type === "rc:save" && data.noteId === noteId) {
         // Throttle saves to avoid spamming DB while typing
@@ -623,6 +628,25 @@ function ReportModal({
   async function printFromParent() {
     const w = iframeRef.current?.contentWindow ?? null;
     const doc = iframeRef.current?.contentDocument ?? null;
+
+    // Ask iframe to prepare (load/decode images) and wait briefly for ack.
+    try {
+      const ack = await new Promise<boolean>((resolve) => {
+        preparedResolverRef.current = resolve;
+        try {
+          w?.postMessage({ type: "rc:preparePrint" }, "*");
+        } catch {}
+        window.setTimeout(() => {
+          if (preparedResolverRef.current) {
+            preparedResolverRef.current = null;
+            resolve(false);
+          }
+        }, 6000);
+      });
+      void ack;
+    } catch {
+      // ignore
+    }
 
     try {
       // Wait for fonts + images so print doesn't create blank pages.

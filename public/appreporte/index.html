@@ -372,11 +372,11 @@
         height: auto !important;
       }
       #imagePages .imageBody img{
-        width: auto !important;
+        display:block !important;
+        width: 100% !important;
         max-width: 100% !important;
-        height: auto !important;
+        height: 10.2in !important;
         /* 11in page height - 0.7in margins = 10.3in (safe a bit lower) */
-        max-height: 10.2in !important;
         object-fit: contain !important;
         border: 0 !important;
         border-radius: 0 !important;
@@ -802,6 +802,26 @@
         renderImages();
       };
 
+      const waitForImagesReady = async () => {
+        const imgs = Array.from(document.images || []);
+        await Promise.all(
+          imgs.map((img) =>
+            img.complete
+              ? Promise.resolve()
+              : new Promise((resolve) => {
+                  img.addEventListener("load", resolve, { once: true });
+                  img.addEventListener("error", resolve, { once: true });
+                }),
+          ),
+        );
+        await Promise.all(
+          imgs.map((img) =>
+            typeof img.decode === "function" ? img.decode().catch(() => undefined) : Promise.resolve(),
+          ),
+        );
+        await new Promise((r) => requestAnimationFrame(() => r()));
+      };
+
       const load = () => {
         // Prefer v3 (single report)
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -828,6 +848,15 @@
       window.addEventListener("message", (ev) => {
         const data = ev?.data;
         if (!data || typeof data !== "object") return;
+        if (data.type === "rc:preparePrint") {
+          (async () => {
+            try { await waitForImagesReady(); } catch {}
+            if (canPostToParent) {
+              try { window.parent.postMessage({ type: "rc:prepared", noteId }, "*"); } catch {}
+            }
+          })();
+          return;
+        }
         if (data.type !== "rc:init") return;
         if (data.noteId && String(data.noteId) !== String(noteId)) return;
         const norm = normalizeFromLegacy(data.initialReport);
