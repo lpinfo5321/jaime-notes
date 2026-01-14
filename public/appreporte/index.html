@@ -348,8 +348,40 @@
 
       /* Each section = one page */
       #paper{ break-after: page; page-break-after: always; }
-      #imagePages .imagePaper{ break-before: page; page-break-before: always; break-after: page; page-break-after: always; }
-      #imagePages .imagePaper:last-child{ break-after: auto; page-break-after: auto; }
+      /* Use break-before only to avoid extra blank pages */
+      #imagePages .imagePaper{ break-before: page; page-break-before: always; }
+
+      /* Image pages: print only the image (no header), no padding so it fills */
+      #imagePages .imageTop{ display:none !important; }
+      #imagePages .imagePaper{
+        padding: 0 !important;
+        border: 1px solid #000 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        overflow: hidden !important;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+      }
+      #imagePages .imageBody{
+        padding: 0 !important;
+        margin: 0 !important;
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+        /* 11in page height - 0.7in margins = 10.3in (safe a bit lower) */
+        height: 10.2in !important;
+      }
+      #imagePages .imageBody img{
+        width: auto !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: 100% !important;
+        object-fit: contain !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background:#fff !important;
+      }
 
       .paper{
         box-shadow:none !important;
@@ -360,14 +392,6 @@
         overflow: visible !important;
         break-inside: avoid-page;
         page-break-inside: avoid;
-      }
-      .imageBody img{
-        box-shadow:none !important;
-        border:1px solid #000 !important;
-        border-radius:0 !important;
-        background:#fff !important;
-        max-height: 9.6in !important;
-        object-fit: contain !important;
       }
     }
   </style>
