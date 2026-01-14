@@ -78,6 +78,35 @@ function formatUsMmDdYy(iso: string) {
   });
 }
 
+function parseMoneyToCents(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return Math.round(v * 100);
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (!s) return null;
+  const num = Number(s.replace(/[^0-9.\-]/g, ""));
+  if (!Number.isFinite(num)) return null;
+  return Math.round(num * 100);
+}
+
+function formatUsd(cents: number) {
+  const n = cents / 100;
+  return (
+    "$" +
+    n.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  );
+}
+
+function getTotalDueFromValues(values: Record<string, unknown> | null | undefined) {
+  const payload = (values as any)?._report?.payload;
+  const raw = payload?.fields?.totalDue ?? payload?.fields?.total_due ?? payload?.totalDue;
+  const cents = parseMoneyToCents(raw);
+  if (cents === null) return { text: "$0.00", isSet: false };
+  return { text: formatUsd(cents), isSet: true };
+}
+
 function fitTextToSingleLineInput(
   el: HTMLInputElement | null,
   opts?: { minPx?: number },
@@ -349,6 +378,15 @@ export default function NotesList({
           noteId={reportForCompany.id}
           companyTitle={reportForCompany.title}
           initialReport={(reportForCompany.values as any)?._report?.payload ?? null}
+          onLocalReportUpdate={(payload) => {
+            const now = new Date().toISOString();
+            const nextValues = {
+              ...((reportForCompany.values ?? {}) as Record<string, unknown>),
+              _report: { payload, updatedAt: now },
+            } as Record<string, unknown>;
+            patchCompany(reportForCompany.id, { values: nextValues });
+            setReportForCompany((prev) => (prev ? { ...prev, values: nextValues } : prev));
+          }}
           onClose={() => setReportForCompany(null)}
         />
       ) : null}
@@ -443,6 +481,7 @@ function CompanyCard({
   const latestAgent = (latest?.agent ?? "").trim();
   const latestText = (latest?.note ?? note.body ?? "").trim();
   const excerpt = latestText.replace(/\s+/g, " ").slice(0, 140);
+  const totalDue = getTotalDueFromValues(note.values);
 
   return (
     <div
@@ -463,6 +502,28 @@ function CompanyCard({
       <div className="grid grid-cols-[minmax(0,1fr)_160px] gap-3 sm:grid-cols-[minmax(0,1fr)_44%] sm:gap-6">
         {/* Última Nota (abre modal) */}
         <div className="min-w-0">
+          {/* TOTAL DUE WITH FEES */}
+          <div className="mb-3">
+            <div className="mb-2 text-xs font-bold text-zinc-500 dark:text-zinc-300 sm:text-sm">
+              Total
+            </div>
+            <div className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 dark:bg-zinc-950 dark:text-zinc-100 sm:px-4 sm:py-3 sm:text-sm">
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200/70 bg-white/70 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300 sm:px-3 sm:py-1.5 sm:text-xs">
+                <div className="truncate">TOTAL DUE WITH FEES</div>
+              </div>
+              <div
+                className={cn(
+                  "mt-2 border-t border-zinc-200/60 pt-2 text-base font-black tabular-nums sm:text-lg",
+                  totalDue.isSet
+                    ? "text-zinc-900 dark:text-white"
+                    : "text-zinc-500 dark:text-zinc-400",
+                )}
+              >
+                {totalDue.text}
+              </div>
+            </div>
+          </div>
+
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="text-xs font-bold text-zinc-500 dark:text-zinc-300 sm:text-sm">
               Última Nota
@@ -571,11 +632,13 @@ function ReportModal({
   noteId,
   companyTitle,
   initialReport,
+  onLocalReportUpdate,
   onClose,
 }: {
   noteId: string;
   companyTitle: string;
   initialReport: any;
+  onLocalReportUpdate: (payload: unknown) => void;
   onClose: () => void;
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -603,6 +666,11 @@ function ReportModal({
         preparedResolverRef.current = null;
       }
       if (data.type === "rc:save" && data.noteId === noteId) {
+        // Update UI immediately (card should reflect total without refresh)
+        try {
+          onLocalReportUpdate((data as any).payload);
+        } catch {}
+
         // Throttle saves to avoid spamming DB while typing
         if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = window.setTimeout(async () => {
