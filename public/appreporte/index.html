@@ -537,6 +537,7 @@
 
   <script>
     (() => {
+      try {
       const qs = new URLSearchParams(location.search);
       const noteId = qs.get("noteId") || "global";
       const initialCompanyName = (qs.get("companyName") || "").trim();
@@ -565,7 +566,10 @@
         if (!Number.isFinite(x)) return "";
         return "$" + x.toFixed(2);
       };
-      const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : ("id-" + Math.random().toString(16).slice(2) + Date.now()));
+      const uid = () =>
+        (globalThis.crypto?.randomUUID
+          ? globalThis.crypto.randomUUID()
+          : "id-" + Math.random().toString(16).slice(2) + Date.now());
 
       const el = {
         paper: document.getElementById("paper"),
@@ -676,7 +680,18 @@
 
       const buildPaper = () => {
         const frag = el.paperTemplate.content.cloneNode(true);
-        const node = frag.firstElementChild;
+        const node =
+          frag.firstElementChild ||
+          (frag.childNodes && frag.childNodes.length
+            ? Array.from(frag.childNodes).find((n) => n && n.nodeType === 1)
+            : null);
+        if (!node) {
+          const div = document.createElement("div");
+          div.style.padding = "14px";
+          div.innerHTML =
+            "<b>Reporte no se pudo renderizar.</b><div style='opacity:.7;margin-top:6px;'>Revisa que el template del reporte exista.</div>";
+          return div;
+        }
         const updated = node.querySelector('[data-live="updatedAt"]');
         if (updated) updated.textContent = fmtDateTime(report.updatedAt);
 
@@ -949,6 +964,13 @@
       renderPaper();
       renderImages();
       el.lastSaved.textContent = `Última edición: ${fmtDateTime(report.updatedAt)}`;
+      } catch (e) {
+        const root = document.getElementById("paper");
+        if (root) {
+          root.innerHTML =
+            "<div style='padding:14px'><b>Error cargando el reporte.</b><div style='opacity:.7;margin-top:6px'>Intenta recargar la página.</div></div>";
+        }
+      }
     })();
   </script>
 </body>
