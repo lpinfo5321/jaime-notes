@@ -13,49 +13,34 @@
       --accent:#d11b2a;
       --label:#a6a6a6;
       --shadow: 0 18px 60px rgba(0,0,0,.10);
-      --shadow2: 0 10px 22px rgba(0,0,0,.08);
       --radius:16px;
 
       /* Paper sizing */
       --paper-w: 860px;
       --paper-pad-x: 34px;
       --paper-pad-y: 26px;
-
-      /* Thumbnail scale */
-      --thumb-scale: .19;
       --paper-ratio: 1.294; /* 11/8.5 */
     }
 
     *{box-sizing:border-box}
     body{
       margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       color:var(--ink);
       background: radial-gradient(1000px 500px at 20% 0%, rgba(209,27,42,.08), transparent 60%),
                   radial-gradient(900px 600px at 85% 20%, rgba(16,185,129,.08), transparent 55%),
                   var(--bg);
     }
 
-    /* Top bar */
     .topbar{
       position:sticky; top:0; z-index:50;
       display:flex; align-items:center; gap:12px;
       padding:12px 14px;
-      background: rgba(255,255,255,.72);
+      background: rgba(255,255,255,.78);
       backdrop-filter: blur(10px);
-      border-bottom:1px solid rgba(229,231,235,.75);
+      border-bottom:1px solid rgba(229,231,235,.85);
     }
-    .brand{display:flex; align-items:center; gap:10px; min-width: 190px;}
-    .hamburger{
-      display:none;
-      border:1px solid var(--line);
-      background:#fff;
-      border-radius:12px;
-      height:38px; width:42px;
-      box-shadow: 0 6px 18px rgba(0,0,0,.06);
-      cursor:pointer;
-    }
-    .hamburger:active{transform: translateY(1px)}
+    .brand{display:flex; align-items:center; gap:10px; min-width: 220px;}
     .logoDot{
       width:34px; height:34px; border-radius:12px;
       background: linear-gradient(135deg, rgba(209,27,42,.95), rgba(245,158,11,.95));
@@ -64,23 +49,16 @@
     .brandTitle{display:flex; flex-direction:column; line-height:1.05;}
     .brandTitle b{font-size:14px}
     .brandTitle span{font-size:12px; color:var(--muted)}
+
     .topbarRight{
       margin-left:auto;
-      display:flex; gap:10px; align-items:center;
-      width: min(740px, 100%);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
     }
-    .searchWrap{flex:1; display:flex; gap:10px; align-items:center;}
-    .search{
-      flex:1;
-      display:flex; align-items:center; gap:8px;
-      padding:10px 12px;
-      border:1px solid var(--line);
-      background:#fff;
-      border-radius:14px;
-      box-shadow: 0 10px 20px rgba(0,0,0,.06);
-    }
-    .search svg{opacity:.55}
-    .search input{border:0; outline:0; width:100%; font-size:14px; background:transparent;}
+
     .btn{
       border:1px solid var(--line);
       background:#fff;
@@ -88,7 +66,7 @@
       border-radius:14px;
       cursor:pointer;
       box-shadow: 0 10px 20px rgba(0,0,0,.06);
-      font-weight:700;
+      font-weight:800;
       font-size:13px;
       display:inline-flex; align-items:center; gap:8px;
       user-select:none;
@@ -101,135 +79,21 @@
       color:#fff;
       box-shadow: 0 14px 26px rgba(209,27,42,.20);
     }
-    .btnDanger{
-      border-color: rgba(239,68,68,.35);
-      background: linear-gradient(180deg, rgba(239,68,68,.96), rgba(239,68,68,.90));
-      color:#fff;
-      box-shadow: 0 14px 26px rgba(239,68,68,.18);
-    }
-    .btnGhost{box-shadow:none; background:transparent;}
-    .iconBtn{
-      width:38px; height:38px;
-      border-radius:12px;
-      border:1px solid var(--line);
-      background:#fff;
-      cursor:pointer;
-      display:grid; place-items:center;
-      box-shadow: 0 10px 18px rgba(0,0,0,.06);
-    }
-    .iconBtn:active{transform: translateY(1px)}
-
-    /* Layout */
-    .layout{
-      display:grid;
-      grid-template-columns: 330px 1fr;
-      gap:14px;
-      padding:14px;
-    }
-    aside{
-      background: rgba(255,255,255,.78);
-      border:1px solid rgba(229,231,235,.9);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow2);
-      overflow:hidden;
-      min-height: calc(100vh - 92px);
-    }
-    .sideHead{
-      padding:14px 14px 10px 14px;
-      border-bottom:1px solid rgba(229,231,235,.85);
-      display:flex; align-items:center; justify-content:space-between;
-      gap:10px;
-    }
-    .sideHead .title{display:flex; flex-direction:column; gap:2px;}
-    .sideHead .title b{font-size:14px}
-    .sideHead .title span{font-size:12px; color:var(--muted)}
-    .sideActions{display:flex; gap:8px; align-items:center;}
-    .list{
-      padding:10px;
-      overflow:auto;
-      max-height: calc(100vh - 92px - 70px);
-    }
-    .item{
-      border:1px solid rgba(229,231,235,.95);
-      background: rgba(255,255,255,.82);
-      border-radius: 16px;
-      overflow:hidden;
-      margin-bottom:10px;
-      cursor:pointer;
-      box-shadow: 0 10px 18px rgba(0,0,0,.05);
-      transition: transform .08s ease, box-shadow .08s ease, border-color .08s ease;
-    }
-    .item:hover{
-      transform: translateY(-1px);
-      box-shadow: 0 14px 26px rgba(0,0,0,.08);
-      border-color: rgba(209,27,42,.20);
-    }
-    .item.active{
-      border-color: rgba(209,27,42,.45);
-      box-shadow: 0 18px 34px rgba(209,27,42,.14);
-    }
-    .thumb{
-      background: linear-gradient(180deg, rgba(17,24,39,.03), rgba(17,24,39,.00));
-      border-bottom: 1px solid rgba(229,231,235,.9);
-      padding:10px 10px 0 10px;
-    }
-    .thumbStage{
-      width: 100%;
-      border-radius: 14px;
-      background:#fff;
-      border:1px solid rgba(229,231,235,.9);
-      overflow:hidden;
-      position:relative;
-      height: calc((var(--paper-w) * var(--paper-ratio)) * var(--thumb-scale));
-    }
-    .thumbStage .paper{
-      width: var(--paper-w);
-      transform: scale(var(--thumb-scale));
-      transform-origin: top left;
-      pointer-events:none;
-    }
-    .meta{
-      display:flex; gap:8px; align-items:flex-start;
-      padding:10px 12px 12px 12px;
-    }
-    .meta .dot{
-      width:10px; height:10px; border-radius:999px;
-      margin-top:4px;
-      background: rgba(209,27,42,.9);
-      box-shadow: 0 10px 18px rgba(209,27,42,.18);
-      flex:0 0 auto;
-    }
-    .meta .txt{min-width:0}
-    .meta .txt b{
-      display:block;
-      font-size:13px;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    }
-    .meta .txt span{
-      display:block;
+    .pill{
       font-size:12px;
       color:var(--muted);
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-      margin-top:2px;
+      padding: 8px 10px;
+      border-radius: 14px;
+      border:1px dashed rgba(107,114,128,.35);
+      background: rgba(243,244,246,.55);
     }
 
-    main{min-height: calc(100vh - 92px); padding-bottom: 26px;}
-    .mainShell{
-      background: rgba(255,255,255,.58);
-      border:1px solid rgba(229,231,235,.9);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow2);
+    .shell{
       padding: 14px;
-      min-height: calc(100vh - 92px);
-      overflow:hidden;
-    }
-
-    /* Paper */
-    .paperWrap{
       display:flex;
       justify-content:center;
-      padding: 10px 0 0 0;
     }
+
     .paper{
       width: min(var(--paper-w), 100%);
       background:#fff;
@@ -238,6 +102,7 @@
       box-shadow: var(--shadow);
       padding: var(--paper-pad-y) var(--paper-pad-x);
       position:relative;
+      overflow:hidden;
     }
     .paper:before{
       content:"";
@@ -267,17 +132,6 @@
       background: transparent;
     }
     .subline{display:flex; gap:10px; flex-wrap:wrap; color: var(--muted); font-size: 12px;}
-    .brandRow{display:flex; align-items:center; gap:10px; margin-top: 2px;}
-    .mark{
-      width:70px; height:50px;
-      border-radius:14px;
-      border:1px solid rgba(229,231,235,.9);
-      display:grid; place-items:center;
-      overflow:hidden;
-      background: radial-gradient(40px 40px at 30% 30%, rgba(245,158,11,.25), transparent 65%),
-                  radial-gradient(60px 50px at 70% 70%, rgba(209,27,42,.18), transparent 65%),
-                  #fff;
-    }
     .storeInfo{
       text-align:left;
       font-size:12.5px;
@@ -285,6 +139,7 @@
       color:#111827;
     }
     .storeInfo b{letter-spacing:.4px;}
+
     .titleCenter{
       margin: 16px 0 10px 0;
       text-align:center;
@@ -295,10 +150,9 @@
       text-transform: uppercase;
     }
 
-    /* Tables */
     table{width:100%; border-collapse:collapse; table-layout:fixed; font-size: 13px;}
     .gridBlock{border:1px solid rgba(17,24,39,.35);}
-    .gridBlock td, .gridBlock th{border:1px solid rgba(17,24,39,.35); padding:8px 10px; vertical-align:middle;}
+    .gridBlock td{border:1px solid rgba(17,24,39,.35); padding:8px 10px; vertical-align:middle;}
     .labelCell{
       width: 30%;
       background: var(--label);
@@ -307,6 +161,8 @@
       text-transform: uppercase;
       letter-spacing:.2px;
       text-align:center;
+      font-size: 12px;
+      line-height: 1.1;
     }
     .valueCell{background:#fff;}
     .valueCell input{
@@ -317,6 +173,7 @@
       font-size: 13px;
       padding:0;
     }
+
     .moneyRow{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -325,16 +182,10 @@
       align-items:start;
     }
     .miniBlock{border:1px solid rgba(17,24,39,.35);}
-    .miniBlock td, .miniBlock th{border:1px solid rgba(17,24,39,.35); padding:8px 10px; font-size: 13px;}
-    .completedRow{margin-top: 16px;}
+    .miniBlock td{border:1px solid rgba(17,24,39,.35); padding:8px 10px; font-size: 13px;}
 
-    /* Images as paper pages (same size as editable sheet) */
-    .imagesSection{
-      margin-top: 14px;
-    }
+    .imagesSection{margin-top: 14px;}
     .imagesHead{
-      width: min(var(--paper-w), 100%);
-      margin: 0 auto 10px auto;
       display:flex;
       align-items:center;
       justify-content:space-between;
@@ -343,7 +194,6 @@
       border:1px solid rgba(229,231,235,.9);
       border-radius: 16px;
       background: rgba(255,255,255,.72);
-      box-shadow: 0 10px 20px rgba(0,0,0,.05);
     }
     .imagesHead b{font-size:13px}
     .imagesHead span{font-size:12px; color:var(--muted)}
@@ -352,10 +202,9 @@
       flex-direction:column;
       gap:14px;
       align-items:center;
+      margin-top: 10px;
     }
-    .imagePaper{
-      padding: 18px 18px;
-    }
+    .imagePaper{padding: 18px 18px;}
     .imageTop{
       display:flex;
       align-items:center;
@@ -379,7 +228,6 @@
       color:var(--muted);
       white-space:nowrap;
     }
-    .imageActions{display:flex; gap:10px; align-items:center;}
     .miniBtn{
       border:1px solid rgba(229,231,235,.95);
       background:#fff;
@@ -388,22 +236,14 @@
       cursor:pointer;
       font-size:12px;
       font-weight:900;
-      box-shadow: 0 10px 18px rgba(0,0,0,.06);
       white-space:nowrap;
     }
-    .miniBtn:active{transform: translateY(1px)}
     .miniBtnDanger{
       border-color: rgba(239,68,68,.35);
       color:#fff;
       background: linear-gradient(180deg, rgba(239,68,68,.96), rgba(239,68,68,.90));
-      box-shadow: 0 14px 26px rgba(239,68,68,.18);
     }
-    .imageBody{
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      padding: 6px 0 2px 0;
-    }
+    .imageBody{display:flex; justify-content:center; align-items:center; padding: 6px 0 2px 0;}
     .imageBody img{
       width: 100%;
       height: auto;
@@ -416,45 +256,13 @@
       background:#fff;
     }
     .imagesEmpty{
-      width: min(var(--paper-w), 100%);
-      margin: 0 auto;
+      margin-top: 10px;
       padding: 14px;
       text-align:center;
       color: var(--muted);
       font-weight: 800;
       border: 1px dashed rgba(107,114,128,.35);
       border-radius: 16px;
-      background: rgba(243,244,246,.55);
-    }
-
-    /* Bottom actions */
-    .bottomBar{
-      position: sticky;
-      bottom: 12px;
-      margin-top: 16px;
-      display:flex;
-      justify-content:center;
-      pointer-events:none;
-    }
-    .bottomBarInner{
-      pointer-events:auto;
-      background: rgba(255,255,255,.86);
-      border:1px solid rgba(229,231,235,.95);
-      border-radius: 18px;
-      box-shadow: 0 20px 50px rgba(0,0,0,.10);
-      padding:10px;
-      display:flex;
-      flex-wrap:wrap;
-      gap:10px;
-      align-items:center;
-      justify-content:center;
-    }
-    .pill{
-      font-size:12px;
-      color:var(--muted);
-      padding: 8px 10px;
-      border-radius: 14px;
-      border:1px dashed rgba(107,114,128,.35);
       background: rgba(243,244,246,.55);
     }
 
@@ -496,235 +304,93 @@
       box-shadow: 0 18px 50px rgba(0,0,0,.35);
     }
 
-    /* Toast */
-    .toast{
-      position: fixed;
-      left: 50%;
-      bottom: 18px;
-      transform: translateX(-50%);
-      background: rgba(17,24,39,.92);
-      color:#fff;
-      padding: 10px 12px;
-      border-radius: 14px;
-      font-size: 13px;
-      box-shadow: 0 18px 60px rgba(0,0,0,.25);
-      display:none;
-      z-index: 1000;
-    }
-    .toast.show{display:block}
-
-    /* Responsive */
-    @media (max-width: 1020px){
-      .layout{grid-template-columns: 1fr}
-      aside{
-        position:fixed; inset: 64px 14px 14px 14px;
-        z-index: 60;
-        transform: translateX(-110%);
-        transition: transform .18s ease;
-      }
-      aside.show{transform: translateX(0)}
-      .hamburger{display:inline-grid}
-      .brand{min-width:auto}
-      .topbarRight{width:auto}
-    }
-
-    /* Mobile fine-tuning */
+    /* Mobile */
     @media (max-width: 520px){
       :root{
-        --paper-pad-x: 16px;
-        --paper-pad-y: 16px;
+        --paper-pad-x: 14px;
+        --paper-pad-y: 14px;
       }
-      .layout{padding: 10px; gap: 10px;}
-      .topbar{padding: 10px 10px;}
-      .brandTitle b{font-size: 13px}
-      .brandTitle span{font-size: 11px}
-      .btn{padding: 9px 10px; border-radius: 12px;}
-      .search{padding: 9px 10px; border-radius: 12px;}
-      .search input{font-size: 13px;}
+      .topbar{padding:10px 10px;}
+      .brand{min-width:auto}
+      .brandTitle b{font-size:13px}
+      .brandTitle span{font-size:11px}
+      .btn{padding:8px 10px; border-radius:12px; font-size:12px;}
+      .shell{padding: 10px;}
       .paperTop{grid-template-columns: 1fr; gap: 12px;}
-      .companyName{font-size: 20px;}
-      .storeInfo{font-size: 12px;}
-      .titleCenter{font-size: 22px; margin: 12px 0 8px 0;}
-      table{font-size: 12px;}
-      .gridBlock td, .gridBlock th{padding: 7px 8px;}
-      .miniBlock td, .miniBlock th{padding: 7px 8px; font-size: 12px;}
+      .companyName{font-size: 18px;}
+      .storeInfo{font-size: 11.5px;}
+      .titleCenter{font-size: 20px; margin: 12px 0 8px 0;}
+      table{font-size: 11.5px;}
+      .labelCell{font-size: 10px; width: 34%;}
+      .gridBlock td{padding: 6px 7px;}
+      .valueCell input{font-size: 12px;}
+      .moneyRow{grid-template-columns: 1fr; gap: 10px;}
+      .miniBlock td{padding: 6px 7px; font-size: 12px;}
     }
 
     /* Print */
     @media print{
       body{background:#fff}
-      .topbar, aside, .bottomBar{display:none !important}
-      .mainShell{
-        border:0 !important;
-        box-shadow:none !important;
-        background:#fff !important;
-        padding:0 !important;
-        min-height:auto !important;
-      }
+      .topbar{display:none !important}
+      .imagesHead{display:none !important}
+      .miniBtn{display:none !important}
       .paper{
         box-shadow:none !important;
         border: 1px solid #000 !important;
         border-radius:0 !important;
         width: 8.5in !important;
       }
-      .imagesHead{display:none !important}
       .imageBody img{
         box-shadow:none !important;
         border:1px solid #000 !important;
         border-radius:0 !important;
         background:#fff !important;
       }
-      .imageTop{display:none !important}
-      .imagePaper{
-        border-radius:0 !important;
-        padding: 0 !important;
-      }
     }
   </style>
 </head>
 <body>
   <div class="topbar">
-    <button class="hamburger" id="btnMenu" title="Menú">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-    </button>
-
     <div class="brand">
       <div class="logoDot"></div>
       <div class="brandTitle">
         <b>Returned Checks</b>
-        <span>Editable reports</span>
+        <span>Reporte editable</span>
       </div>
     </div>
-
     <div class="topbarRight">
-      <div class="searchWrap">
-        <div class="search" title="Buscar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="2"/>
-            <path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-          <input id="searchInput" placeholder="Buscar por compañía, payee, check #, etc." />
-        </div>
+      <div class="pill" id="lastSaved">Sin cambios</div>
+      <input id="imgPicker" type="file" accept="image/*" multiple style="display:none" />
+      <button class="btn" id="btnAddImages">Agregar imágenes</button>
+      <button class="btn btnPrimary" id="btnPrint">Imprimir</button>
+    </div>
+  </div>
 
-        <button class="btn btnPrimary" id="btnNewTop" title="Nuevo">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-          Nuevo
-        </button>
+  <div class="shell">
+    <div style="width:min(var(--paper-w),100%);">
+      <div class="paper" id="paper"></div>
+
+      <div class="imagesSection">
+        <div class="imagesHead">
+          <div>
+            <b>Imágenes</b>
+            <span id="attCount">0</span>
+          </div>
+        </div>
+        <div class="imagesPages" id="imagePages"></div>
+        <div class="imagesEmpty" id="imagesEmpty" style="display:none;">No hay imágenes. Usa “Agregar imágenes”.</div>
       </div>
     </div>
   </div>
 
-  <div class="layout">
-    <aside id="sidebar">
-      <div class="sideHead">
-        <div class="title">
-          <b>Reports</b>
-          <span id="countText">0</span>
-        </div>
-        <div class="sideActions">
-          <button class="iconBtn" id="btnExport" title="Exportar respaldo (JSON)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M12 3v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M8 9l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 17v3h16v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <button class="iconBtn" id="btnImport" title="Importar respaldo (JSON)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M12 21V11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M16 15l-4-4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 4v3h16V4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <div class="list" id="list"></div>
-    </aside>
-
-    <main>
-      <div class="mainShell">
-        <div class="paperWrap" id="paperWrap"></div>
-
-        <!-- Images as full paper pages -->
-        <div class="imagesSection" id="imagesSection">
-          <div class="imagesHead">
-            <div>
-              <b>Images</b>
-              <span id="attCount">0</span>
-            </div>
-            <div style="display:flex; gap:10px; align-items:center;">
-              <input id="imgPicker" type="file" accept="image/*" multiple style="display:none" />
-              <button class="btn" id="btnAddImages">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-                Agregar imágenes
-              </button>
-            </div>
-          </div>
-
-          <div class="imagesPages" id="imagePages"></div>
-          <div class="imagesEmpty" id="imagesEmpty" style="display:none;">No hay imágenes. Usa “Agregar imágenes”.</div>
-        </div>
-
-        <div class="bottomBar">
-          <div class="bottomBarInner">
-            <div class="pill" id="lastSaved">Sin cambios</div>
-            <button class="btn" id="btnPrint">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path d="M7 8V4h10v4" stroke="currentColor" stroke-width="2"/>
-                <path d="M6 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1" stroke="currentColor" stroke-width="2"/>
-                <path d="M7 14h10v6H7z" stroke="currentColor" stroke-width="2"/>
-              </svg>
-              Imprimir
-            </button>
-            <button class="btn" id="btnDuplicate">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path d="M9 9h10v10H9z" stroke="currentColor" stroke-width="2"/>
-                <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="2"/>
-              </svg>
-              Duplicar
-            </button>
-            <button class="btn btnDanger" id="btnDelete">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              Borrar
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </main>
-  </div>
-
-  <!-- Paper template (NO NOTES) -->
   <template id="paperTemplate">
-    <div class="paper">
+    <div>
       <div class="paperTop">
         <div class="companyBlock">
           <input class="companyName" data-field="companyName" placeholder="COMPANY NAME" />
           <div class="subline">
             <span>Last updated:</span>
             <span data-live="updatedAt">—</span>
-          </div>
-          <div class="brandRow">
-            <div class="mark" title="Logo">
-              <svg width="66" height="46" viewBox="0 0 66 46" fill="none" aria-hidden="true">
-                <path d="M33 6c6.2 0 11.2 5 11.2 11.2S39.2 28.4 33 28.4 21.8 23.4 21.8 17.2 26.8 6 33 6Z" fill="rgba(16,185,129,.28)"/>
-                <path d="M33 2v6M33 38v6M8 17h6M52 17h6M14 7l4 4M48 31l4 4M52 7l-4 4M14 31l-4 4" stroke="rgba(245,158,11,.85)" stroke-width="2" stroke-linecap="round"/>
-                <text x="33" y="22" text-anchor="middle" font-size="10" font-weight="900" fill="rgba(209,27,42,.95)">LA</text>
-                <text x="33" y="34" text-anchor="middle" font-size="10" font-weight="900" fill="rgba(17,24,39,.9)">PRIMAVERA</text>
-              </svg>
-            </div>
           </div>
         </div>
 
@@ -740,87 +406,38 @@
       <div class="titleCenter">RETURNED CHECK REPORT</div>
 
       <table class="gridBlock">
-        <tr>
-          <td class="labelCell">DATE CASHED</td>
-          <td class="valueCell"><input data-field="dateCashed" placeholder="" /></td>
-        </tr>
-        <tr>
-          <td class="labelCell">DATE OF DEPOSIT</td>
-          <td class="valueCell"><input data-field="dateDeposit" placeholder="" /></td>
-        </tr>
-        <tr>
-          <td class="labelCell">DATE RETURNED</td>
-          <td class="valueCell"><input data-field="dateReturned" placeholder="" /></td>
-        </tr>
-        <tr>
-          <td class="labelCell">PAYEE</td>
-          <td class="valueCell"><input data-field="payee" placeholder="" /></td>
-        </tr>
-        <tr>
-          <td class="labelCell">CHECK NUMBER</td>
-          <td class="valueCell"><input data-field="checkNumber" placeholder="" /></td>
-        </tr>
-        <tr>
-          <td class="labelCell">MAKER/PAYOR</td>
-          <td class="valueCell"><input data-field="makerPayor" placeholder="" /></td>
-        </tr>
-        <tr>
-          <td class="labelCell">REJECT REASON</td>
-          <td class="valueCell"><input data-field="rejectReason" placeholder="" /></td>
-        </tr>
-        <tr>
-          <td class="labelCell">CUSTOMER CONTACT</td>
-          <td class="valueCell"><input data-field="customerContact" placeholder="" /></td>
-        </tr>
-        <tr>
-          <td class="labelCell">COMPANY CONTACT</td>
-          <td class="valueCell"><input data-field="companyContact" placeholder="" /></td>
-        </tr>
+        <tr><td class="labelCell">DATE CASHED</td><td class="valueCell"><input data-field="dateCashed" /></td></tr>
+        <tr><td class="labelCell">DATE OF DEPOSIT</td><td class="valueCell"><input data-field="dateDeposit" /></td></tr>
+        <tr><td class="labelCell">DATE RETURNED</td><td class="valueCell"><input data-field="dateReturned" /></td></tr>
+        <tr><td class="labelCell">PAYEE</td><td class="valueCell"><input data-field="payee" /></td></tr>
+        <tr><td class="labelCell">CHECK NUMBER</td><td class="valueCell"><input data-field="checkNumber" /></td></tr>
+        <tr><td class="labelCell">MAKER/PAYOR</td><td class="valueCell"><input data-field="makerPayor" /></td></tr>
+        <tr><td class="labelCell">REJECT REASON</td><td class="valueCell"><input data-field="rejectReason" /></td></tr>
+        <tr><td class="labelCell">CUSTOMER CONTACT</td><td class="valueCell"><input data-field="customerContact" /></td></tr>
+        <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" /></td></tr>
       </table>
 
       <div class="moneyRow">
         <table class="miniBlock">
-          <tr>
-            <td class="labelCell">CHECK AMOUNT</td>
-            <td class="valueCell"><input data-field="checkAmount" placeholder="$0.00" /></td>
-          </tr>
-          <tr>
-            <td class="labelCell">RETURNED CHECK FEE</td>
-            <td class="valueCell"><input data-field="returnedFee" placeholder="$0.00" /></td>
-          </tr>
-          <tr>
-            <td class="labelCell">TOTAL DUE</td>
-            <td class="valueCell"><input data-field="totalDue" placeholder="$0.00" readonly /></td>
-          </tr>
+          <tr><td class="labelCell">CHECK AMOUNT</td><td class="valueCell"><input data-field="checkAmount" placeholder="$0.00" /></td></tr>
+          <tr><td class="labelCell">RETURNED CHECK FEE</td><td class="valueCell"><input data-field="returnedFee" placeholder="$0.00" /></td></tr>
+          <tr><td class="labelCell">TOTAL DUE</td><td class="valueCell"><input data-field="totalDue" placeholder="$0.00" readonly /></td></tr>
         </table>
-
         <table class="miniBlock">
-          <tr>
-            <td class="labelCell">DATE FEE PAID</td>
-            <td class="valueCell"><input data-field="dateFeePaid" placeholder="" /></td>
-          </tr>
-          <tr>
-            <td class="labelCell">FORM OF PAYMENT</td>
-            <td class="valueCell"><input data-field="feePaymentMethod" placeholder="" /></td>
-          </tr>
-          <tr>
-            <td class="labelCell">DATE CHECK PAID</td>
-            <td class="valueCell"><input data-field="dateCheckPaid" placeholder="" /></td>
-          </tr>
-          <tr>
-            <td class="labelCell">FORM OF PAYMENT</td>
-            <td class="valueCell"><input data-field="checkPaymentMethod" placeholder="" /></td>
-          </tr>
+          <tr><td class="labelCell">DATE FEE PAID</td><td class="valueCell"><input data-field="dateFeePaid" /></td></tr>
+          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="feePaymentMethod" /></td></tr>
+          <tr><td class="labelCell">DATE CHECK PAID</td><td class="valueCell"><input data-field="dateCheckPaid" /></td></tr>
+          <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="checkPaymentMethod" /></td></tr>
         </table>
       </div>
 
-      <div class="completedRow">
+      <div style="margin-top:16px;">
         <table class="miniBlock">
           <tr>
             <td class="labelCell">DATE COMPLETED</td>
-            <td class="valueCell"><input data-field="dateCompleted" placeholder="" /></td>
+            <td class="valueCell"><input data-field="dateCompleted" /></td>
             <td class="labelCell" style="width:22%">AGENT</td>
-            <td class="valueCell"><input data-field="agentCompleted" placeholder="" /></td>
+            <td class="valueCell"><input data-field="agentCompleted" /></td>
           </tr>
         </table>
       </div>
@@ -831,10 +448,10 @@
   <div class="modal" id="modal">
     <div class="modalCard">
       <div class="modalTop">
-        <b id="modalTitle">Image</b>
+        <b id="modalTitle">Imagen</b>
         <div style="display:flex; gap:10px; align-items:center;">
-          <button class="btn btnDanger" id="modalDelete">Borrar imagen</button>
           <button class="btn" id="modalClose">Cerrar</button>
+          <button class="btn btnDanger" id="modalDelete">Borrar</button>
         </div>
       </div>
       <div class="modalBody">
@@ -843,61 +460,17 @@
     </div>
   </div>
 
-  <div class="toast" id="toast">Guardado</div>
-  <input id="importFile" type="file" accept="application/json" style="display:none" />
   <script>
     (() => {
       const qs = new URLSearchParams(location.search);
       const noteId = qs.get("noteId") || "global";
-      const STORAGE_KEY = `returnedChecks.v2:${noteId}`;
+      const initialCompanyName = (qs.get("companyName") || "").trim();
+      const STORAGE_KEY = `returnedChecks.v3:${noteId}`;
+      const legacyKeyV2 = `returnedChecks.v2:${noteId}`;
 
-      const state = {
-        reports: [],
-        activeId: null,
-        query: ""
-      };
-
-      // Parent sync (when embedded in the main app)
       const canPostToParent = (() => {
         try { return window.parent && window.parent !== window; } catch { return false; }
       })();
-
-      const el = {
-        sidebar: document.getElementById("sidebar"),
-        btnMenu: document.getElementById("btnMenu"),
-        list: document.getElementById("list"),
-        paperWrap: document.getElementById("paperWrap"),
-        searchInput: document.getElementById("searchInput"),
-        btnNewTop: document.getElementById("btnNewTop"),
-        btnDelete: document.getElementById("btnDelete"),
-        btnPrint: document.getElementById("btnPrint"),
-        btnDuplicate: document.getElementById("btnDuplicate"),
-        countText: document.getElementById("countText"),
-        lastSaved: document.getElementById("lastSaved"),
-        toast: document.getElementById("toast"),
-
-        imagePages: document.getElementById("imagePages"),
-        imagesEmpty: document.getElementById("imagesEmpty"),
-        attCount: document.getElementById("attCount"),
-        imgPicker: document.getElementById("imgPicker"),
-        btnAddImages: document.getElementById("btnAddImages"),
-
-        modal: document.getElementById("modal"),
-        modalImg: document.getElementById("modalImg"),
-        modalTitle: document.getElementById("modalTitle"),
-        modalClose: document.getElementById("modalClose"),
-        modalDelete: document.getElementById("modalDelete"),
-
-        btnExport: document.getElementById("btnExport"),
-        btnImport: document.getElementById("btnImport"),
-        importFile: document.getElementById("importFile"),
-        paperTemplate: document.getElementById("paperTemplate")
-      };
-
-      let activePaper = null;
-      let saveTimer = null;
-      let toastTimer = null;
-      let modalImageId = null;
 
       const nowISO = () => new Date().toISOString();
       const fmtDateTime = (iso) => {
@@ -919,285 +492,146 @@
       };
       const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : ("id-" + Math.random().toString(16).slice(2) + Date.now()));
 
-      const makeBlankReport = () => {
-        const id = uid();
-        return {
-          id,
-          createdAt: nowISO(),
-          updatedAt: nowISO(),
-          fields: {
-            companyName: "COMPANY NAME",
-            dateCashed: "",
-            dateDeposit: "",
-            dateReturned: "",
-            payee: "",
-            checkNumber: "",
-            makerPayor: "",
-            rejectReason: "",
-            customerContact: "",
-            companyContact: "",
-            checkAmount: "",
-            returnedFee: "",
-            totalDue: "$0.00",
-            dateFeePaid: "",
-            feePaymentMethod: "",
-            dateCheckPaid: "",
-            checkPaymentMethod: "",
-            dateCompleted: "",
-            agentCompleted: ""
-          },
-          images: [] // {id, name, dataUrl, createdAt}
-        };
+      const el = {
+        paper: document.getElementById("paper"),
+        paperTemplate: document.getElementById("paperTemplate"),
+        lastSaved: document.getElementById("lastSaved"),
+        btnPrint: document.getElementById("btnPrint"),
+        btnAddImages: document.getElementById("btnAddImages"),
+        imgPicker: document.getElementById("imgPicker"),
+        imagePages: document.getElementById("imagePages"),
+        imagesEmpty: document.getElementById("imagesEmpty"),
+        attCount: document.getElementById("attCount"),
+        modal: document.getElementById("modal"),
+        modalImg: document.getElementById("modalImg"),
+        modalTitle: document.getElementById("modalTitle"),
+        modalClose: document.getElementById("modalClose"),
+        modalDelete: document.getElementById("modalDelete"),
       };
 
-      const load = () => {
-        // Try v2 first
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            if (parsed && Array.isArray(parsed.reports)) {
-              state.reports = parsed.reports;
-              state.activeId = parsed.activeId || (state.reports[0]?.id ?? null);
-              return;
-            }
-          } catch {}
+      let report = null; // {id, createdAt, updatedAt, fields, images}
+      let activePaper = null;
+      let saveTimer = null;
+      let toastTimer = null;
+      let modalImageId = null;
+
+      const blankReport = () => ({
+        id: uid(),
+        createdAt: nowISO(),
+        updatedAt: nowISO(),
+        fields: {
+          companyName: initialCompanyName ? initialCompanyName.toUpperCase() : "",
+          dateCashed: "",
+          dateDeposit: "",
+          dateReturned: "",
+          payee: "",
+          checkNumber: "",
+          makerPayor: "",
+          rejectReason: "",
+          customerContact: "",
+          companyContact: "",
+          checkAmount: "",
+          returnedFee: "",
+          totalDue: "$0.00",
+          dateFeePaid: "",
+          feePaymentMethod: "",
+          dateCheckPaid: "",
+          checkPaymentMethod: "",
+          dateCompleted: "",
+          agentCompleted: ""
+        },
+        images: [] // {id, name, dataUrl, createdAt}
+      });
+
+      const normalizeFromLegacy = (maybe) => {
+        // If coming from older multi-report payload, pick active or first.
+        if (!maybe || typeof maybe !== "object") return null;
+        if (Array.isArray(maybe.reports)) {
+          const list = maybe.reports || [];
+          const activeId = maybe.activeId || null;
+          const pick = list.find(r => r && r.id === activeId) || list[0] || null;
+          if (pick && pick.fields) {
+            return {
+              id: pick.id || uid(),
+              createdAt: pick.createdAt || nowISO(),
+              updatedAt: pick.updatedAt || nowISO(),
+              fields: pick.fields || {},
+              images: pick.images || [],
+            };
+          }
         }
-
-        // Backward compatibility: migrate from older key if exists
-        const oldRaw = localStorage.getItem("returnedChecks.v1");
-        if (oldRaw) {
-          try {
-            const parsed = JSON.parse(oldRaw);
-            if (parsed && Array.isArray(parsed.reports)) {
-              // Remove old "notes" if present, silently
-              parsed.reports.forEach(r => {
-                if (r?.fields && "notes" in r.fields) delete r.fields.notes;
-              });
-              state.reports = parsed.reports;
-              state.activeId = parsed.activeId || (state.reports[0]?.id ?? null);
-              persist(true);
-              return;
-            }
-          } catch {}
+        if (maybe.fields && typeof maybe.fields === "object") {
+          return {
+            id: maybe.id || uid(),
+            createdAt: maybe.createdAt || nowISO(),
+            updatedAt: maybe.updatedAt || nowISO(),
+            fields: maybe.fields || {},
+            images: maybe.images || [],
+          };
         }
-
-        // First run
-        const first = makeBlankReport();
-        first.fields.companyName = "NEW ITALIAN GRILL";
-        first.fields.payee = "ROBERTO RAMIREZ";
-        first.fields.checkNumber = "10705";
-        first.fields.makerPayor = "NEW ITALIAN GRILL CORP";
-        first.fields.rejectReason = "NSF";
-        first.fields.customerContact = "941-320-7574";
-        first.fields.companyContact = "KENNETH 941-966-6565";
-        first.fields.checkAmount = "$200.24";
-        first.fields.returnedFee = "$30.00";
-        first.fields.totalDue = "$230.24";
-        state.reports = [first];
-        state.activeId = first.id;
-        persist(true);
-      };
-
-      const applyExternalPayload = (payload) => {
-        if (!payload || typeof payload !== "object") return false;
-        if (!Array.isArray(payload.reports)) return false;
-        state.reports = payload.reports;
-        state.activeId = payload.activeId || (state.reports[0]?.id ?? null);
-        return true;
+        return null;
       };
 
       const persist = (silent=false) => {
-        const payload = { reports: state.reports, activeId: state.activeId };
+        if (!report) return;
+        report.updatedAt = nowISO();
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-          // If embedded, notify parent so it can sync to Supabase for realtime across devices.
-          if (canPostToParent) {
-            try {
-              window.parent.postMessage(
-                { type: "rc:save", noteId, payload },
-                "*",
-              );
-            } catch {}
-          }
-          if (!silent) showToast("Guardado");
-        } catch {
-          showToast("No se pudo guardar (storage lleno).");
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(report));
+        } catch {}
+        el.lastSaved.textContent = silent ? `Última edición: ${fmtDateTime(report.updatedAt)}` : "Guardando…";
+
+        if (canPostToParent) {
+          try {
+            window.parent.postMessage({ type: "rc:save", noteId, payload: report }, "*");
+          } catch {}
         }
       };
-
-      // Receive init payload from parent (Supabase-synced) when embedded.
-      window.addEventListener("message", (ev) => {
-        const data = ev?.data;
-        if (!data || typeof data !== "object") return;
-        if (data.type !== "rc:init") return;
-        if (data.noteId && String(data.noteId) !== String(noteId)) return;
-        if (data.initialReport && applyExternalPayload(data.initialReport)) {
-          try { persist(true); } catch {}
-          try { renderAll(); } catch {}
-        }
-      });
 
       const scheduleSave = () => {
         clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => persist(false), 350);
+        saveTimer = setTimeout(() => {
+          persist(true);
+        }, 350);
       };
 
-      const showToast = (msg) => {
-        el.toast.textContent = msg;
-        el.toast.classList.add("show");
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => el.toast.classList.remove("show"), 1200);
+      const computeTotalDue = () => {
+        const total = moneyToNumber(report.fields.checkAmount) + moneyToNumber(report.fields.returnedFee);
+        report.fields.totalDue = formatMoney(total);
       };
 
-      const getActive = () => state.reports.find(r => r.id === state.activeId) || null;
-      const sortReports = (arr) => arr.slice().sort((a,b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
-
-      const matchesQuery = (report, q) => {
-        if (!q) return true;
-        const t = q.toLowerCase().trim();
-        const f = report.fields || {};
-        const hay = [
-          f.companyName, f.payee, f.checkNumber, f.makerPayor, f.customerContact, f.companyContact, f.rejectReason
-        ].join(" ").toLowerCase();
-        return hay.includes(t);
-      };
-
-      const computeTotalDue = (checkAmount, returnedFee) => {
-        const total = moneyToNumber(checkAmount) + moneyToNumber(returnedFee);
-        return formatMoney(total);
-      };
-
-      const buildPaperNode = (report, {readonly}) => {
+      const buildPaper = () => {
         const frag = el.paperTemplate.content.cloneNode(true);
-        const paper = frag.querySelector(".paper");
-        applyFieldsToPaper(paper, report, {readonly});
-        return paper;
-      };
-
-      const applyFieldsToPaper = (paper, report, {readonly}) => {
-        const f = report.fields || {};
-        const updated = paper.querySelector('[data-live="updatedAt"]');
+        const node = frag.firstElementChild;
+        const updated = node.querySelector('[data-live="updatedAt"]');
         if (updated) updated.textContent = fmtDateTime(report.updatedAt);
 
-        const inputs = paper.querySelectorAll("[data-field]");
+        const inputs = node.querySelectorAll("[data-field]");
         inputs.forEach(inp => {
           const key = inp.getAttribute("data-field");
-          const val = (f[key] ?? "");
+          const val = (report.fields[key] ?? "");
           if (inp.tagName === "INPUT") inp.value = val;
-
-          if (readonly) {
-            inp.setAttribute("readonly", "readonly");
-            inp.tabIndex = -1;
-          } else {
-            if (key !== "totalDue") inp.removeAttribute("readonly");
-          }
+          if (key === "totalDue") inp.setAttribute("readonly","readonly");
         });
-
-        const total = computeTotalDue(f.checkAmount, f.returnedFee);
-        const totalEl = paper.querySelector('[data-field="totalDue"]');
-        if (totalEl) totalEl.value = total;
-
-        if (readonly) paper.style.pointerEvents = "none";
+        return node;
       };
 
-      const renderSidebar = () => {
-        const filtered = sortReports(state.reports).filter(r => matchesQuery(r, state.query));
-        el.countText.textContent = `${filtered.length} report(s)`;
-        el.list.innerHTML = "";
-
-        for (const r of filtered) {
-          const item = document.createElement("div");
-          item.className = "item" + (r.id === state.activeId ? " active" : "");
-          item.dataset.id = r.id;
-
-          const thumb = document.createElement("div");
-          thumb.className = "thumb";
-          const stage = document.createElement("div");
-          stage.className = "thumbStage";
-          stage.appendChild(buildPaperNode(r, {readonly:true}));
-          thumb.appendChild(stage);
-
-          const meta = document.createElement("div");
-          meta.className = "meta";
-          const dot = document.createElement("div");
-          dot.className = "dot";
-
-          const txt = document.createElement("div");
-          txt.className = "txt";
-          const title = document.createElement("b");
-          title.textContent = (r.fields?.companyName || "COMPANY NAME").toUpperCase();
-
-          const sub = document.createElement("span");
-          const amt = (r.fields?.totalDue || "").trim() || "$0.00";
-          sub.textContent = `Total due: ${amt} • ${fmtDateTime(r.updatedAt)}`;
-
-          txt.appendChild(title);
-          txt.appendChild(sub);
-
-          meta.appendChild(dot);
-          meta.appendChild(txt);
-
-          item.appendChild(thumb);
-          item.appendChild(meta);
-
-          item.addEventListener("click", () => {
-            state.activeId = r.id;
-            persist(true);
-            renderAll();
-            closeSidebarOnMobile();
-          });
-
-          el.list.appendChild(item);
-        }
-      };
-
-      const updateLastSavedPill = (iso) => {
-        el.lastSaved.textContent = `Última edición: ${fmtDateTime(iso)}`;
-      };
-
-      const renderMain = () => {
-        const report = getActive();
-        el.paperWrap.innerHTML = "";
-        el.imagePages.innerHTML = "";
-
-        if (!report) {
-          const div = document.createElement("div");
-          div.style.padding = "20px";
-          div.innerHTML = `<div style="text-align:center;color:var(--muted);font-weight:800;">No hay report seleccionado.</div>`;
-          el.paperWrap.appendChild(div);
-          el.attCount.textContent = "0 image(s)";
-          el.imagesEmpty.style.display = "block";
-          return;
-        }
-
-        activePaper = buildPaperNode(report, {readonly:false});
-        el.paperWrap.appendChild(activePaper);
+      const renderPaper = () => {
+        el.paper.innerHTML = "";
+        activePaper = buildPaper();
+        el.paper.appendChild(activePaper);
 
         activePaper.addEventListener("input", (e) => {
           const t = e.target;
           const key = t?.getAttribute?.("data-field");
           if (!key) return;
-
-          const r = getActive();
-          if (!r) return;
-
           if (key === "totalDue") return;
-
-          const val = (t.tagName === "INPUT") ? t.value : "";
-          r.fields[key] = val;
-
+          report.fields[key] = (t.tagName === "INPUT") ? t.value : "";
           if (key === "checkAmount" || key === "returnedFee") {
-            r.fields.totalDue = computeTotalDue(r.fields.checkAmount, r.fields.returnedFee);
+            computeTotalDue();
             const totalEl = activePaper.querySelector('[data-field="totalDue"]');
-            if (totalEl) totalEl.value = r.fields.totalDue;
+            if (totalEl) totalEl.value = report.fields.totalDue;
           }
-
-          r.updatedAt = nowISO();
-          el.lastSaved.textContent = "Guardando…";
           scheduleSave();
-          renderSidebar();
-          updateLastSavedPill(r.updatedAt);
         });
 
         activePaper.addEventListener("blur", (e) => {
@@ -1205,171 +639,17 @@
           if (!(t instanceof HTMLInputElement)) return;
           const key = t.getAttribute("data-field");
           if (!key) return;
-
           if (key === "checkAmount" || key === "returnedFee") {
-            const r = getActive();
-            if (!r) return;
-
             const n = moneyToNumber(t.value);
             const pretty = formatMoney(n);
             t.value = pretty;
-            r.fields[key] = pretty;
-
-            r.fields.totalDue = computeTotalDue(r.fields.checkAmount, r.fields.returnedFee);
+            report.fields[key] = pretty;
+            computeTotalDue();
             const totalEl = activePaper.querySelector('[data-field="totalDue"]');
-            if (totalEl) totalEl.value = r.fields.totalDue;
-
-            r.updatedAt = nowISO();
+            if (totalEl) totalEl.value = report.fields.totalDue;
             scheduleSave();
-            renderSidebar();
-            updateLastSavedPill(r.updatedAt);
           }
         }, true);
-
-        renderImagePages(report);
-        updateLastSavedPill(report.updatedAt);
-      };
-
-      const renderImagePages = (report) => {
-        const imgs = report.images || [];
-        el.attCount.textContent = `${imgs.length} image(s)`;
-        el.imagePages.innerHTML = "";
-
-        if (!imgs.length) {
-          el.imagesEmpty.style.display = "block";
-          return;
-        }
-        el.imagesEmpty.style.display = "none";
-
-        for (const im of imgs) {
-          const page = document.createElement("div");
-          page.className = "paper imagePaper";
-          page.dataset.id = im.id;
-
-          const top = document.createElement("div");
-          top.className = "imageTop";
-
-          const left = document.createElement("div");
-          left.style.minWidth = "0";
-
-          const name = document.createElement("div");
-          name.className = "name";
-          name.textContent = im.name || "Image";
-
-          const meta = document.createElement("div");
-          meta.className = "metaSmall";
-          meta.textContent = `Added: ${fmtDateTime(im.createdAt || report.updatedAt)}`;
-
-          left.appendChild(name);
-          left.appendChild(meta);
-
-          const actions = document.createElement("div");
-          actions.className = "imageActions";
-
-          const del = document.createElement("button");
-          del.className = "miniBtn miniBtnDanger";
-          del.textContent = "Borrar";
-          del.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            removeImage(im.id);
-          });
-
-          actions.appendChild(del);
-
-          top.appendChild(left);
-          top.appendChild(actions);
-
-          const body = document.createElement("div");
-          body.className = "imageBody";
-
-          const img = document.createElement("img");
-          img.src = im.dataUrl;
-          img.alt = im.name || "image";
-          img.addEventListener("click", () => openModal(im.id));
-
-          body.appendChild(img);
-
-          page.appendChild(top);
-          page.appendChild(body);
-
-          el.imagePages.appendChild(page);
-        }
-      };
-
-      const addNewReport = () => {
-        const r = makeBlankReport();
-        state.reports.unshift(r);
-        state.activeId = r.id;
-        persist(true);
-        renderAll();
-        showToast("Nuevo report creado");
-      };
-
-      const deleteActiveReport = () => {
-        const r = getActive();
-        if (!r) return;
-        const ok = confirm(`¿Seguro que quieres borrar este report?\n\n${(r.fields.companyName || "COMPANY NAME").toUpperCase()}`);
-        if (!ok) return;
-
-        state.reports = state.reports.filter(x => x.id !== r.id);
-        state.activeId = state.reports[0]?.id ?? null;
-        persist(true);
-        renderAll();
-        showToast("Report borrado");
-      };
-
-      const duplicateActiveReport = () => {
-        const r = getActive();
-        if (!r) return;
-
-        const copy = JSON.parse(JSON.stringify(r));
-        copy.id = uid();
-        copy.createdAt = nowISO();
-        copy.updatedAt = nowISO();
-        copy.fields.companyName = (copy.fields.companyName || "COMPANY NAME") + " (COPY)";
-        copy.images = (copy.images || []).map(im => ({...im, id: uid(), createdAt: nowISO()}));
-
-        state.reports.unshift(copy);
-        state.activeId = copy.id;
-        persist(true);
-        renderAll();
-        showToast("Duplicado");
-      };
-
-      const closeSidebarOnMobile = () => {
-        if (window.matchMedia("(max-width: 1020px)").matches) el.sidebar.classList.remove("show");
-      };
-      const toggleSidebarOnMobile = () => el.sidebar.classList.toggle("show");
-
-      const exportBackup = () => {
-        const payload = { reports: state.reports, exportedAt: nowISO() };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `returned-checks-backup-${new Date().toISOString().slice(0,10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      };
-
-      const importBackup = async (file) => {
-        const text = await file.text();
-        let parsed;
-        try { parsed = JSON.parse(text); } catch { alert("JSON inválido."); return; }
-        if (!parsed || !Array.isArray(parsed.reports)) { alert("Ese archivo no parece ser un respaldo válido."); return; }
-
-        const ok = confirm("Esto reemplazará tus reports actuales. ¿Continuar?");
-        if (!ok) return;
-
-        parsed.reports.forEach(r => { if (r?.fields && "notes" in r.fields) delete r.fields.notes; });
-
-        state.reports = parsed.reports;
-        state.activeId = state.reports[0]?.id ?? null;
-        persist(true);
-        renderAll();
-        showToast("Importado");
       };
 
       // Images: compress
@@ -1384,15 +664,12 @@
               const scale = Math.min(1, maxSide / Math.max(w, h));
               const nw = Math.round(w * scale);
               const nh = Math.round(h * scale);
-
               const canvas = document.createElement("canvas");
               canvas.width = nw;
               canvas.height = nh;
               const ctx = canvas.getContext("2d");
               ctx.drawImage(img, 0, 0, nw, nh);
-
-              const out = canvas.toDataURL("image/jpeg", quality);
-              resolve(out);
+              resolve(canvas.toDataURL("image/jpeg", quality));
             };
             img.onerror = () => reject(new Error("img error"));
             img.src = reader.result;
@@ -1401,120 +678,161 @@
         });
       };
 
-      const addImages = async (files) => {
-        const r = getActive();
-        if (!r) return;
+      const renderImages = () => {
+        const imgs = report.images || [];
+        el.attCount.textContent = `${imgs.length} image(s)`;
+        el.imagePages.innerHTML = "";
+        if (!imgs.length) {
+          el.imagesEmpty.style.display = "block";
+          return;
+        }
+        el.imagesEmpty.style.display = "none";
+        for (const im of imgs) {
+          const page = document.createElement("div");
+          page.className = "paper imagePaper";
 
+          const top = document.createElement("div");
+          top.className = "imageTop";
+          const left = document.createElement("div");
+          left.style.minWidth = "0";
+          const name = document.createElement("div");
+          name.className = "name";
+          name.textContent = im.name || "Image";
+          const meta = document.createElement("div");
+          meta.className = "metaSmall";
+          meta.textContent = `Added: ${fmtDateTime(im.createdAt || report.updatedAt)}`;
+          left.appendChild(name);
+          left.appendChild(meta);
+
+          const actions = document.createElement("div");
+          const del = document.createElement("button");
+          del.className = "miniBtn miniBtnDanger";
+          del.textContent = "Borrar";
+          del.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            const ok = confirm("¿Borrar esta imagen?");
+            if (!ok) return;
+            report.images = (report.images || []).filter(x => x.id !== im.id);
+            scheduleSave();
+            renderImages();
+          });
+          actions.appendChild(del);
+
+          top.appendChild(left);
+          top.appendChild(actions);
+
+          const body = document.createElement("div");
+          body.className = "imageBody";
+          const img = document.createElement("img");
+          img.src = im.dataUrl;
+          img.alt = im.name || "image";
+          img.addEventListener("click", () => {
+            modalImageId = im.id;
+            el.modalTitle.textContent = im.name || "Imagen";
+            el.modalImg.src = im.dataUrl;
+            el.modal.classList.add("show");
+          });
+          body.appendChild(img);
+
+          page.appendChild(top);
+          page.appendChild(body);
+          el.imagePages.appendChild(page);
+        }
+      };
+
+      const addImages = async (files) => {
         const list = Array.from(files || []);
         if (!list.length) return;
-
-        showToast("Procesando imágenes…");
-
         for (const f of list) {
           try{
             const dataUrl = await fileToCompressedDataUrl(f);
-            r.images = r.images || [];
-            r.images.unshift({ id: uid(), name: f.name, dataUrl, createdAt: nowISO() });
+            report.images = report.images || [];
+            report.images.unshift({ id: uid(), name: f.name, dataUrl, createdAt: nowISO() });
           }catch{}
         }
-
-        r.updatedAt = nowISO();
         scheduleSave();
-        renderImagePages(r);
-        renderSidebar();
-        updateLastSavedPill(r.updatedAt);
-        showToast("Imágenes agregadas");
+        renderImages();
       };
 
-      const removeImage = (imgId) => {
-        const r = getActive();
-        if (!r) return;
-
-        const ok = confirm("¿Borrar esta imagen?");
-        if (!ok) return;
-
-        r.images = (r.images || []).filter(im => im.id !== imgId);
-        r.updatedAt = nowISO();
-        scheduleSave();
-        renderImagePages(r);
-        renderSidebar();
-        updateLastSavedPill(r.updatedAt);
-        showToast("Imagen borrada");
+      const load = () => {
+        // Prefer v3 (single report)
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            const norm = normalizeFromLegacy(parsed);
+            if (norm) return norm;
+          } catch {}
+        }
+        // Migrate legacy v2 per-note multi-report payload if present
+        const rawV2 = localStorage.getItem(legacyKeyV2);
+        if (rawV2) {
+          try {
+            const parsed = JSON.parse(rawV2);
+            const norm = normalizeFromLegacy(parsed);
+            if (norm) return norm;
+          } catch {}
+        }
+        return blankReport();
       };
 
-      const openModal = (imgId) => {
-        const r = getActive();
-        if (!r) return;
-        const im = (r.images || []).find(x => x.id === imgId);
-        if (!im) return;
-
-        modalImageId = imgId;
-        el.modalTitle.textContent = im.name || "Image";
-        el.modalImg.src = im.dataUrl;
-        el.modal.classList.add("show");
-      };
-
-      const closeModal = () => {
-        modalImageId = null;
-        el.modal.classList.remove("show");
-        el.modalImg.src = "";
-      };
-
-      const renderAll = () => {
-        renderSidebar();
-        renderMain();
-      };
+      // Init from parent (Supabase values._report)
+      window.addEventListener("message", (ev) => {
+        const data = ev?.data;
+        if (!data || typeof data !== "object") return;
+        if (data.type !== "rc:init") return;
+        if (data.noteId && String(data.noteId) !== String(noteId)) return;
+        const norm = normalizeFromLegacy(data.initialReport);
+        if (norm) {
+          report = norm;
+          computeTotalDue();
+          persist(true);
+          renderPaper();
+          renderImages();
+        }
+      });
 
       // Events
-      el.btnMenu.addEventListener("click", toggleSidebarOnMobile);
-
-      el.searchInput.addEventListener("input", () => {
-        state.query = el.searchInput.value || "";
-        renderSidebar();
-      });
-
-      el.btnNewTop.addEventListener("click", addNewReport);
-      el.btnDelete.addEventListener("click", deleteActiveReport);
-      el.btnPrint.addEventListener("click", () => {
-        // Printing from inside a sandboxed iframe is often blocked on mobile.
-        // If embedded, ask the parent to trigger printing.
-        if (canPostToParent) {
-          try { window.parent.postMessage({ type: "rc:print", noteId }, "*"); } catch {}
-          return;
-        }
-        window.print();
-      });
-      el.btnDuplicate.addEventListener("click", duplicateActiveReport);
-
       el.btnAddImages.addEventListener("click", () => el.imgPicker.click());
       el.imgPicker.addEventListener("change", async (e) => {
         await addImages(e.target.files);
         el.imgPicker.value = "";
       });
 
-      el.modalClose.addEventListener("click", closeModal);
-      el.modal.addEventListener("click", (e) => { if (e.target === el.modal) closeModal(); });
+      el.btnPrint.addEventListener("click", () => {
+        // Printing from inside a sandboxed iframe is often blocked on mobile.
+        if (canPostToParent) {
+          try { window.parent.postMessage({ type: "rc:print", noteId }, "*"); } catch {}
+          return;
+        }
+        window.print();
+      });
+
+      el.modalClose.addEventListener("click", () => {
+        modalImageId = null;
+        el.modal.classList.remove("show");
+        el.modalImg.src = "";
+      });
+      el.modal.addEventListener("click", (e) => { if (e.target === el.modal) el.modalClose.click(); });
       el.modalDelete.addEventListener("click", () => {
         if (!modalImageId) return;
-        removeImage(modalImageId);
-        closeModal();
-      });
-
-      el.btnExport.addEventListener("click", exportBackup);
-      el.btnImport.addEventListener("click", () => el.importFile.click());
-      el.importFile.addEventListener("change", async (e) => {
-        const file = e.target.files?.[0];
-        if (file) await importBackup(file);
-        el.importFile.value = "";
-      });
-
-      window.addEventListener("resize", () => {
-        if (!window.matchMedia("(max-width: 1020px)").matches) el.sidebar.classList.remove("show");
+        const ok = confirm("¿Borrar esta imagen?");
+        if (!ok) return;
+        report.images = (report.images || []).filter(im => im.id !== modalImageId);
+        modalImageId = null;
+        el.modal.classList.remove("show");
+        el.modalImg.src = "";
+        scheduleSave();
+        renderImages();
       });
 
       // Boot
-      load();
-      renderAll();
+      report = load();
+      computeTotalDue();
+      persist(true);
+      renderPaper();
+      renderImages();
+      el.lastSaved.textContent = `Última edición: ${fmtDateTime(report.updatedAt)}`;
     })();
   </script>
 </body>

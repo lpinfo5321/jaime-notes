@@ -4,12 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const schema = z
   .object({
-    payload: z
-      .object({
-        reports: z.array(z.unknown()),
-        activeId: z.string().nullable().optional(),
-      })
-      .passthrough(),
+    payload: z.unknown(),
   })
   .strict();
 
@@ -44,7 +39,7 @@ export async function POST(
   const next = {
     ...prev,
     _report: {
-      ...input.data.payload,
+      payload: input.data.payload,
       updatedAt: new Date().toISOString(),
     },
   };

@@ -348,7 +348,7 @@ export default function NotesList({
         <ReportModal
           noteId={reportForCompany.id}
           companyTitle={reportForCompany.title}
-          initialReport={(reportForCompany.values as any)?._report ?? null}
+          initialReport={(reportForCompany.values as any)?._report?.payload ?? null}
           onClose={() => setReportForCompany(null)}
         />
       ) : null}
@@ -663,7 +663,7 @@ function ReportModal({
               Imprimir
             </button>
             <a
-              href={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}`}
+              href={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -687,7 +687,7 @@ function ReportModal({
           <iframe
             title="Reporte Return Checks"
             ref={iframeRef}
-            src={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}`}
+            src={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}`}
             className="h-full w-full"
             sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"
             onLoad={() => {
