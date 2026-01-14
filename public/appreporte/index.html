@@ -622,6 +622,25 @@
         images: [] // {id, name, dataUrl, createdAt}
       });
 
+      const ensureReportShape = (maybe) => {
+        const base = blankReport();
+        if (!maybe || typeof maybe !== "object") return base;
+        const out = { ...base };
+        try {
+          if (typeof maybe.id === "string" && maybe.id) out.id = maybe.id;
+          if (typeof maybe.createdAt === "string" && maybe.createdAt) out.createdAt = maybe.createdAt;
+          if (typeof maybe.updatedAt === "string" && maybe.updatedAt) out.updatedAt = maybe.updatedAt;
+
+          if (maybe.fields && typeof maybe.fields === "object") {
+            out.fields = { ...base.fields, ...maybe.fields };
+          }
+          if (Array.isArray(maybe.images)) out.images = maybe.images;
+        } catch {
+          return base;
+        }
+        return out;
+      };
+
       const normalizeFromLegacy = (maybe) => {
         // If coming from older multi-report payload, pick active or first.
         if (!maybe || typeof maybe !== "object") return null;
@@ -679,6 +698,13 @@
       };
 
       const buildPaper = () => {
+        if (!el.paperTemplate || !("content" in el.paperTemplate)) {
+          const div = document.createElement("div");
+          div.style.padding = "14px";
+          div.innerHTML =
+            "<b>Reporte no se pudo renderizar.</b><div style='opacity:.7;margin-top:6px;'>No se encontró el template del reporte.</div>";
+          return div;
+        }
         const frag = el.paperTemplate.content.cloneNode(true);
         const node =
           frag.firstElementChild ||
@@ -693,12 +719,12 @@
           return div;
         }
         const updated = node.querySelector('[data-live="updatedAt"]');
-        if (updated) updated.textContent = fmtDateTime(report.updatedAt);
+        if (updated) updated.textContent = fmtDateTime(report?.updatedAt);
 
         const inputs = node.querySelectorAll("[data-field]");
         inputs.forEach(inp => {
           const key = inp.getAttribute("data-field");
-          const val = (report.fields[key] ?? "");
+          const val = ((report?.fields || {})[key] ?? "");
           if (inp.tagName === "INPUT") inp.value = val;
           if (key === "totalDue") inp.setAttribute("readonly","readonly");
         });
@@ -706,40 +732,49 @@
       };
 
       const renderPaper = () => {
-        el.paper.innerHTML = "";
-        activePaper = buildPaper();
-        el.paper.appendChild(activePaper);
+        try {
+          // Make sure report always has expected shape
+          report = ensureReportShape(report);
+          el.paper.innerHTML = "";
+          activePaper = buildPaper();
+          el.paper.appendChild(activePaper);
 
-        activePaper.addEventListener("input", (e) => {
-          const t = e.target;
-          const key = t?.getAttribute?.("data-field");
-          if (!key) return;
-          if (key === "totalDue") return;
-          report.fields[key] = (t.tagName === "INPUT") ? t.value : "";
-          if (key === "checkAmount" || key === "returnedFee") {
-            computeTotalDue();
-            const totalEl = activePaper.querySelector('[data-field="totalDue"]');
-            if (totalEl) totalEl.value = report.fields.totalDue;
-          }
-          scheduleSave();
-        });
-
-        activePaper.addEventListener("blur", (e) => {
-          const t = e.target;
-          if (!(t instanceof HTMLInputElement)) return;
-          const key = t.getAttribute("data-field");
-          if (!key) return;
-          if (key === "checkAmount" || key === "returnedFee") {
-            const n = moneyToNumber(t.value);
-            const pretty = formatMoney(n);
-            t.value = pretty;
-            report.fields[key] = pretty;
-            computeTotalDue();
-            const totalEl = activePaper.querySelector('[data-field="totalDue"]');
-            if (totalEl) totalEl.value = report.fields.totalDue;
+          activePaper.addEventListener("input", (e) => {
+            const t = e.target;
+            const key = t?.getAttribute?.("data-field");
+            if (!key) return;
+            if (key === "totalDue") return;
+            report.fields[key] = (t.tagName === "INPUT") ? t.value : "";
+            if (key === "checkAmount" || key === "returnedFee") {
+              computeTotalDue();
+              const totalEl = activePaper.querySelector('[data-field="totalDue"]');
+              if (totalEl) totalEl.value = report.fields.totalDue;
+            }
             scheduleSave();
+          });
+
+          activePaper.addEventListener("blur", (e) => {
+            const t = e.target;
+            if (!(t instanceof HTMLInputElement)) return;
+            const key = t.getAttribute("data-field");
+            if (!key) return;
+            if (key === "checkAmount" || key === "returnedFee") {
+              const n = moneyToNumber(t.value);
+              const pretty = formatMoney(n);
+              t.value = pretty;
+              report.fields[key] = pretty;
+              computeTotalDue();
+              const totalEl = activePaper.querySelector('[data-field="totalDue"]');
+              if (totalEl) totalEl.value = report.fields.totalDue;
+              scheduleSave();
+            }
+          }, true);
+        } catch {
+          if (el.paper) {
+            el.paper.innerHTML =
+              "<div style='padding:14px'><b>Error cargando el reporte.</b><div style='opacity:.7;margin-top:6px'>Intenta recargar la página.</div></div>";
           }
-        }, true);
+        }
       };
 
       // Images: compress
@@ -888,8 +923,9 @@
 
       // Init from parent (Supabase values._report)
       window.addEventListener("message", (ev) => {
-        const data = ev?.data;
+        let data = ev?.data;
         if (!data || typeof data !== "object") return;
+        try {
         if (data.type === "rc:setCompanyName") {
           const name = String((data as any).companyName ?? "").trim();
           if (name && report?.fields) {
@@ -911,15 +947,19 @@
         if (data.type !== "rc:init") return;
         if (data.noteId && String(data.noteId) !== String(noteId)) return;
         const norm = normalizeFromLegacy(data.initialReport);
-        if (norm) {
-          report = norm;
-          if (initialCompanyName && report?.fields) {
-            report.fields.companyName = initialCompanyName.toUpperCase();
-          }
+        report = ensureReportShape(norm || report || null);
+        if (initialCompanyName && report?.fields) {
+          report.fields.companyName = initialCompanyName.toUpperCase();
+        }
+        computeTotalDue();
+        persist(true);
+        renderPaper();
+        renderImages();
+        } catch {
+          // If parent sends a weird payload, don't break rendering.
+          report = ensureReportShape(null);
           computeTotalDue();
-          persist(true);
           renderPaper();
-          renderImages();
         }
       });
 
