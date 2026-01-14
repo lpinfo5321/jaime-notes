@@ -108,6 +108,19 @@ function getTotalDueFromValues(values: Record<string, unknown> | null | undefine
   return { text: formatUsd(cents), isSet: true };
 }
 
+function getReportCoverDataUrl(values: Record<string, unknown> | null | undefined): string | null {
+  const payload = (values as any)?._report?.payload;
+  const images = Array.isArray(payload?.images) ? payload.images : [];
+  if (!images.length) return null;
+  const coverId =
+    typeof (values as any)?._reportCoverImageId === "string"
+      ? String((values as any)._reportCoverImageId)
+      : null;
+  const pick = coverId ? images.find((im: any) => String(im?.id) === coverId) : images[0];
+  const url = pick?.dataUrl;
+  return typeof url === "string" && url.startsWith("data:image/") ? url : null;
+}
+
 function fitTextToSingleLineInput(
   el: HTMLInputElement | null,
   opts?: { minPx?: number },
@@ -481,6 +494,9 @@ function CompanyCard({
   const excerpt = latestText.replace(/\s+/g, " ").slice(0, 140);
   const totalDue = getTotalDueFromValues(note.values);
 
+  const reportCover = getReportCoverDataUrl(note.values);
+  const coverSrc = reportCover ?? coverUrl;
+
   return (
     <div
       className={cn(
@@ -564,7 +580,7 @@ function CompanyCard({
 
         {/* Portada (contain) */}
         <div className="flex items-center justify-center">
-          {coverUrl ? (
+          {coverSrc ? (
             <button
               type="button"
               onClick={onOpenReport}
@@ -574,7 +590,7 @@ function CompanyCard({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 alt="Portada"
-                src={coverUrl}
+                src={coverSrc}
                 className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
               />
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-3">
@@ -643,6 +659,26 @@ function ReportModal({
   const saveTimerRef = useRef<number | null>(null);
   const preparedResolverRef = useRef<((ok: boolean) => void) | null>(null);
 
+  const companyTitleUpper = (companyTitle ?? "").trim().toUpperCase();
+
+  function withCompanyName(payload: unknown) {
+    if (!payload || typeof payload !== "object") return payload;
+    const p: any = payload;
+    if (!p.fields || typeof p.fields !== "object") p.fields = {};
+    p.fields.companyName = companyTitleUpper;
+    return p;
+  }
+
+  useEffect(() => {
+    // Keep report company name synced with note title
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "rc:companyName", name: companyTitleUpper },
+        "*",
+      );
+    } catch {}
+  }, [companyTitleUpper]);
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -664,9 +700,10 @@ function ReportModal({
         preparedResolverRef.current = null;
       }
       if (data.type === "rc:save" && data.noteId === noteId) {
+        const nextPayload = withCompanyName((data as any).payload);
         // Update UI immediately (card should reflect total without refresh)
         try {
-          onLocalReportUpdate((data as any).payload);
+          onLocalReportUpdate(nextPayload);
         } catch {}
 
         // Throttle saves to avoid spamming DB while typing
@@ -676,7 +713,7 @@ function ReportModal({
             await fetch(`/api/notes/${noteId}/report`, {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ payload: data.payload }),
+              body: JSON.stringify({ payload: nextPayload }),
             });
           } catch {
             // ignore
@@ -811,7 +848,7 @@ function ReportModal({
             onLoad={() => {
               try {
                 iframeRef.current?.contentWindow?.postMessage(
-                  { type: "rc:init", noteId, initialReport },
+                  { type: "rc:init", noteId, initialReport: withCompanyName(initialReport), companyTitle },
                   "*",
                 );
               } catch {}

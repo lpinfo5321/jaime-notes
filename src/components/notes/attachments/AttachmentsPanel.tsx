@@ -25,6 +25,7 @@ type Attachment = {
 };
 
 // (note.values) shape we use: { _imageOrder?: string[] }
+type ReportImage = { id: string; name: string; dataUrl: string; createdAt?: string };
 
 function sanitizeName(name: string) {
   return name
@@ -57,6 +58,9 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [coverPath, setCoverPath] = useState<string | null>(null);
   const [imageOrderIds, setImageOrderIds] = useState<string[]>([]);
+  const [reportImages, setReportImages] = useState<ReportImage[]>([]);
+  const [reportCoverId, setReportCoverId] = useState<string | null>(null);
+  const [reportPayload, setReportPayload] = useState<any>(null);
   const [preview, setPreview] = useState<{
     url: string;
     mime: string;
@@ -121,6 +125,26 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
         : null;
     setCoverPath(cp);
 
+    // imágenes dentro del reporte (guardadas en values._report.payload.images)
+    const payload = (noteRow as any)?.values?._report?.payload;
+    setReportPayload(payload ?? null);
+    const imgsRaw = Array.isArray(payload?.images) ? payload.images : [];
+    const imgs: ReportImage[] = imgsRaw
+      .map((im: any) => ({
+        id: typeof im?.id === "string" ? im.id : "",
+        name: typeof im?.name === "string" ? im.name : "Image",
+        dataUrl: typeof im?.dataUrl === "string" ? im.dataUrl : "",
+        createdAt: typeof im?.createdAt === "string" ? im.createdAt : undefined,
+      }))
+      .filter((im: ReportImage) => !!im.id && im.dataUrl.startsWith("data:image/"));
+    setReportImages(imgs);
+
+    const rcid =
+      typeof (noteRow as any)?.values?._reportCoverImageId === "string"
+        ? String((noteRow as any).values._reportCoverImageId)
+        : null;
+    setReportCoverId(rcid);
+
     const savedOrder = Array.isArray((noteRow as any)?.values?._imageOrder)
       ? ((noteRow as any).values._imageOrder as string[])
       : null;
@@ -171,6 +195,25 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
 
   useEffect(() => {
     refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteId]);
+
+  // Realtime refresh when note values change (report images, cover, order)
+  useEffect(() => {
+    const channel = supabase
+      .channel(`note-values-${noteId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notes", filter: `id=eq.${noteId}` },
+        () => {
+          if (busy) return;
+          refresh();
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId]);
 
@@ -279,9 +322,78 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
         }),
       });
       setCoverPath(a.path);
+      // If user chooses an attachment as cover, clear report-cover selection.
+      try {
+        const { data: noteRow } = await supabase
+          .from("notes")
+          .select("values")
+          .eq("id", noteId)
+          .single();
+        const prev = ((noteRow as any)?.values ?? {}) as Record<string, unknown>;
+        const next = { ...prev, _reportCoverImageId: null };
+        await supabase.from("notes").update({ values: next }).eq("id", noteId);
+        setReportCoverId(null);
+      } catch {}
     } catch {
       // ignore
     }
+  }
+
+  async function setReportCover(imgId: string) {
+    try {
+      const { data: noteRow } = await supabase
+        .from("notes")
+        .select("values")
+        .eq("id", noteId)
+        .single();
+      const prev = ((noteRow as any)?.values ?? {}) as Record<string, unknown>;
+      const next = { ...prev, _reportCoverImageId: imgId, _reportCoverUpdatedAt: new Date().toISOString() };
+      await supabase.from("notes").update({ values: next }).eq("id", noteId);
+      setReportCoverId(imgId);
+    } catch {
+      // ignore
+    }
+  }
+
+  function SortableReportThumb({ im }: { im: ReportImage }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+      id: `r:${im.id}`,
+    });
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    } as Record<string, string | undefined>;
+    const isCover = !!reportCoverId && reportCoverId === im.id;
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={cn(
+          "relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950",
+          isDragging && "opacity-70",
+        )}
+      >
+        <button
+          type="button"
+          className="block h-full w-full"
+          title="Arrastra para ordenar. Click: Portada (reporte). Doble click: ver."
+          onClick={() => setReportCover(im.id)}
+          onDoubleClick={() => setPreview({ url: im.dataUrl, mime: "image/jpeg", filename: im.name })}
+          {...attributes}
+          {...listeners}
+        >
+          <div className="aspect-square w-full bg-zinc-50 dark:bg-zinc-900">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={im.dataUrl} alt={im.name} className="h-full w-full object-cover" />
+          </div>
+        </button>
+        {isCover ? (
+          <div className="absolute left-2 top-2 rounded-full bg-emerald-600/90 px-2 py-0.5 text-[11px] font-bold text-white">
+            Portada
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   async function renameAttachment(a: Attachment) {
@@ -434,6 +546,57 @@ export default function AttachmentsPanel({ noteId }: { noteId: string }) {
       {error ? (
         <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
           {error}
+        </div>
+      ) : null}
+
+      {/* Imágenes del reporte */}
+      {reportImages.length ? (
+        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-sm font-semibold">Imágenes del reporte</div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+              Arrastra para ordenar · Click = Portada (tarjeta) · Doble click = Ver
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(event) => {
+                const { active, over } = event;
+                if (!over || active.id === over.id) return;
+                const aId = String(active.id).replace(/^r:/, "");
+                const oId = String(over.id).replace(/^r:/, "");
+                setReportImages((prev) => {
+                  const oldIndex = prev.findIndex((x) => x.id === aId);
+                  const newIndex = prev.findIndex((x) => x.id === oId);
+                  if (oldIndex < 0 || newIndex < 0) return prev;
+                  const next = arrayMove(prev, oldIndex, newIndex);
+                  // Persist by updating report payload order (affects printing too)
+                  const nextPayload = { ...(reportPayload ?? {}), images: next };
+                  setReportPayload(nextPayload);
+                  void fetch(`/api/notes/${noteId}/report`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ payload: nextPayload }),
+                  }).catch(() => undefined);
+                  return next;
+                });
+              }}
+            >
+              <SortableContext
+                items={reportImages.map((im) => `r:${im.id}`)}
+                strategy={rectSortingStrategy}
+              >
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+                  {reportImages.map((im) => (
+                    <SortableReportThumb key={im.id} im={im} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
         </div>
       ) : null}
 

@@ -590,6 +590,18 @@
       let toastTimer = null;
       let modalImageId = null;
 
+      const applyCompanyName = (name) => {
+        const v = (name || "").trim();
+        const up = v ? v.toUpperCase() : "";
+        if (!report) return;
+        report.fields = report.fields || {};
+        report.fields.companyName = up;
+        try {
+          const input = document.querySelector('input[data-field="companyName"]');
+          if (input) input.value = up;
+        } catch {}
+      };
+
       const blankReport = () => ({
         id: uid(),
         createdAt: nowISO(),
@@ -685,7 +697,7 @@
           const key = inp.getAttribute("data-field");
           const val = (report.fields[key] ?? "");
           if (inp.tagName === "INPUT") inp.value = val;
-          if (key === "totalDue") inp.setAttribute("readonly","readonly");
+          if (key === "totalDue" || key === "companyName") inp.setAttribute("readonly","readonly");
         });
         return node;
       };
@@ -875,6 +887,11 @@
       window.addEventListener("message", (ev) => {
         const data = ev?.data;
         if (!data || typeof data !== "object") return;
+        if (data.type === "rc:companyName") {
+          applyCompanyName(data.name);
+          scheduleSave();
+          return;
+        }
         if (data.type === "rc:preparePrint") {
           (async () => {
             try { await waitForImagesReady(); } catch {}
@@ -889,6 +906,8 @@
         const norm = normalizeFromLegacy(data.initialReport);
         if (norm) {
           report = norm;
+          // Always sync company name from note title (authoritative)
+          applyCompanyName(data.companyTitle || initialCompanyName);
           computeTotalDue();
           persist(true);
           renderPaper();
