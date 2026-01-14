@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Paperclip, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import AttachmentsPanel from "@/components/notes/attachments/AttachmentsPanel";
 
 export type NoteListItem = {
   id: string;
@@ -345,9 +346,6 @@ export default function NotesList({
         ) : (
           <CompanyModal
             note={openCompany}
-            coverUrl={coverUrls[openCompany.id] ?? null}
-            meta={attachmentMetaByNoteId[String(openCompany.id)] ?? null}
-            firstDoc={firstDocUrlsByNoteId[String(openCompany.id)] ?? null}
             startOnNew={open?.mode === "new"}
             startOnEntryId={open?.mode === "edit" ? (open?.entryId ?? null) : null}
             onClose={() => setOpen(null)}
@@ -980,9 +978,6 @@ function CompanyListModal({
 
 function CompanyModal({
   note,
-  coverUrl,
-  meta,
-  firstDoc,
   startOnNew,
   startOnEntryId,
   onClose,
@@ -992,9 +987,6 @@ function CompanyModal({
   onLocalWrite,
 }: {
   note: NoteListItem;
-  coverUrl: string | null;
-  meta: { total: number; images: number; docs: number; firstDocName?: string } | null;
-  firstDoc: { url: string; filename: string; mime: string } | null;
   startOnNew: boolean;
   startOnEntryId: string | null;
   onClose: () => void;
@@ -1182,7 +1174,6 @@ function CompanyModal({
     }
   }
 
-  const isPdf = !!firstDoc && String(firstDoc.mime ?? "").includes("pdf");
   const isEditingExisting = !!selectedId && entries.some((e) => e.id === selectedId);
 
   return (
@@ -1351,39 +1342,9 @@ function CompanyModal({
               </button>
             </div>
 
-            {/* Preview opcional */}
-            {(coverUrl || (isPdf && firstDoc) || meta?.total) ? (
-              <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                  Portada / Adjuntos
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="aspect-[3/4] overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
-                    {coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={coverUrl} alt="Portada" className="h-full w-full object-contain" />
-                    ) : isPdf && firstDoc ? (
-                      <iframe title={firstDoc.filename} src={firstDoc.url} className="h-full w-full" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
-                        Sin portada
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-xs text-zinc-600 dark:text-zinc-300">
-                    {meta?.total ? (
-                      <div className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
-                        <Paperclip className="h-4 w-4" /> {meta.total} adjuntos
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
-                        No hay adjuntos.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            <div className="mt-4">
+              <AttachmentsPanel noteId={note.id} />
+            </div>
           </div>
           </div>
         </div>
