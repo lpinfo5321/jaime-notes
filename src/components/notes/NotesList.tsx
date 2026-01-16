@@ -108,6 +108,16 @@ function getTotalDueFromValues(values: Record<string, unknown> | null | undefine
   return { text: formatUsd(cents), isSet: true };
 }
 
+function getReportFieldText(
+  values: Record<string, unknown> | null | undefined,
+  key: string,
+): string {
+  const payload = (values as any)?._report?.payload;
+  const raw = payload?.fields?.[key];
+  const s = typeof raw === "string" ? raw.trim() : "";
+  return s ? s : "RELLENAR";
+}
+
 function fitTextToSingleLineInput(
   el: HTMLInputElement | null,
   opts?: { minPx?: number },
@@ -157,9 +167,6 @@ export default function NotesList({
   const [pendingRemote, setPendingRemote] = useState(false);
   const suppressRemoteUntilRef = useRef<number>(0);
   const idsRef = useRef<Set<string>>(new Set());
-  const [confirmDel, setConfirmDel] = useState<{ id: string; title: string } | null>(
-    null,
-  );
   const [reportForCompany, setReportForCompany] = useState<{
     id: string;
     title: string;
@@ -270,33 +277,6 @@ export default function NotesList({
     );
   }
 
-  function removeCompany(noteId: string) {
-    setItems((prev) => prev.filter((n) => n.id !== noteId));
-  }
-
-  function askDeleteCompany(id: string) {
-    const t = sorted.find((n) => n.id === id);
-    if (!t) return;
-    setConfirmDel({ id, title: (t.title ?? "").trim() || "Sin nombre" });
-  }
-
-  async function doDeleteCompany(id: string) {
-    suppressRemoteUntilRef.current = Date.now() + 1500;
-    setBusyId(id);
-    setConfirmDel(null);
-    // Optimista: quitar de UI al instante
-    removeCompany(id);
-    try {
-      const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("No se pudo eliminar");
-    } catch {
-      // Si falla, recargar para restaurar el estado real
-      router.refresh();
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   if (empty) {
     return (
       <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
@@ -331,7 +311,6 @@ export default function NotesList({
             }
             onPatch={(patch) => patchCompany(note.id, patch)}
             onLocalWrite={markLocalWrite}
-            onDelete={() => askDeleteCompany(note.id)}
           />
         ))}
       </div>
@@ -351,24 +330,9 @@ export default function NotesList({
             onClose={() => setOpen(null)}
             onBusy={(b) => setBusyId(b ? openCompany.id : null)}
             onPatch={(patch) => patchCompany(openCompany.id, patch)}
-            onDeleteCompany={() => {
-              removeCompany(openCompany.id);
-              setOpen(null);
-            }}
             onLocalWrite={markLocalWrite}
           />
         )
-      ) : null}
-
-      {confirmDel ? (
-        <ConfirmDialog
-          title="Eliminar compañía"
-          message={`¿Seguro que quieres eliminar "${confirmDel.title}"?`}
-          confirmText="Sí, eliminar"
-          cancelText="No"
-          onCancel={() => setConfirmDel(null)}
-          onConfirm={() => doDeleteCompany(confirmDel.id)}
-        />
       ) : null}
 
       {reportForCompany ? (
@@ -404,7 +368,6 @@ function CompanyCard({
   onOpenReport,
   onPatch,
   onLocalWrite,
-  onDelete,
 }: {
   note: NoteListItem;
   coverUrl: string | null;
@@ -417,7 +380,6 @@ function CompanyCard({
   onOpenReport: () => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
   onLocalWrite: () => void;
-  onDelete: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const lastSavedNameRef = useRef(companyName);
@@ -610,17 +572,6 @@ function CompanyCard({
             </button>
           )}
         </div>
-      </div>
-
-      <div className="mt-3 flex justify-end">
-        <button
-          type="button"
-          onClick={onDelete}
-          className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/40"
-        >
-          <Trash2 className="h-4 w-4" />
-          Eliminar
-        </button>
       </div>
     </div>
   );
@@ -995,7 +946,6 @@ function CompanyModal({
   onClose,
   onBusy,
   onPatch,
-  onDeleteCompany,
   onLocalWrite,
 }: {
   note: NoteListItem;
@@ -1004,7 +954,6 @@ function CompanyModal({
   onClose: () => void;
   onBusy: (busy: boolean) => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
-  onDeleteCompany: () => void;
   onLocalWrite: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
@@ -1170,22 +1119,6 @@ function CompanyModal({
     }
   }
 
-  async function deleteCompany() {
-    const ok = confirm("¿Eliminar esta compañía completa? (Sí/No)");
-    if (!ok) return;
-    onBusy(true);
-    try {
-      onLocalWrite();
-      const res = await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("No se pudo eliminar");
-      onDeleteCompany();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Error eliminando");
-    } finally {
-      onBusy(false);
-    }
-  }
-
   const isEditingExisting = !!selectedId && entries.some((e) => e.id === selectedId);
 
   return (
@@ -1337,21 +1270,66 @@ function CompanyModal({
             </label>
 
             {/* Controles abajo */}
-            <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
-                onClick={deleteCompany}
-                className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/40"
-              >
-                Eliminar compañía
-              </button>
-              <button
-                type="button"
-                onClick={saveEntry}
-                className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-              >
-                Guardar
-              </button>
+            <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 dark:bg-zinc-950 dark:text-zinc-100">
+                    <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200/70 bg-white/70 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
+                      <div className="truncate">CHECK AMOUNT</div>
+                    </div>
+                    <div className="mt-2 border-t border-zinc-200/60 pt-2 text-[11px] leading-snug text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
+                      <div className="flex gap-2">
+                        <div className="shrink-0 font-semibold text-zinc-600 dark:text-zinc-300">
+                          DATE CHECK PAID:
+                        </div>
+                        <div className="min-w-0 truncate">
+                          {getReportFieldText(note.values, "dateCheckPaid")}
+                        </div>
+                      </div>
+                      <div className="mt-1 flex gap-2">
+                        <div className="shrink-0 font-semibold text-zinc-600 dark:text-zinc-300">
+                          FORM OF PAYMENT:
+                        </div>
+                        <div className="min-w-0 truncate">
+                          {getReportFieldText(note.values, "checkPaymentMethod")}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 dark:bg-zinc-950 dark:text-zinc-100">
+                    <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200/70 bg-white/70 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
+                      <div className="truncate">CHECK FEE</div>
+                    </div>
+                    <div className="mt-2 border-t border-zinc-200/60 pt-2 text-[11px] leading-snug text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
+                      <div className="flex gap-2">
+                        <div className="shrink-0 font-semibold text-zinc-600 dark:text-zinc-300">
+                          DATE FEE PAID:
+                        </div>
+                        <div className="min-w-0 truncate">
+                          {getReportFieldText(note.values, "dateFeePaid")}
+                        </div>
+                      </div>
+                      <div className="mt-1 flex gap-2">
+                        <div className="shrink-0 font-semibold text-zinc-600 dark:text-zinc-300">
+                          FORM OF PAYMENT:
+                        </div>
+                        <div className="min-w-0 truncate">
+                          {getReportFieldText(note.values, "feePaymentMethod")}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={saveEntry}
+                  className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+                >
+                  Guardar
+                </button>
+              </div>
             </div>
 
             <div className="mt-4">
