@@ -6,14 +6,18 @@
   <title>Returned Checks</title>
   <style>
     :root{
-      --bg:#f4f6fb;
-      --ink:#111827;
-      --muted:#6b7280;
-      --line:#e5e7eb;
+      --bg:#f5f7fb;
+      --ink:#0f172a;
+      --muted:#64748b;
+      --line: rgba(15,23,42,.10);
       --accent:#d11b2a;
-      --label:#a6a6a6;
-      --shadow: 0 18px 60px rgba(0,0,0,.10);
-      --radius:16px;
+      --shadow: 0 18px 55px rgba(2,6,23,.12);
+      --radius:18px;
+      --paperBorder: rgba(15,23,42,.10);
+      --cellLine: rgba(15,23,42,.12);
+      --labelBg: rgba(15,23,42,.06);
+      --fieldBg: rgba(255,255,255,.92);
+      --fieldBorder: rgba(15,23,42,.14);
 
       /* Paper sizing */
       --paper-w: 860px;
@@ -60,7 +64,7 @@
     }
 
     .btn{
-      border:1px solid var(--line);
+      border:1px solid rgba(15,23,42,.12);
       background:#fff;
       padding:10px 12px;
       border-radius:14px;
@@ -97,8 +101,8 @@
     .paper{
       width: min(var(--paper-w), 100%);
       background:#fff;
-      border:1px solid rgba(209,27,42,.15);
-      border-radius: 18px;
+      border:1px solid var(--paperBorder);
+      border-radius: 20px;
       box-shadow: var(--shadow);
       padding: var(--paper-pad-y) var(--paper-pad-x);
       position:relative;
@@ -107,9 +111,9 @@
     .paper:before{
       content:"";
       position:absolute; inset:0;
-      border-radius: 18px;
+      border-radius: 20px;
       pointer-events:none;
-      box-shadow: inset 0 0 0 1px rgba(17,24,39,.05);
+      box-shadow: inset 0 0 0 1px rgba(15,23,42,.04);
     }
 
     .paperTop{
@@ -125,13 +129,13 @@
       border:0;
       outline:0;
       padding:0 0 6px 0;
-      border-bottom: 2px solid rgba(17,24,39,.15);
+      border-bottom: 2px solid rgba(15,23,42,.14);
       width:100%;
       font-weight: 300;
       text-transform: uppercase;
       background: transparent;
     }
-    .subline{display:flex; gap:10px; flex-wrap:wrap; color: var(--muted); font-size: 12px;}
+    .subline{display:flex; gap:10px; flex-wrap:wrap; color: var(--muted); font-size: 12px; font-weight:700;}
     .storeInfo{
       text-align:right; /* logo + texto juntos, alineados */
       font-size:12.5px;
@@ -163,33 +167,101 @@
       text-transform: uppercase;
     }
 
-    table{width:100%; border-collapse:collapse; table-layout:fixed; font-size: 13px;}
-    .gridBlock{border:1px solid rgba(17,24,39,.35);}
-    .gridBlock td{border:1px solid rgba(17,24,39,.35); padding:8px 10px; vertical-align:middle;}
+    table{width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; font-size: 13px;}
+    .gridBlock{
+      border:1px solid var(--cellLine);
+      border-radius: 14px;
+      overflow:hidden;
+    }
+    .gridBlock td{
+      border-bottom:1px solid var(--cellLine);
+      border-right:1px solid var(--cellLine);
+      padding:10px 12px;
+      vertical-align:middle;
+    }
+    .gridBlock tr:last-child td{ border-bottom:0; }
+    .gridBlock td:last-child{ border-right:0; }
     .labelCell{
       width: 30%;
-      background: var(--label);
-      color:#0b0b0b;
+      background: var(--labelBg);
+      color: rgba(15,23,42,.92);
       font-weight: 900;
       text-transform: uppercase;
-      letter-spacing:.2px;
-      text-align:center;
-      font-size: 12px;
+      letter-spacing:.14px;
+      text-align:left;
+      font-size: 13px;
       line-height: 1.1;
+      padding-left:14px;
     }
     .valueCell{background:#fff;}
     .valueCell input{
+      width:100%;
+      border:1px solid var(--fieldBorder);
+      outline:0;
+      background: var(--fieldBg);
+      font-size: 13px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      font-weight: 800;
+      letter-spacing: .08px;
+    }
+    .valueCell input::placeholder{
+      color: rgba(15,23,42,.35);
+      font-weight: 800;
+      letter-spacing: .1px;
+    }
+
+    /* Select (dropdown) inside table cells */
+    .valueCell .selectCol{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .selectWrap{
+      position:relative;
+      display:block;
+      width:100%;
+      border-radius: 14px;
+      border: 1px solid var(--fieldBorder);
+      background: var(--fieldBg);
+      padding: 8px 10px;
+      box-shadow: 0 10px 22px rgba(2,6,23,.06);
+    }
+    .selectWrap:focus-within{
+      border-color: rgba(209,27,42,.28);
+      box-shadow: 0 0 0 3px rgba(209,27,42,.10), 0 10px 22px rgba(2,6,23,.06);
+    }
+    .selectWrap:after{
+      content:"▾";
+      position:absolute;
+      right:10px;
+      top:50%;
+      transform: translateY(-50%);
+      color: rgba(17,24,39,.55);
+      font-weight: 900;
+      pointer-events:none;
+    }
+    .valueCell select{
       width:100%;
       border:0;
       outline:0;
       background:transparent;
       font-size: 13px;
       padding:0;
-    }
-    .valueCell input::placeholder{
-      color: rgba(17,24,39,.35);
-      font-weight: 700;
+      font-weight: 800;
       letter-spacing: .1px;
+      appearance:none;
+      -webkit-appearance:none;
+      -moz-appearance:none;
+    }
+    .selectExtra{
+      margin-top: 8px;
+    }
+    .selectExtra .hint{
+      font-size: 11px;
+      font-weight: 900;
+      color: rgba(15,23,42,.55);
+      margin-bottom: 6px;
     }
 
     .moneyRow{
@@ -199,8 +271,20 @@
       margin-top: 14px;
       align-items:start;
     }
-    .miniBlock{border:1px solid rgba(17,24,39,.35);}
-    .miniBlock td{border:1px solid rgba(17,24,39,.35); padding:8px 10px; font-size: 13px;}
+    .miniBlock{
+      border:1px solid var(--cellLine);
+      border-radius: 14px;
+      overflow:hidden;
+    }
+    .miniBlock td{
+      border-bottom:1px solid var(--cellLine);
+      border-right:1px solid var(--cellLine);
+      padding:10px 12px;
+      font-size: 13px;
+      vertical-align:middle;
+    }
+    .miniBlock tr:last-child td{ border-bottom:0; }
+    .miniBlock td:last-child{ border-right:0; }
 
     .imagesSection{margin-top: 14px;}
     .imagesHead{
@@ -340,11 +424,12 @@
       .lpLogo{width: 140px;}
       .titleCenter{font-size: 20px; margin: 12px 0 8px 0;}
       table{font-size: 11.5px;}
-      .labelCell{font-size: 10px; width: 34%;}
-      .gridBlock td{padding: 6px 7px;}
-      .valueCell input{font-size: 12px;}
+      .labelCell{font-size: 12px; width: 40%; padding-left:10px;}
+      .gridBlock td{padding: 8px 8px;}
+      .valueCell input{font-size: 12px; padding: 7px 9px; border-radius: 12px;}
+      .selectWrap{padding:7px 9px;}
       .moneyRow{grid-template-columns: 1fr; gap: 10px;}
-      .miniBlock td{padding: 6px 7px; font-size: 12px;}
+      .miniBlock td{padding: 8px 8px; font-size: 12px;}
     }
 
     /* Print */
@@ -355,10 +440,18 @@
       .topbar{display:none !important}
       .imagesHead{display:none !important}
       .miniBtn{display:none !important}
+      .linkBtn{display:none !important}
       .shell{padding:0 !important}
       .imagesSection{margin-top:0 !important}
       /* Never print placeholder helper text */
       input::placeholder{ color: transparent !important; }
+
+      /* Clean print look */
+      .gridBlock, .miniBlock{ border-color:#000 !important; border-radius:0 !important; }
+      .gridBlock td, .miniBlock td{ border-color:#000 !important; }
+      .labelCell{ background:#e5e7eb !important; color:#000 !important; }
+      .valueCell input{ border:0 !important; background:transparent !important; padding:0 !important; }
+      .selectWrap{ border:0 !important; background:transparent !important; padding:0 !important; }
 
       /* Each section = one page */
       #paper{ break-after: page; page-break-after: always; }
@@ -465,28 +558,50 @@
         <div class="titleCenter">RETURNED CHECK REPORT</div>
 
         <table class="gridBlock">
-          <tr><td class="labelCell">DATE CASHED</td><td class="valueCell"><input data-field="dateCashed" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">DATE OF DEPOSIT</td><td class="valueCell"><input data-field="dateDeposit" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">DATE RETURNED</td><td class="valueCell"><input data-field="dateReturned" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">PAYEE</td><td class="valueCell"><input data-field="payee" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">CHECK NUMBER</td><td class="valueCell"><input data-field="checkNumber" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">MAKER/PAYOR</td><td class="valueCell"><input data-field="makerPayor" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">REJECT REASON</td><td class="valueCell"><input data-field="rejectReason" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">CUSTOMER CONTACT</td><td class="valueCell"><input data-field="customerContact" placeholder="RELLENAR" /></td></tr>
-          <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" placeholder="RELLENAR" /></td></tr>
+          <tr><td class="labelCell">DATE CASHED</td><td class="valueCell"><input data-field="dateCashed" inputmode="numeric" placeholder="MM/DD/YY" /></td></tr>
+          <tr><td class="labelCell">DATE OF DEPOSIT</td><td class="valueCell"><input data-field="dateDeposit" inputmode="numeric" placeholder="MM/DD/YY" /></td></tr>
+          <tr><td class="labelCell">DATE RETURNED</td><td class="valueCell"><input data-field="dateReturned" inputmode="numeric" placeholder="MM/DD/YY" /></td></tr>
+          <tr><td class="labelCell">PAYEE</td><td class="valueCell"><input data-field="payee" placeholder="NAME.." /></td></tr>
+          <tr><td class="labelCell">CHECK NUMBER</td><td class="valueCell"><input data-field="checkNumber" inputmode="numeric" placeholder="#00000" /></td></tr>
+          <tr><td class="labelCell">MAKER/PAYOR</td><td class="valueCell"><input data-field="makerPayor" placeholder="COMPANY NAME" /></td></tr>
+          <tr><td class="labelCell">REJECT REASON</td><td class="valueCell"><input data-field="rejectReason" placeholder="REASON" /></td></tr>
+          <tr><td class="labelCell">CUSTOMER CONTACT</td><td class="valueCell"><input data-field="customerContact" inputmode="numeric" placeholder="000-000-0000" /></td></tr>
+          <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" placeholder="NAME 000-000-0000" /></td></tr>
         </table>
 
         <div class="moneyRow">
           <table class="miniBlock">
-            <tr><td class="labelCell">CHECK AMOUNT</td><td class="valueCell"><input data-field="checkAmount" placeholder="$0.00" /></td></tr>
-            <tr><td class="labelCell">RETURNED CHECK FEE</td><td class="valueCell"><input data-field="returnedFee" placeholder="$0.00" /></td></tr>
+            <tr><td class="labelCell">CHECK AMOUNT</td><td class="valueCell"><input data-field="checkAmount" inputmode="decimal" placeholder="$0.00" /></td></tr>
+            <tr><td class="labelCell">RETURNED CHECK FEE</td><td class="valueCell"><input data-field="returnedFee" inputmode="decimal" placeholder="$0.00" /></td></tr>
             <tr><td class="labelCell">TOTAL DUE</td><td class="valueCell"><input data-field="totalDue" placeholder="$0.00" readonly /></td></tr>
           </table>
           <table class="miniBlock">
-            <tr><td class="labelCell">DATE FEE PAID</td><td class="valueCell"><input data-field="dateFeePaid" placeholder="RELLENAR" /></td></tr>
-            <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="feePaymentMethod" placeholder="RELLENAR" /></td></tr>
-            <tr><td class="labelCell">DATE CHECK PAID</td><td class="valueCell"><input data-field="dateCheckPaid" placeholder="RELLENAR" /></td></tr>
-            <tr><td class="labelCell">FORM OF PAYMENT</td><td class="valueCell"><input data-field="checkPaymentMethod" placeholder="RELLENAR" /></td></tr>
+            <tr><td class="labelCell">DATE FEE PAID</td><td class="valueCell"><input data-field="dateFeePaid" inputmode="numeric" placeholder="MM/DD/YY" /></td></tr>
+            <tr>
+              <td class="labelCell">FORM OF PAYMENT</td>
+              <td class="valueCell">
+                <div class="selectCol">
+                  <div class="selectWrap">
+                    <select data-field="feePaymentMethod" data-select="fee"></select>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr><td class="labelCell">DATE CHECK PAID</td><td class="valueCell"><input data-field="dateCheckPaid" inputmode="numeric" placeholder="MM/DD/YY" /></td></tr>
+            <tr>
+              <td class="labelCell">FORM OF PAYMENT</td>
+              <td class="valueCell">
+                <div class="selectCol">
+                  <div class="selectWrap">
+                    <select data-field="checkPaymentMethod" data-select="check"></select>
+                  </div>
+                  <div class="selectExtra" data-extra="checkPaidNumber" style="display:none;">
+                    <div class="hint">Check #</div>
+                    <input data-field="checkPaidNumber" inputmode="numeric" placeholder="#00000" />
+                  </div>
+                </div>
+              </td>
+            </tr>
           </table>
         </div>
 
@@ -494,9 +609,9 @@
           <table class="miniBlock">
             <tr>
               <td class="labelCell">DATE COMPLETED</td>
-              <td class="valueCell"><input data-field="dateCompleted" placeholder="RELLENAR" /></td>
+              <td class="valueCell"><input data-field="dateCompleted" inputmode="numeric" placeholder="MM/DD/YY" /></td>
               <td class="labelCell" style="width:22%">AGENT</td>
-              <td class="valueCell"><input data-field="agentCompleted" placeholder="RELLENAR" /></td>
+              <td class="valueCell"><input data-field="agentCompleted" placeholder="NAME" /></td>
             </tr>
           </table>
         </div>
@@ -527,6 +642,34 @@
       </div>
       <div class="modalBody">
         <img id="modalImg" alt="preview" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Manage dropdown options modal -->
+  <div class="modal" id="manageModal">
+    <div class="modalCard" style="max-width:560px">
+      <div class="modalTop">
+        <b id="manageTitle">Editar lista</b>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn" id="manageClose">Cerrar</button>
+        </div>
+      </div>
+      <div class="modalBody" style="background:#fff; display:block;">
+        <div style="padding:12px;">
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <input
+              id="manageAddInput"
+              placeholder="Nueva opción…"
+              style="flex:1; min-width:220px; border:1px solid rgba(229,231,235,.95); border-radius:14px; padding:10px 12px; font-weight:800;"
+            />
+            <button class="btn btnPrimary" id="manageAddBtn" type="button">Agregar</button>
+          </div>
+          <div id="manageList" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;"></div>
+          <div style="margin-top:10px; color:rgba(107,114,128,.9); font-size:12px; font-weight:700;">
+            Eliminar = archivar. Si una opción ya está usada en reportes viejos, seguirá visible como (Archived).
+          </div>
+        </div>
       </div>
     </div>
   </div>

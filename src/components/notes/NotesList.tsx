@@ -2,7 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Paperclip, Trash2, X } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  CheckCircle2,
+  ImageOff,
+  MoreHorizontal,
+  Paperclip,
+  Trash2,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import AttachmentsPanel from "@/components/notes/attachments/AttachmentsPanel";
@@ -18,6 +27,8 @@ export type NoteListItem = {
   updated_at: string;
   created_at: string;
 };
+
+type Bucket = "pending" | "completed" | "trash";
 
 type Props = {
   notes: NoteListItem[];
@@ -108,14 +119,50 @@ function getTotalDueFromValues(values: Record<string, unknown> | null | undefine
   return { text: formatUsd(cents), isSet: true };
 }
 
-function getReportFieldText(
-  values: Record<string, unknown> | null | undefined,
-  key: string,
-): string {
+function normText(v: unknown) {
+  const s = typeof v === "string" ? v : v == null ? "" : String(v);
+  return s.trim();
+}
+
+function pickField(fields: any, keys: string[]) {
+  for (const k of keys) {
+    const v = fields?.[k];
+    if (v !== undefined) return v;
+  }
+  return undefined;
+}
+
+function getTotalDueCentsFromValues(values: Record<string, unknown> | null | undefined) {
   const payload = (values as any)?._report?.payload;
-  const raw = payload?.fields?.[key];
-  const s = typeof raw === "string" ? raw.trim() : "";
-  return s ? s : "RELLENAR";
+  const fields = payload?.fields ?? null;
+  const raw = pickField(fields, ["totalDue", "total_due"]);
+  const cents = parseMoneyToCents(raw);
+  return cents === null ? 0 : Math.max(0, cents);
+}
+
+function isBucket(v: unknown): v is Bucket {
+  return v === "pending" || v === "completed" || v === "trash";
+}
+
+function normalizePaymentToken(v: unknown) {
+  const s = normText(v);
+  if (!s) return "";
+  if (s.toUpperCase() === "RELLENAR") return "";
+  return s.toUpperCase();
+}
+
+function statusFromPaymentMethod(
+  raw: unknown,
+  opts: { allowRedeposited?: boolean },
+): { text: string; tone: "pending" | "paid" } {
+  const token = normalizePaymentToken(raw);
+  if (!token) return { text: "Pending", tone: "pending" };
+  // Algunos usuarios usan "REDEPOSITED" también en Fee; lo soportamos.
+  if (opts.allowRedeposited && token === "REDEPOSITED")
+    return { text: "Redeposited", tone: "paid" };
+  if (token === "PAID CASH") return { text: "Paid Cash", tone: "paid" };
+  if (token === "PAID CHECK") return { text: "Paid Check", tone: "paid" };
+  return { text: "Pending", tone: "pending" };
 }
 
 function fitTextToSingleLineInput(
@@ -167,6 +214,13 @@ export default function NotesList({
   const [pendingRemote, setPendingRemote] = useState(false);
   const suppressRemoteUntilRef = useRef<number>(0);
   const idsRef = useRef<Set<string>>(new Set());
+  const [confirmDel, setConfirmDel] = useState<{ id: string; title: string } | null>(
+    null,
+  );
+  const [bucket, setBucket] = useState<Bucket>("pending");
+  const [actionsFor, setActionsFor] = useState<{ id: string; title: string } | null>(
+    null,
+  );
   const [reportForCompany, setReportForCompany] = useState<{
     id: string;
     title: string;
@@ -277,6 +331,231 @@ export default function NotesList({
     );
   }
 
+  function removeCompany(noteId: string) {
+    setItems((prev) => prev.filter((n) => n.id !== noteId));
+  }
+
+  function askDeleteCompany(id: string) {
+    const t = sorted.find((n) => n.id === id);
+    if (!t) return;
+    setConfirmDel({ id, title: (t.title ?? "").trim() || "Sin nombre" });
+  }
+
+  async function doDeleteCompany(id: string) {
+    suppressRemoteUntilRef.current = Date.now() + 1500;
+    setBusyId(id);
+    setConfirmDel(null);
+    // Optimista: quitar de UI al instante
+    removeCompany(id);
+    try {
+      const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("No se pudo eliminar");
+    } catch {
+      // Si falla, recargar para restaurar el estado real
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function deriveBucketFromNote(n: NoteListItem): Bucket {
+    const v = (n.values ?? null) as any;
+    const stored = v?._bucket;
+    if (isBucket(stored)) return stored;
+    // Derivado: si falta status, lo calculamos sin persistir.
+    const dueCents = getTotalDueCentsFromValues(n.values);
+    const payload = v?._report?.payload ?? null;
+    const fields = payload?.fields ?? null;
+    const feeMethodRaw = pickField(fields, ["feePaymentMethod", "fee_payment_method"]);
+    const checkMethodRaw = pickField(fields, ["checkPaymentMethod", "check_payment_method"]);
+    const fee = statusFromPaymentMethod(feeMethodRaw, { allowRedeposited: true });
+    const chk = statusFromPaymentMethod(checkMethodRaw, { allowRedeposited: true });
+    const pending = fee.text === "Pending" || chk.text === "Pending" || dueCents <= 0;
+    return pending ? "pending" : "completed";
+  }
+
+  const bucketCounts = useMemo(() => {
+    const out: Record<Bucket, number> = { pending: 0, completed: 0, trash: 0 };
+    for (const n of items) out[deriveBucketFromNote(n)] += 1;
+    return out;
+  }, [items]);
+
+  const filtered = useMemo(() => {
+    return sorted.filter((n) => deriveBucketFromNote(n) === bucket);
+  }, [sorted, bucket]);
+
+  async function setNoteBucket(noteId: string, nextBucket: Bucket) {
+    const target = items.find((n) => n.id === noteId);
+    if (!target) return;
+    const prev = ((target.values ?? {}) as Record<string, unknown>) ?? {};
+    const nextValues = { ...prev, _bucket: nextBucket } as Record<string, unknown>;
+    suppressRemoteUntilRef.current = Date.now() + 1500;
+    patchCompany(noteId, { values: nextValues });
+    markLocalWrite();
+    try {
+      await fetch(`/api/notes/${noteId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ values: nextValues }),
+      });
+    } catch {
+      router.refresh();
+    }
+  }
+
+  function BucketBar() {
+    const tabs: { id: Bucket; label: string; icon: React.ReactNode }[] = [
+      { id: "pending", label: "Pendientes", icon: <Archive className="h-4 w-4" /> },
+      { id: "completed", label: "Completados", icon: <CheckCircle2 className="h-4 w-4" /> },
+      { id: "trash", label: "Papelera", icon: <Trash2 className="h-4 w-4" /> },
+    ];
+    return (
+      <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/70">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-around px-3 py-2">
+          {tabs.map((t) => {
+            const active = bucket === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setBucket(t.id)}
+                className={cn(
+                  "flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold",
+                  active
+                    ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                    : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900",
+                )}
+              >
+                {t.icon}
+                <span className="truncate">{t.label}</span>
+                <span
+                  className={cn(
+                    "ml-1 rounded-full px-2 py-0.5 text-xs font-black tabular-nums",
+                    active
+                      ? "bg-white/15 text-white dark:bg-zinc-900/15 dark:text-zinc-900"
+                      : "bg-zinc-200/70 text-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-200",
+                  )}
+                >
+                  {bucketCounts[t.id]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function CompanyActionsModal({
+    id,
+    title,
+    onClose,
+  }: {
+    id: string;
+    title: string;
+    onClose: () => void;
+  }) {
+    const current = items.find((n) => n.id === id);
+    const b = current ? deriveBucketFromNote(current) : "pending";
+    const canRestore = b === "trash";
+    const canDeleteForever = b === "trash";
+
+    return (
+      <div
+        className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3 sm:items-center"
+        onClick={onClose}
+      >
+        <div
+          className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+              Acciones
+            </div>
+            <div className="mt-0.5 truncate text-sm font-bold">{title}</div>
+          </div>
+
+          <div className="p-3">
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void setNoteBucket(id, "pending");
+                  onClose();
+                }}
+                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              >
+                <span>Mover a Pendientes</span>
+                <Archive className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void setNoteBucket(id, "completed");
+                  onClose();
+                }}
+                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              >
+                <span>Mover a Completados</span>
+                <CheckCircle2 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void setNoteBucket(id, "trash");
+                  onClose();
+                }}
+                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              >
+                <span>Mover a Papelera</span>
+                <Trash2 className="h-4 w-4" />
+              </button>
+
+              {canRestore ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void setNoteBucket(id, "pending");
+                    onClose();
+                  }}
+                  className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200 dark:hover:bg-emerald-950/30"
+                >
+                  <span>Restaurar</span>
+                  <ArchiveRestore className="h-4 w-4" />
+                </button>
+              ) : null}
+
+              {canDeleteForever ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    askDeleteCompany(id);
+                    onClose();
+                  }}
+                  className="flex w-full items-center justify-between rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-900 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-200 dark:hover:bg-red-950/30"
+                >
+                  <span>Eliminar definitivamente</span>
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (empty) {
     return (
       <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
@@ -288,9 +567,9 @@ export default function NotesList({
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="mx-auto w-full max-w-7xl pb-24">
       <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
-        {sorted.map((note) => (
+        {filtered.map((note) => (
           <CompanyCard
             key={note.id}
             note={note}
@@ -311,6 +590,13 @@ export default function NotesList({
             }
             onPatch={(patch) => patchCompany(note.id, patch)}
             onLocalWrite={markLocalWrite}
+            onDelete={() => askDeleteCompany(note.id)}
+            onActions={() =>
+              setActionsFor({
+                id: note.id,
+                title: (note.title ?? "").trim() || "Sin nombre",
+              })
+            }
           />
         ))}
       </div>
@@ -330,9 +616,24 @@ export default function NotesList({
             onClose={() => setOpen(null)}
             onBusy={(b) => setBusyId(b ? openCompany.id : null)}
             onPatch={(patch) => patchCompany(openCompany.id, patch)}
+            onDeleteCompany={() => {
+              removeCompany(openCompany.id);
+              setOpen(null);
+            }}
             onLocalWrite={markLocalWrite}
           />
         )
+      ) : null}
+
+      {confirmDel ? (
+        <ConfirmDialog
+          title="Eliminar compañía"
+          message={`¿Seguro que quieres eliminar "${confirmDel.title}"?`}
+          confirmText="Sí, eliminar"
+          cancelText="No"
+          onCancel={() => setConfirmDel(null)}
+          onConfirm={() => doDeleteCompany(confirmDel.id)}
+        />
       ) : null}
 
       {reportForCompany ? (
@@ -352,6 +653,16 @@ export default function NotesList({
           onClose={() => setReportForCompany(null)}
         />
       ) : null}
+
+      {actionsFor ? (
+        <CompanyActionsModal
+          id={actionsFor.id}
+          title={actionsFor.title}
+          onClose={() => setActionsFor(null)}
+        />
+      ) : null}
+
+      <BucketBar />
     </div>
   );
 }
@@ -368,6 +679,8 @@ function CompanyCard({
   onOpenReport,
   onPatch,
   onLocalWrite,
+  onDelete,
+  onActions,
 }: {
   note: NoteListItem;
   coverUrl: string | null;
@@ -380,6 +693,8 @@ function CompanyCard({
   onOpenReport: () => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
   onLocalWrite: () => void;
+  onDelete: () => void;
+  onActions: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const lastSavedNameRef = useRef(companyName);
@@ -443,13 +758,109 @@ function CompanyCard({
   const excerpt = latestText.replace(/\s+/g, " ").slice(0, 140);
   const totalDue = getTotalDueFromValues(note.values);
 
+  type MiniTone = "empty" | "pending" | "paid" | "emphasis";
+  function MiniStat({
+    label,
+    value,
+    tone,
+    size = "md",
+  }: {
+    label: string;
+    value?: string | null;
+    tone: MiniTone;
+    size?: "md" | "lg";
+  }) {
+    const showValue = (value ?? "").trim();
+    const isEmpty = !showValue;
+    // En estado vacío, los 3 deben verse iguales (mismo borde/fondo).
+    const baseBox = "border-zinc-800/60 bg-zinc-950/50 text-zinc-200";
+    const toneClass =
+      isEmpty
+        ? baseBox
+        : tone === "pending"
+          ? "border-red-500/40 bg-red-950/10 text-red-300"
+          : tone === "paid"
+            ? "border-emerald-400/40 bg-emerald-950/10 text-emerald-200"
+            : baseBox;
+
+    return (
+      <div className="min-w-0">
+        <div
+          className={cn(
+            "flex items-center justify-center px-1 text-center font-semibold leading-none tracking-tight text-zinc-500 dark:text-zinc-300",
+            size === "lg" ? "h-8 text-[11px] sm:text-[12px]" : "h-7 text-[9px] sm:text-[10px] md:text-[11px]",
+          )}
+        >
+          <div className="w-full whitespace-nowrap">{label}</div>
+        </div>
+        <div
+          className={cn(
+            "mt-1 flex items-center justify-center rounded-xl border px-3 font-semibold shadow-inner",
+            "dark:shadow-black/20",
+            toneClass,
+            // sin contorno extra (mockup no lo tiene)
+            size === "lg" ? "h-12 text-sm" : "h-10 text-xs",
+          )}
+        >
+          <div
+            className={cn(
+              "w-full text-center tabular-nums leading-none",
+              isEmpty && "text-zinc-500 dark:text-zinc-500",
+              tone === "emphasis"
+                ? !isEmpty
+                  ? "text-sm font-black"
+                  : ""
+                : size === "lg"
+                  ? "text-[12px] font-semibold sm:text-[13px]"
+                  : "text-[10px] font-semibold sm:text-[11px]",
+            )}
+          >
+            {isEmpty ? " " : showValue}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const reportPayload = (note.values as any)?._report?.payload ?? null;
+  const reportFields = reportPayload?.fields ?? null;
+  const feeMethodRaw = pickField(reportFields, ["feePaymentMethod", "fee_payment_method"]);
+  const checkMethodRaw = pickField(reportFields, ["checkPaymentMethod", "check_payment_method"]);
+
+  const checkFeeStatus = statusFromPaymentMethod(feeMethodRaw, { allowRedeposited: true });
+  const checkAmountStatus = statusFromPaymentMethod(checkMethodRaw, { allowRedeposited: true });
+
+  // Reacción visual del total: $0.00 => Pending (rojo), >0 => verde.
+  const totalDueCents = getTotalDueCentsFromValues(note.values);
+  const totalDueText = formatUsd(totalDueCents);
+  // Regla: si el caso sigue "Pending" (fee o check), el total se ve rojo aunque haya monto.
+  const anyPending =
+    checkFeeStatus.text === "Pending" ||
+    checkAmountStatus.text === "Pending" ||
+    totalDueCents <= 0;
+  const totalDueStatus: { tone: "pending" | "paid" } = anyPending
+    ? { tone: "pending" }
+    : { tone: "paid" };
+
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-4 shadow-sm transition hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900 sm:p-5",
+        "group relative flex h-full flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-4 shadow-sm transition hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900 sm:p-5",
         busy && "pointer-events-none opacity-60",
       )}
     >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onActions();
+        }}
+        className="absolute right-3 top-3 z-10 inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white/80 p-2 text-zinc-700 shadow-sm hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-200 dark:hover:bg-zinc-950"
+        title="Acciones"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+
       {/* Nombre de la compañía (editable) */}
       <input
         ref={companyNameInputRef}
@@ -459,31 +870,37 @@ function CompanyCard({
         className="mb-3 w-full rounded-2xl border border-transparent bg-transparent px-3 text-center text-lg font-black uppercase tracking-tight text-zinc-900 outline-none ring-zinc-300 focus:ring-2 dark:text-white dark:ring-zinc-700 sm:mb-4 sm:text-xl md:text-2xl"
       />
 
+      {/* Barra de TOTAL (como Canva) */}
+      <div className="mb-4">
+        <div className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 dark:bg-zinc-950 dark:text-zinc-100 sm:px-4 sm:py-3 sm:text-sm">
+          <div
+            className={cn(
+              "grid grid-cols-[1fr_auto] items-stretch overflow-hidden rounded-xl border bg-white/70 dark:bg-zinc-900/40",
+              totalDueStatus.tone === "pending"
+                ? "border-red-200/70 text-red-700 dark:border-red-900/60 dark:text-red-300"
+                : "border-emerald-200/70 text-emerald-800 dark:border-emerald-900/60 dark:text-emerald-200",
+            )}
+          >
+            <div className="flex items-center justify-center px-3 py-2 text-center text-[10px] font-extrabold tracking-tight sm:text-[11px]">
+              TOTAL DUE WITH FEES
+            </div>
+            <div
+              className={cn(
+                "flex items-center justify-center border-l px-4 py-2 text-center text-lg font-black tabular-nums sm:text-xl",
+                totalDueStatus.tone === "pending"
+                  ? "border-red-200/70 dark:border-red-900/60"
+                  : "border-emerald-200/70 dark:border-emerald-900/60",
+              )}
+            >
+              {totalDueText}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-[minmax(0,1fr)_160px] gap-3 sm:grid-cols-[minmax(0,1fr)_44%] sm:gap-6">
         {/* Última Nota (abre modal) */}
         <div className="min-w-0">
-          {/* TOTAL DUE WITH FEES */}
-          <div className="mb-3">
-            <div className="mb-2 text-xs font-bold text-zinc-500 dark:text-zinc-300 sm:text-sm">
-              Total
-            </div>
-            <div className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 dark:bg-zinc-950 dark:text-zinc-100 sm:px-4 sm:py-3 sm:text-sm">
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200/70 bg-white/70 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300 sm:px-3 sm:py-1.5 sm:text-xs">
-                <div className="truncate">TOTAL DUE WITH FEES</div>
-              </div>
-              <div
-                className={cn(
-                  "mt-2 border-t border-zinc-200/60 pt-2 text-base font-black tabular-nums sm:text-lg",
-                  totalDue.isSet
-                    ? "text-zinc-900 dark:text-white"
-                    : "text-zinc-500 dark:text-zinc-400",
-                )}
-              >
-                {totalDue.text}
-              </div>
-            </div>
-          </div>
-
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="text-xs font-bold text-zinc-500 dark:text-zinc-300 sm:text-sm">
               Última Nota
@@ -539,12 +956,6 @@ function CompanyCard({
                 src={coverUrl}
                 className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
               />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-3">
-                <div className="text-[11px] font-semibold text-white/90">Reporte</div>
-                <div className="mt-1 inline-flex items-center rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white backdrop-blur">
-                  Abrir Return Checks →
-                </div>
-              </div>
             </button>
           ) : (
             <button
@@ -553,24 +964,31 @@ function CompanyCard({
               className="group/report aspect-[3/4] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-left shadow-md transition hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900 dark:focus:ring-zinc-700"
               title="Abrir reporte (editar y ver imágenes)"
             >
-              <div className="flex h-full w-full flex-col justify-between py-4">
-                <div>
-                  <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                    Reporte
-                  </div>
-                  <div className="mt-1 text-lg font-black uppercase tracking-tight text-zinc-900 dark:text-white">
-                    Return Checks
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                    Toca para abrir y editar
-                  </div>
-                </div>
-                <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-                  Abrir reporte →
+              <div className="flex h-full w-full items-center justify-center">
+                <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <ImageOff className="h-7 w-7 text-zinc-500 dark:text-zinc-300" />
                 </div>
               </div>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Fila inferior (mini-cards) */}
+      <div className="mt-auto flex justify-center pt-5">
+        <div className="grid w-full max-w-md grid-cols-2 gap-4 sm:gap-5">
+          <MiniStat
+            label="Check Amount"
+            value={checkAmountStatus.text}
+            tone={checkAmountStatus.tone}
+            size="lg"
+          />
+          <MiniStat
+            label="Check Fee"
+            value={checkFeeStatus.text}
+            tone={checkFeeStatus.tone}
+            size="lg"
+          />
         </div>
       </div>
     </div>
@@ -946,6 +1364,7 @@ function CompanyModal({
   onClose,
   onBusy,
   onPatch,
+  onDeleteCompany,
   onLocalWrite,
 }: {
   note: NoteListItem;
@@ -954,6 +1373,7 @@ function CompanyModal({
   onClose: () => void;
   onBusy: (busy: boolean) => void;
   onPatch: (patch: Partial<NoteListItem>) => void;
+  onDeleteCompany: () => void;
   onLocalWrite: () => void;
 }) {
   const [companyName, setCompanyName] = useState(note.title ?? "");
@@ -1119,6 +1539,22 @@ function CompanyModal({
     }
   }
 
+  async function deleteCompany() {
+    const ok = confirm("¿Eliminar esta compañía completa? (Sí/No)");
+    if (!ok) return;
+    onBusy(true);
+    try {
+      onLocalWrite();
+      const res = await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("No se pudo eliminar");
+      onDeleteCompany();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error eliminando");
+    } finally {
+      onBusy(false);
+    }
+  }
+
   const isEditingExisting = !!selectedId && entries.some((e) => e.id === selectedId);
 
   return (
@@ -1270,66 +1706,21 @@ function CompanyModal({
             </label>
 
             {/* Controles abajo */}
-            <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 dark:bg-zinc-950 dark:text-zinc-100">
-                    <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200/70 bg-white/70 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
-                      <div className="truncate">CHECK AMOUNT</div>
-                    </div>
-                    <div className="mt-2 border-t border-zinc-200/60 pt-2 text-[11px] leading-snug text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
-                      <div className="flex gap-2">
-                        <div className="shrink-0 font-semibold text-zinc-600 dark:text-zinc-300">
-                          DATE CHECK PAID:
-                        </div>
-                        <div className="min-w-0 truncate">
-                          {getReportFieldText(note.values, "dateCheckPaid")}
-                        </div>
-                      </div>
-                      <div className="mt-1 flex gap-2">
-                        <div className="shrink-0 font-semibold text-zinc-600 dark:text-zinc-300">
-                          FORM OF PAYMENT:
-                        </div>
-                        <div className="min-w-0 truncate">
-                          {getReportFieldText(note.values, "checkPaymentMethod")}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="block w-full rounded-2xl bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-800 shadow-inner ring-zinc-300 dark:bg-zinc-950 dark:text-zinc-100">
-                    <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200/70 bg-white/70 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
-                      <div className="truncate">CHECK FEE</div>
-                    </div>
-                    <div className="mt-2 border-t border-zinc-200/60 pt-2 text-[11px] leading-snug text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
-                      <div className="flex gap-2">
-                        <div className="shrink-0 font-semibold text-zinc-600 dark:text-zinc-300">
-                          DATE FEE PAID:
-                        </div>
-                        <div className="min-w-0 truncate">
-                          {getReportFieldText(note.values, "dateFeePaid")}
-                        </div>
-                      </div>
-                      <div className="mt-1 flex gap-2">
-                        <div className="shrink-0 font-semibold text-zinc-600 dark:text-zinc-300">
-                          FORM OF PAYMENT:
-                        </div>
-                        <div className="min-w-0 truncate">
-                          {getReportFieldText(note.values, "feePaymentMethod")}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={saveEntry}
-                  className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-                >
-                  Guardar
-                </button>
-              </div>
+            <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={deleteCompany}
+                className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/40"
+              >
+                Eliminar compañía
+              </button>
+              <button
+                type="button"
+                onClick={saveEntry}
+                className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              >
+                Guardar
+              </button>
             </div>
 
             <div className="mt-4">
