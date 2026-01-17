@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Archive,
   ArchiveRestore,
   CheckCircle2,
+  Copy,
   ImageOff,
   MoreHorizontal,
   Paperclip,
@@ -29,6 +30,56 @@ export type NoteListItem = {
 };
 
 type Bucket = "pending" | "completed" | "trash";
+
+type LastAppLocation = {
+  v: 1;
+  ts: number;
+  bucket: Bucket;
+  view: "list" | "note" | "report";
+  noteId?: string;
+  noteMode?: "list" | "new" | "edit";
+  entryId?: string;
+  scrollY?: number;
+};
+
+const LAST_APP_LOCATION_KEY = "rc:lastAppLocation:v1";
+
+function readLastAppLocation(): LastAppLocation | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LAST_APP_LOCATION_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || data.v !== 1) return null;
+    if (typeof data.ts !== "number") return null;
+    if (data.bucket !== "pending" && data.bucket !== "completed" && data.bucket !== "trash")
+      return null;
+    if (data.view !== "list" && data.view !== "note" && data.view !== "report") return null;
+    return data as LastAppLocation;
+  } catch {
+    return null;
+  }
+}
+
+function updateLastAppLocation(patch: Partial<LastAppLocation>) {
+  if (typeof window === "undefined") return;
+  try {
+    const prev = readLastAppLocation();
+    const next: LastAppLocation = {
+      v: 1,
+      ts: Date.now(),
+      bucket: (patch.bucket ?? prev?.bucket ?? "pending") as Bucket,
+      view: (patch.view ?? prev?.view ?? "list") as LastAppLocation["view"],
+      noteId: patch.noteId ?? prev?.noteId,
+      noteMode: patch.noteMode ?? prev?.noteMode,
+      entryId: patch.entryId ?? prev?.entryId,
+      scrollY: typeof patch.scrollY === "number" ? patch.scrollY : prev?.scrollY,
+    };
+    window.localStorage.setItem(LAST_APP_LOCATION_KEY, JSON.stringify(next));
+  } catch {
+    // ignore (storage might be blocked)
+  }
+}
 
 type Props = {
   notes: NoteListItem[];
@@ -205,6 +256,7 @@ export default function NotesList({
   firstDocUrlsByNoteId,
 }: Props) {
   const router = useRouter();
+  const sp = useSearchParams();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [open, setOpen] = useState<{
     id: string;
@@ -229,11 +281,38 @@ export default function NotesList({
   } | null>(null);
 
   const [items, setItems] = useState<NoteListItem[]>(notes);
+  const didRestoreRef = useRef(false);
+  const handledOpenReportRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Cuando cambia el servidor (búsqueda / navegación), resincroniza.
     setItems(notes);
   }, [notes]);
+
+  // Soporte: /app?openReport=<noteId> (usado por /app/new)
+  useEffect(() => {
+    const id = (sp.get("openReport") ?? "").trim();
+    if (!id) return;
+    if (handledOpenReportRef.current === id) return;
+    const note = items.find((n) => String(n.id) === id) ?? null;
+    if (!note) return;
+
+    handledOpenReportRef.current = id;
+    setReportForCompany({
+      id: note.id,
+      title: (note.title ?? "").trim() || "Sin nombre",
+      values: (note.values ?? null) as any,
+      coverUrl: coverUrls?.[note.id] ?? null,
+    });
+
+    // Limpia el parámetro para que no se vuelva a disparar en refresh
+    try {
+      const params = new URLSearchParams(sp.toString());
+      params.delete("openReport");
+      const next = params.toString();
+      router.replace(next ? `/app?${next}` : "/app");
+    } catch {}
+  }, [sp, items, coverUrls, router]);
 
   const empty = items.length === 0;
   const sorted = useMemo(() => items, [items]);
@@ -241,6 +320,81 @@ export default function NotesList({
   useEffect(() => {
     idsRef.current = new Set(items.map((n) => String(n.id)));
   }, [items]);
+
+  // Recordar y restaurar "donde estaba" al recargar/volver a entrar a /app
+  // (layout effect para evitar el "salto" visual arriba→abajo)
+  useLayoutEffect(() => {
+    if (didRestoreRef.current) return;
+    if (typeof window === "undefined") return;
+
+    const loc = readLastAppLocation();
+    if (!loc) return;
+
+    // Si está súper viejo, ignóralo (7 días).
+    if (Date.now() - loc.ts > 7 * 24 * 60 * 60 * 1000) return;
+
+    // Siempre restaura la pestaña (bucket)
+    setBucket(loc.bucket);
+
+    const note = loc.noteId ? items.find((n) => n.id === loc.noteId) ?? null : null;
+    if (loc.view === "report" && note) {
+      setReportForCompany({
+        id: note.id,
+        title: (note.title ?? "").trim() || "Sin nombre",
+        values: (note.values ?? null) as any,
+        coverUrl: coverUrls?.[note.id] ?? null,
+      });
+    } else if (loc.view === "note" && note) {
+      setOpen({
+        id: note.id,
+        mode: loc.noteMode ?? "list",
+        entryId: loc.entryId,
+      });
+    }
+
+    // Restaura el scroll del listado (si aplica)
+    const y = typeof loc.scrollY === "number" ? loc.scrollY : 0;
+    try {
+      window.scrollTo(0, y);
+    } catch {}
+
+    didRestoreRef.current = true;
+  }, [items, coverUrls]);
+
+  // Guardar cambios de "ubicación" (nota abierta / reporte / pestaña)
+  useEffect(() => {
+    const view: LastAppLocation["view"] = reportForCompany
+      ? "report"
+      : open
+        ? "note"
+        : "list";
+    const noteId = reportForCompany?.id ?? open?.id ?? undefined;
+    updateLastAppLocation({
+      bucket,
+      view,
+      noteId,
+      noteMode: open?.mode,
+      entryId: open?.entryId,
+      scrollY: typeof window !== "undefined" ? window.scrollY || 0 : 0,
+    });
+  }, [bucket, open?.id, open?.mode, open?.entryId, reportForCompany?.id]);
+
+  // Guardar scroll del listado mientras navegas
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let t: number | null = null;
+    const onScroll = () => {
+      if (t) window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        updateLastAppLocation({ scrollY: window.scrollY || 0 });
+      }, 150);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (t) window.clearTimeout(t);
+    };
+  }, []);
 
   const openCompany = useMemo(() => {
     if (!open?.id) return null;
@@ -353,6 +507,66 @@ export default function NotesList({
     } catch {
       // Si falla, recargar para restaurar el estado real
       router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function duplicateCompany(id: string) {
+    suppressRemoteUntilRef.current = Date.now() + 1500;
+    setBusyId(id);
+    try {
+      const src = items.find((n) => n.id === id) ?? null;
+      const res = await fetch(`/api/notes/${id}/duplicate`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.id) throw new Error(json?.error || "No se pudo duplicar");
+
+      // La copia siempre es "Pendientes", así que cámbiate a esa pestaña para verla.
+      setBucket("pending");
+
+      // Optimista: insertar la copia en UI al instante para que NO "desaparezca"
+      const now = new Date().toISOString();
+      const newId = String(json.id);
+      const newTitle = String(json.title ?? src?.title ?? "Sin nombre");
+      const newValues = {
+        _bucket: "pending",
+        _report: { payload: json.reportPayload ?? null, updatedAt: now },
+        _cover: null,
+        _coverInline: null,
+      } as Record<string, unknown>;
+
+      setItems((prev) => {
+        if (prev.some((n) => String(n.id) === newId)) return prev;
+        const next: NoteListItem = {
+          id: newId,
+          title: newTitle,
+          body: "",
+          tags: [],
+          favorite: false,
+          template_snapshot: null,
+          values: newValues,
+          updated_at: now,
+          created_at: now,
+        };
+        return [next, ...prev];
+      });
+
+      // Abrir el reporte de la copia inmediatamente
+      setReportForCompany({
+        id: newId,
+        title: newTitle,
+        values: newValues,
+        coverUrl: null,
+      });
+
+      // Refresco en background para traer estado real del server
+      window.setTimeout(() => {
+        try {
+          router.refresh();
+        } catch {}
+      }, 350);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error duplicando");
     } finally {
       setBusyId(null);
     }
@@ -478,6 +692,18 @@ export default function NotesList({
 
           <div className="p-3">
             <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void duplicateCompany(id);
+                  onClose();
+                }}
+                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              >
+                <span>Duplicar</span>
+                <Copy className="h-4 w-4" />
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -773,14 +999,15 @@ function CompanyCard({
     const showValue = (value ?? "").trim();
     const isEmpty = !showValue;
     // En estado vacío, los 3 deben verse iguales (mismo borde/fondo).
-    const baseBox = "border-zinc-800/60 bg-zinc-950/50 text-zinc-200";
+    const baseBox =
+      "border-zinc-200 bg-white text-zinc-800 shadow-inner dark:border-zinc-800/60 dark:bg-zinc-950/50 dark:text-zinc-200";
     const toneClass =
       isEmpty
         ? baseBox
         : tone === "pending"
-          ? "border-red-500/40 bg-red-950/10 text-red-300"
+          ? "border-red-200 bg-red-50 text-red-800 dark:border-red-500/40 dark:bg-red-950/10 dark:text-red-300"
           : tone === "paid"
-            ? "border-emerald-400/40 bg-emerald-950/10 text-emerald-200"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/40 dark:bg-emerald-950/10 dark:text-emerald-200"
             : baseBox;
 
     return (
@@ -805,7 +1032,7 @@ function CompanyCard({
           <div
             className={cn(
               "w-full text-center tabular-nums leading-none",
-              isEmpty && "text-zinc-500 dark:text-zinc-500",
+              isEmpty && "text-zinc-400 dark:text-zinc-500",
               tone === "emphasis"
                 ? !isEmpty
                   ? "text-sm font-black"
@@ -1011,6 +1238,11 @@ function ReportModal({
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const preparedResolverRef = useRef<((ok: boolean) => void) | null>(null);
+  const [iframeShown, setIframeShown] = useState(false);
+  const showFallbackTimerRef = useRef<number | null>(null);
+  const flushResolverRef = useRef<((ok: boolean) => void) | null>(null);
+  const flushReqRef = useRef<string | null>(null);
+  const [closing, setClosing] = useState(false);
 
   function postToIframe(message: unknown) {
     try {
@@ -1040,6 +1272,23 @@ function ReportModal({
         preparedResolverRef.current?.(true);
         preparedResolverRef.current = null;
       }
+      if (data.type === "rc:scrollRestored" && (data as any).noteId === noteId) {
+        setIframeShown(true);
+        if (showFallbackTimerRef.current) {
+          window.clearTimeout(showFallbackTimerRef.current);
+          showFallbackTimerRef.current = null;
+        }
+      }
+      if (
+        data.type === "rc:flushed" &&
+        (data as any).noteId === noteId &&
+        flushReqRef.current &&
+        (data as any).requestId === flushReqRef.current
+      ) {
+        flushResolverRef.current?.(true);
+        flushResolverRef.current = null;
+        flushReqRef.current = null;
+      }
       if (data.type === "rc:save" && data.noteId === noteId) {
         // Update UI immediately (card should reflect total without refresh)
         try {
@@ -1065,8 +1314,42 @@ function ReportModal({
     return () => {
       window.removeEventListener("message", onMessage);
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+      if (showFallbackTimerRef.current) window.clearTimeout(showFallbackTimerRef.current);
+      if (flushResolverRef.current) flushResolverRef.current(false);
+      flushResolverRef.current = null;
+      flushReqRef.current = null;
     };
   }, [noteId]);
+
+  async function flushAndClose() {
+    if (closing) return;
+    setClosing(true);
+    try {
+      // Pedir flush al iframe para que no se pierdan cambios por debounce.
+      const reqId =
+        (globalThis.crypto as any)?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+      flushReqRef.current = reqId;
+      const ok = await new Promise<boolean>((resolve) => {
+        flushResolverRef.current = resolve;
+        try {
+          postToIframe({ type: "rc:flushNow", noteId, requestId: reqId });
+        } catch {}
+        window.setTimeout(() => {
+          if (flushResolverRef.current) {
+            flushResolverRef.current(false);
+            flushResolverRef.current = null;
+            flushReqRef.current = null;
+          }
+        }, 500);
+      });
+      void ok;
+    } catch {
+      // ignore
+    } finally {
+      onClose();
+      setClosing(false);
+    }
+  }
 
   useEffect(() => {
     // keep report company name in sync with note title
@@ -1136,7 +1419,7 @@ function ReportModal({
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-2 sm:p-4"
-      onClick={onClose}
+      onClick={() => void flushAndClose()}
     >
       <div
         role="dialog"
@@ -1176,7 +1459,11 @@ function ReportModal({
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              onClick={onClose}
+              onClick={(e) => {
+                e.stopPropagation();
+                void flushAndClose();
+              }}
+              disabled={closing}
             >
               <X className="h-4 w-4" />
               Cerrar
@@ -1184,15 +1471,33 @@ function ReportModal({
           </div>
         </div>
 
-        <div className="h-[calc(92svh-60px)] bg-zinc-100 dark:bg-zinc-950">
+        <div className="relative h-[calc(92svh-60px)] bg-zinc-100 dark:bg-zinc-950">
+          {!iframeShown ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center">
+              <div className="rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3 text-sm font-semibold text-zinc-700 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200">
+                Cargando…
+              </div>
+            </div>
+          ) : null}
           <iframe
             title="Reporte Return Checks"
             ref={iframeRef}
             src={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}`}
-            className="h-full w-full"
+            className={cn(
+              "h-full w-full transition-opacity duration-150",
+              iframeShown ? "opacity-100" : "opacity-0",
+            )}
             sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"
             onLoad={() => {
               try {
+                setIframeShown(false);
+                // Fallback: si por alguna razón no llega el "scrollRestored",
+                // no dejar la pantalla trabada en "Cargando…".
+                if (showFallbackTimerRef.current) window.clearTimeout(showFallbackTimerRef.current);
+                showFallbackTimerRef.current = window.setTimeout(() => {
+                  setIframeShown(true);
+                  showFallbackTimerRef.current = null;
+                }, 800);
                 postToIframe({ type: "rc:init", noteId, initialReport });
                 postToIframe({ type: "rc:setCompanyName", companyName: companyTitle });
               } catch {}
@@ -1385,6 +1690,11 @@ function CompanyModal({
   const [draftDate, setDraftDate] = useState<string>(selected?.date ?? isoToday());
   const [draftAgent, setDraftAgent] = useState<string>(selected?.agent ?? "");
   const [draftNote, setDraftNote] = useState<string>(selected?.note ?? "");
+  const draftDidHydrateRef = useRef(false);
+
+  function draftKey() {
+    return `rc:noteDraft:v1:${note.id}`;
+  }
 
   useEffect(() => {
     setCompanyName(note.title ?? "");
@@ -1394,8 +1704,46 @@ function CompanyModal({
     setDraftDate(nextEntries[0]?.date ?? isoToday());
     setDraftAgent(nextEntries[0]?.agent ?? "");
     setDraftNote(nextEntries[0]?.note ?? "");
+
+    // Restore draft (so refresh/tab close can continue editing)
+    if (!draftDidHydrateRef.current && typeof window !== "undefined") {
+      draftDidHydrateRef.current = true;
+      try {
+        const raw = window.localStorage.getItem(draftKey());
+        if (raw) {
+          const d = JSON.parse(raw);
+          if (d && typeof d.ts === "number" && Date.now() - d.ts < 7 * 24 * 60 * 60 * 1000) {
+            if (typeof d.companyName === "string") setCompanyName(d.companyName);
+            if (typeof d.selectedId === "string" || d.selectedId === null) setSelectedId(d.selectedId);
+            if (typeof d.draftDate === "string") setDraftDate(d.draftDate);
+            if (typeof d.draftAgent === "string") setDraftAgent(d.draftAgent);
+            if (typeof d.draftNote === "string") setDraftNote(d.draftNote);
+          }
+        }
+      } catch {}
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id]);
+
+  // Persist draft continuously
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        draftKey(),
+        JSON.stringify({
+          ts: Date.now(),
+          noteId: note.id,
+          companyName,
+          selectedId,
+          draftDate,
+          draftAgent,
+          draftNote,
+        }),
+      );
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.id, companyName, selectedId, draftDate, draftAgent, draftNote]);
 
   // Auto-fit company name in the modal header too.
   useEffect(() => {
@@ -1501,6 +1849,10 @@ function CompanyModal({
       setEntries(nextEntries);
       setSelectedId(id);
       onPatch({ title: companyName, body: nextBody, values: nextValues });
+      // Clear draft for this note on successful save
+      try {
+        window.localStorage.removeItem(draftKey());
+      } catch {}
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error guardando");
     } finally {
@@ -1617,10 +1969,17 @@ function CompanyModal({
                   const active = e.id === selectedId;
                   const small = (e.note ?? "").replace(/\s+/g, " ").slice(0, 60);
                   return (
-                    <button
+                    <div
                       key={e.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedId(e.id)}
+                      onKeyDown={(ev) => {
+                        if (ev.key === "Enter" || ev.key === " ") {
+                          ev.preventDefault();
+                          setSelectedId(e.id);
+                        }
+                      }}
                       className={cn(
                         "w-full rounded-xl border px-3 py-2 text-left text-sm",
                         active
@@ -1650,7 +2009,7 @@ function CompanyModal({
                         </button>
                       </div>
                       <div className="mt-1 text-xs opacity-80">{small || "(sin texto)"}</div>
-                    </button>
+                    </div>
                   );
                 })
               )}

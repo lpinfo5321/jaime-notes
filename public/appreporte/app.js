@@ -5,6 +5,37 @@
     const initialCompanyName = (qs.get("companyName") || "").trim();
     const STORAGE_KEY = `returnedChecks.v3:${noteId}`;
     const legacyKeyV2 = `returnedChecks.v2:${noteId}`;
+    const SCROLL_KEY = `returnedChecks.scrollY:${noteId}`;
+
+    let readySent = false;
+    let initReceived = false;
+    const postReady = () => {
+      if (readySent) return;
+      readySent = true;
+      if (!canPostToParent) return;
+      try {
+        window.parent.postMessage(
+          { type: "rc:scrollRestored", noteId, scrollY: window.scrollY || 0 },
+          "*",
+        );
+      } catch {}
+    };
+    const restoreScrollAndReady = () => {
+      try {
+        const y = Number(localStorage.getItem(SCROLL_KEY) || "0");
+        // Espera a layout (2 RAF) para que el scroll exista.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            try {
+              if (Number.isFinite(y) && y > 0) window.scrollTo(0, y);
+            } catch {}
+            postReady();
+          });
+        });
+      } catch {
+        postReady();
+      }
+    };
 
     const canPostToParent = (() => {
       try {
@@ -120,6 +151,7 @@
     let paperWired = false;
     let manageWired = false;
     let saveTimer = null;
+    let saveApiTimer = null;
     let modalImageId = null;
     let manageKind = null; // "fee" | "check"
 
@@ -154,9 +186,10 @@
         returnedFee: "",
         totalDue: "$0.00",
         dateFeePaid: "",
-        feePaymentMethod: "Pending",
+        feePaymentMethod: "",
+        feePaidNumbers: "",
         dateCheckPaid: "",
-        checkPaymentMethod: "Pending",
+        checkPaymentMethod: "",
         checkPaidNumber: "",
         dateCompleted: "",
         agentCompleted: "",
@@ -214,8 +247,10 @@
     const activeOptions = (kind) => getList(kind).filter((o) => o && !o.archived);
 
     const ensureSelectedDefaults = () => {
-      if (isBlankLike(report.fields.feePaymentMethod)) report.fields.feePaymentMethod = "Pending";
-      if (isBlankLike(report.fields.checkPaymentMethod)) report.fields.checkPaymentMethod = "Pending";
+      // Intencionalmente NO ponemos "Pending" por default.
+      // Vacío => el dropdown debe mostrar "Select".
+      if (isBlankLike(report.fields.feePaymentMethod)) report.fields.feePaymentMethod = "";
+      if (isBlankLike(report.fields.checkPaymentMethod)) report.fields.checkPaymentMethod = "";
     };
 
     const buildSelectOptions = (selectEl, kind, currentLabel) => {
@@ -227,6 +262,12 @@
       const hasCurAny = !!list.find((o) => eqi(o.label, cur));
 
       selectEl.innerHTML = "";
+
+      // Placeholder
+      const ph = document.createElement("option");
+      ph.value = "";
+      ph.textContent = "Select";
+      selectEl.appendChild(ph);
 
       // Active options
       for (const opt of active) {
@@ -258,7 +299,7 @@
       selectEl.appendChild(sep);
 
       // pick selected value
-      const pick = cur && (hasCurActive || hasCurAny) ? cur : (active[0]?.label || "Pending");
+      const pick = cur && (hasCurActive || hasCurAny) ? cur : "";
       selectEl.value = pick;
     };
 
@@ -271,9 +312,19 @@
       buildSelectOptions(chkSel, "check", report.fields.checkPaymentMethod);
 
       // Extra field when Paid Check is selected (check number)
-      const extra = activePaper.querySelector('[data-extra="checkPaidNumber"]');
-      const show = eqi(report?.fields?.checkPaymentMethod, "Paid Check");
-      if (extra) extra.style.display = show ? "block" : "none";
+      const extraCheck = activePaper.querySelector('[data-extra="checkPaidNumber"]');
+      const showCheck = eqi(report?.fields?.checkPaymentMethod, "Paid Check");
+      if (extraCheck) extraCheck.style.display = showCheck ? "block" : "none";
+
+      const extraFee = activePaper.querySelector('[data-extra="feePaidNumbers"]');
+      const showFee = eqi(report?.fields?.feePaymentMethod, "Paid Check");
+      if (extraFee) extraFee.style.display = showFee ? "block" : "none";
+
+      // If extras are visible, tighten print layout to avoid cutting.
+      const anyExtra = !!(showCheck || showFee);
+      try {
+        activePaper.classList.toggle("hasExtras", anyExtra);
+      } catch {}
     };
 
     const normalizeFromLegacy = (maybe) => {
@@ -320,6 +371,24 @@
         try {
           window.parent.postMessage({ type: "rc:save", noteId, payload: report }, "*");
         } catch {}
+      } else {
+        // Si se usa en pestaña (sin iframe), también guardar en el servidor
+        // para que "Duplicar" copie la info correcta.
+        if (noteId && noteId !== "global") {
+          try {
+            clearTimeout(saveApiTimer);
+            saveApiTimer = setTimeout(() => {
+              try {
+                fetch(`/api/notes/${encodeURIComponent(noteId)}/report`, {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ payload: report }),
+                  credentials: "same-origin",
+                }).catch(() => undefined);
+              } catch {}
+            }, 500);
+          } catch {}
+        }
       }
     };
 
@@ -441,10 +510,34 @@
               return;
             }
 
-            // Check number when Paid Check
+            // Check numbers when Paid Check (allow multiple separated by spaces)
             if (key === "checkPaidNumber") {
-              const next = sanitizeDigitsOnly(t.value, 12);
-              const pretty = next ? "#" + next : "";
+              const raw = String(t.value || "");
+              const tokens = raw
+                .replace(/#/g, " ")
+                .replace(/[^0-9\s]/g, " ")
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 10);
+              const pretty = tokens.length ? tokens.map((x) => "#" + x).join(" ") : "";
+              if (t.value !== pretty) t.value = pretty;
+              report.fields[key] = pretty;
+              scheduleSave();
+              return;
+            }
+
+            // Multiple check numbers (space-separated) for Fee Paid Check
+            if (key === "feePaidNumbers") {
+              const raw = String(t.value || "");
+              const tokens = raw
+                .replace(/#/g, " ")
+                .replace(/[^0-9\s]/g, " ")
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 10);
+              const pretty = tokens.length ? tokens.map((x) => "#" + x).join(" ") : "";
               if (t.value !== pretty) t.value = pretty;
               report.fields[key] = pretty;
               scheduleSave();
@@ -495,8 +588,30 @@
               }
 
               if (key === "checkPaidNumber") {
-                const digits = sanitizeDigitsOnly(t.value, 12);
-                const pretty = digits ? "#" + digits : "";
+                const raw = String(t.value || "");
+                const tokens = raw
+                  .replace(/#/g, " ")
+                  .replace(/[^0-9\s]/g, " ")
+                  .trim()
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .slice(0, 10);
+                const pretty = tokens.length ? tokens.map((x) => "#" + x).join(" ") : "";
+                t.value = pretty;
+                report.fields[key] = pretty;
+                scheduleSave();
+              }
+
+              if (key === "feePaidNumbers") {
+                const raw = String(t.value || "");
+                const tokens = raw
+                  .replace(/#/g, " ")
+                  .replace(/[^0-9\s]/g, " ")
+                  .trim()
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .slice(0, 10);
+                const pretty = tokens.length ? tokens.map((x) => "#" + x).join(" ") : "";
                 t.value = pretty;
                 report.fields[key] = pretty;
                 scheduleSave();
@@ -631,6 +746,9 @@
       const imgs = report.images || [];
       if (el.attCount) el.attCount.textContent = `${imgs.length} image(s)`;
       if (el.imagePages) el.imagePages.innerHTML = "";
+      try {
+        document.body.classList.toggle("rc-noimages", !imgs.length);
+      } catch {}
       if (!imgs.length) {
         if (el.imagesEmpty) el.imagesEmpty.style.display = "block";
         return;
@@ -743,10 +861,94 @@
       return blankReport();
     };
 
+    const parseTime = (iso) => {
+      try {
+        const t = Date.parse(String(iso || ""));
+        return Number.isFinite(t) ? t : 0;
+      } catch {
+        return 0;
+      }
+    };
+
+    const hydrateFromServer = async () => {
+      // Solo si hay noteId real (no "global") y estamos en la misma app (cookies)
+      if (!noteId || noteId === "global") return;
+      try {
+        if (el.lastSaved) el.lastSaved.textContent = "Sincronizando…";
+      } catch {}
+      try {
+        const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}/report`, {
+          method: "GET",
+          credentials: "same-origin",
+        });
+        if (!res.ok) return;
+        const json = await res.json().catch(() => null);
+        const serverPayload = json?.payload ?? null;
+        const serverUpdatedAt = json?.updatedAt ?? serverPayload?.updatedAt ?? null;
+
+        // Si el server no tiene nada, no hacer nada.
+        if (!serverPayload) return;
+
+        const serverNorm = normalizeFromLegacy(serverPayload);
+        const next = ensureReportShape(serverNorm || serverPayload || null);
+        const localT = parseTime(report?.updatedAt);
+        const serverT = parseTime(serverUpdatedAt) || parseTime(next?.updatedAt);
+
+        // Regla: si el servidor es más reciente, reemplazar.
+        // Si local es más reciente, dejamos local (pero igual persistimos al server por scheduleSave).
+        if (serverT > localT) {
+          report = ensureReportShape(next);
+          ensureSelectedDefaults();
+          if (initialCompanyName && report?.fields) {
+            report.fields.companyName = initialCompanyName.toUpperCase();
+          }
+          computeTotalDue();
+          persist(true);
+          renderPaper();
+          renderImages();
+        } else {
+          // Si local parece vacío pero server tiene campos, también reemplazamos
+          const localMaker = String(report?.fields?.makerPayor || "").trim();
+          const localComp = String(report?.fields?.companyContact || "").trim();
+          const serverMaker = String(next?.fields?.makerPayor || next?.fields?.maker_payor || "").trim();
+          const serverComp = String(next?.fields?.companyContact || next?.fields?.company_contact || "").trim();
+          if ((!localMaker && serverMaker) || (!localComp && serverComp)) {
+            report = ensureReportShape(next);
+            ensureSelectedDefaults();
+            computeTotalDue();
+            persist(true);
+            renderPaper();
+            renderImages();
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        try {
+          if (el.lastSaved) el.lastSaved.textContent = `Última edición: ${fmtDateTime(report?.updatedAt)}`;
+        } catch {}
+      }
+    };
+
     window.addEventListener("message", (ev) => {
       let data = ev?.data;
       if (!data || typeof data !== "object") return;
       try {
+        if (data.type === "rc:flushNow") {
+          if (data.noteId && String(data.noteId) !== String(noteId)) return;
+          const requestId = data.requestId || null;
+          try {
+            persist(true);
+            renderPaper();
+            renderImages();
+          } catch {}
+          if (canPostToParent) {
+            try {
+              window.parent.postMessage({ type: "rc:flushed", noteId, requestId }, "*");
+            } catch {}
+          }
+          return;
+        }
         if (data.type === "rc:setCompanyName") {
           const name = String(data.companyName ?? "").trim();
           if (name && report?.fields) {
@@ -771,6 +973,7 @@
         }
         if (data.type !== "rc:init") return;
         if (data.noteId && String(data.noteId) !== String(noteId)) return;
+        initReceived = true;
         const norm = normalizeFromLegacy(data.initialReport);
         report = ensureReportShape(norm || report || null);
         ensureSelectedDefaults();
@@ -781,10 +984,12 @@
         persist(true);
         renderPaper();
         renderImages();
+        restoreScrollAndReady();
       } catch {
         report = ensureReportShape(null);
         computeTotalDue();
         renderPaper();
+        restoreScrollAndReady();
       }
     });
 
@@ -849,6 +1054,31 @@
     renderPaper();
     renderImages();
     if (el.lastSaved) el.lastSaved.textContent = `Última edición: ${fmtDateTime(report.updatedAt)}`;
+
+    // Siempre intentar hidratar desde servidor para evitar "vacío y luego aparece"
+    // (por desincronización de localStorage vs DB).
+    hydrateFromServer();
+
+    // Si nadie manda rc:init (pestaña directa), igual restaura/avisa.
+    setTimeout(() => {
+      if (!initReceived) restoreScrollAndReady();
+    }, 50);
+
+    try {
+      let st = null;
+      window.addEventListener(
+        "scroll",
+        () => {
+          if (st) clearTimeout(st);
+          st = setTimeout(() => {
+            try {
+              localStorage.setItem(SCROLL_KEY, String(window.scrollY || 0));
+            } catch {}
+          }, 120);
+        },
+        { passive: true },
+      );
+    } catch {}
 
     // (No separate "Editar lista" buttons; now it's inside the dropdown option)
   } catch {

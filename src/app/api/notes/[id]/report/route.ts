@@ -8,6 +8,31 @@ const schema = z
   })
   .strict();
 
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: note, error } = await supabase
+    .from("notes")
+    .select("values")
+    .eq("id", id)
+    .single();
+
+  if (error || !note) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const v = (note.values ?? {}) as any;
+  const payload = v?._report?.payload ?? null;
+  const updatedAt = v?._report?.updatedAt ?? null;
+  return NextResponse.json({ payload, updatedAt }, { status: 200 });
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

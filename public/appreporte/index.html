@@ -267,10 +267,14 @@
     .moneyRow{
       display:grid;
       grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin-top: 14px;
+      gap: 38px;
+      margin-top: 64px;
       align-items:start;
     }
+    /* Spacers (solo impresión) para igualar separaciones */
+    .printSpacerA,
+    .printSpacerB{ display:none; }
+    .bottomRow{ margin-top:64px; }
     .miniBlock{
       border:1px solid var(--cellLine);
       border-radius: 14px;
@@ -428,14 +432,19 @@
       .gridBlock td{padding: 8px 8px;}
       .valueCell input{font-size: 12px; padding: 7px 9px; border-radius: 12px;}
       .selectWrap{padding:7px 9px;}
-      .moneyRow{grid-template-columns: 1fr; gap: 10px;}
+      .moneyRow{grid-template-columns: 1fr; gap: 10px; margin-top: 18px;}
+      .bottomRow{ margin-top: 18px; }
       .miniBlock td{padding: 8px 8px; font-size: 12px;}
     }
 
     /* Print */
     @media print{
-      @page { size: letter; margin: 0.35in; }
-      html, body { height: auto !important; }
+      @page { size: letter; margin: 0.20in; }
+      html, body {
+        height: auto !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
       body{background:#fff}
       .topbar{display:none !important}
       .imagesHead{display:none !important}
@@ -446,15 +455,102 @@
       /* Never print placeholder helper text */
       input::placeholder{ color: transparent !important; }
 
-      /* Clean print look */
-      .gridBlock, .miniBlock{ border-color:#000 !important; border-radius:0 !important; }
-      .gridBlock td, .miniBlock td{ border-color:#000 !important; }
-      .labelCell{ background:#e5e7eb !important; color:#000 !important; }
-      .valueCell input{ border:0 !important; background:transparent !important; padding:0 !important; }
-      .selectWrap{ border:0 !important; background:transparent !important; padding:0 !important; }
+      /* Print should look like the modern UI (no black frames) */
+      .paper{
+        box-shadow:none !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        overflow: visible !important;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+        padding: 12px 12px !important;
+      }
+      /* Fill the page height so content can sit lower */
+      #paper{
+        display:flex !important;
+        flex-direction:column !important;
+        min-height: calc(11in - 0.40in) !important; /* page height - margins (0.20in*2) */
+      }
+      /* Keep amounts near the form; push only the last row to page bottom */
+      #paper .moneyRow{ margin-top: 18px !important; gap: 18px !important; }
+      #paper .bottomRow{ margin-top:auto !important; }
+      .paperTop{ gap: 8px !important; }
+      .companyName{ font-size: 20px !important; padding-bottom: 3px !important; }
+      .subline{ font-size: 10px !important; }
+      .titleCenter{ font-size: 20px !important; margin: 8px 0 5px 0 !important; }
+      table{ font-size: 11.5px !important; }
+      .gridBlock, .miniBlock{
+        border-color: var(--cellLine) !important;
+        border-radius: 12px !important;
+      }
+      .gridBlock td, .miniBlock td{
+        border-color: var(--cellLine) !important;
+      }
+      .labelCell{
+        background: var(--labelBg) !important;
+        color: rgba(15,23,42,.92) !important;
+      }
+      .valueCell input{
+        border: 1px solid var(--fieldBorder) !important;
+        background: var(--fieldBg) !important;
+        padding: 5px 8px !important;
+        border-radius: 12px !important;
+      }
+      .selectWrap{
+        border: 1px solid var(--fieldBorder) !important;
+        background: var(--fieldBg) !important;
+        padding: 5px 8px !important;
+        border-radius: 14px !important;
+        box-shadow: none !important;
+      }
+      .bottomRow{ margin-top: 10px !important; }
+
+      /* If extra check fields are visible, tighten spacing to keep 1 page */
+      #paper.hasExtras{
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+        zoom: 0.93;
+      }
+      #paper.hasExtras .titleCenter{
+        margin: 6px 0 4px 0 !important;
+        font-size: 18px !important;
+      }
+      #paper.hasExtras .moneyRow{
+        margin-top: 14px !important;
+        gap: 10px !important;
+      }
+      #paper.hasExtras .gridBlock td,
+      #paper.hasExtras .miniBlock td{
+        padding: 6px 7px !important;
+      }
+      #paper.hasExtras .companyName{ font-size: 20px !important; }
+      #paper.hasExtras .subline{ font-size: 10px !important; }
+      #paper.hasExtras table{ font-size: 11px !important; }
+      #paper.hasExtras .valueCell input{ padding: 4px 7px !important; }
+      #paper.hasExtras .selectWrap{ padding: 4px 7px !important; }
+      #paper.hasExtras .bottomRow{ margin-top:auto !important; }
+
+      /* Layout: igualar separación azul y roja (solo impresión) */
+      .printSpacerA,
+      .printSpacerB{
+        display:block !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+      }
+      /* Overwrite empujes anteriores: los spacers controlan el espacio */
+      #paper .moneyRow{ margin-top: 0 !important; }
+      #paper .bottomRow{ margin-top: 0 !important; }
+      #paper.hasExtras .moneyRow{ margin-top: 0 !important; }
+      #paper.hasExtras .bottomRow{ margin-top: 0 !important; }
 
       /* Each section = one page */
       #paper{ break-after: page; page-break-after: always; }
+      /* If there are no images, don't force an extra blank page */
+      body.rc-noimages #paper{ break-after: auto !important; page-break-after: auto !important; }
+      /* If there are no images, don't print the images section at all */
+      body.rc-noimages .imagesSection{ display:none !important; }
       /* Each image = one page (avoid blank pages from break-before) */
       #imagePages .imagePaper{ break-after: page; page-break-after: always; }
       #imagePages .imagePaper:last-child{ break-after: auto; page-break-after: auto; }
@@ -463,7 +559,7 @@
       #imagePages .imageTop{ display:none !important; }
       #imagePages .imagePaper{
         padding: 0 !important;
-        border: 1px solid #000 !important;
+        border: 0 !important;
         border-radius: 0 !important;
         box-shadow: none !important;
         overflow: hidden !important;
@@ -489,17 +585,6 @@
         border-radius: 0 !important;
         box-shadow: none !important;
         background:#fff !important;
-      }
-
-      .paper{
-        box-shadow:none !important;
-        border: 1px solid #000 !important;
-        border-radius:0 !important;
-        width: 100% !important;
-        max-width: none !important;
-        overflow: visible !important;
-        break-inside: avoid-page;
-        page-break-inside: avoid;
       }
       .lpLogo{
         width: 180px !important;
@@ -569,6 +654,8 @@
           <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" placeholder="NAME 000-000-0000" /></td></tr>
         </table>
 
+        <div class="printSpacerA" aria-hidden="true"></div>
+
         <div class="moneyRow">
           <table class="miniBlock">
             <tr><td class="labelCell">CHECK AMOUNT</td><td class="valueCell"><input data-field="checkAmount" inputmode="decimal" placeholder="$0.00" /></td></tr>
@@ -584,6 +671,10 @@
                   <div class="selectWrap">
                     <select data-field="feePaymentMethod" data-select="fee"></select>
                   </div>
+                  <div class="selectExtra" data-extra="feePaidNumbers" style="display:none;">
+                    <div class="hint">Check #(s)</div>
+                    <input data-field="feePaidNumbers" inputmode="text" placeholder="#00000 #00000" />
+                  </div>
                 </div>
               </td>
             </tr>
@@ -597,7 +688,7 @@
                   </div>
                   <div class="selectExtra" data-extra="checkPaidNumber" style="display:none;">
                     <div class="hint">Check #</div>
-                    <input data-field="checkPaidNumber" inputmode="numeric" placeholder="#00000" />
+                    <input data-field="checkPaidNumber" inputmode="text" placeholder="#00000 #00000" />
                   </div>
                 </div>
               </td>
@@ -605,7 +696,9 @@
           </table>
         </div>
 
-        <div style="margin-top:16px;">
+        <div class="printSpacerB" aria-hidden="true"></div>
+
+        <div class="bottomRow">
           <table class="miniBlock">
             <tr>
               <td class="labelCell">DATE COMPLETED</td>

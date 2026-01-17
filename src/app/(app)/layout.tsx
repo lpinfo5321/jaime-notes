@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { tryGetPublicEnv } from "@/lib/env";
 import AppHeader from "@/components/AppHeader";
+import ResumeGate from "@/components/ResumeGate";
 
 export default async function AppLayout({
   children,
@@ -20,7 +21,9 @@ export default async function AppLayout({
     <div className="min-h-dvh bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
       <AppHeader />
 
-      <main className="mx-auto max-w-6xl px-4 py-4">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-4">
+        <ResumeGate>{children}</ResumeGate>
+      </main>
     </div>
   );
 }
