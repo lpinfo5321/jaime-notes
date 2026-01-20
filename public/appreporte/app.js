@@ -107,11 +107,15 @@
       // allow digits and one dot (or comma), no $ while typing
       let s = String(raw || "");
       s = s.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+      const endsWithDot = s.endsWith(".");
       const parts = s.split(".");
       if (parts.length <= 1) return parts[0].slice(0, 10);
       const intPart = parts[0].slice(0, 10);
       const decPart = parts.slice(1).join("").slice(0, 2);
-      return decPart.length ? `${intPart}.${decPart}` : intPart;
+      if (decPart.length) return `${intPart}.${decPart}`;
+      // Important UX: allow typing a trailing dot like "48."
+      if (endsWithDot) return `${intPart || "0"}.`;
+      return intPart;
     };
 
     const formatPhonePartial = (raw) => {
