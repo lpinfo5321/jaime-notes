@@ -6,9 +6,14 @@
     const STORAGE_KEY = `returnedChecks.v3:${noteId}`;
     const legacyKeyV2 = `returnedChecks.v2:${noteId}`;
     const SCROLL_KEY = `returnedChecks.scrollY:${noteId}`;
+    const SAVE_QUEUE_KEY = `rc:reportSaveQueue.v1:${noteId}`;
 
     let readySent = false;
     let initReceived = false;
+    let userLabel = "";
+    let lastServerOkAt = 0;
+    let queuedCount = 0;
+    let isOnline = true;
     const postReady = () => {
       if (readySent) return;
       readySent = true;
@@ -58,6 +63,18 @@
         });
       } catch {
         return "—";
+      }
+    };
+    const fmtTimeShort = (ts) => {
+      try {
+        return new Date(ts).toLocaleString(undefined, {
+          month: "short",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch {
+        return "";
       }
     };
     const moneyToNumber = (v) => {
@@ -124,10 +141,48 @@
         ? globalThis.crypto.randomUUID()
         : "id-" + Math.random().toString(16).slice(2) + Date.now();
 
+    // Defaults por compañía (para no re-escribir MAKER/PAYOR y COMPANY CONTACT cada vez)
+    const normCompanyKey = (name) => String(name || "").trim().toUpperCase();
+    const companyDefaultsKey = (name) => `rc:companyDefaults.v1:${normCompanyKey(name)}`;
+    const readCompanyDefaults = (name) => {
+      const keyName = normCompanyKey(name);
+      if (!keyName) return null;
+      try {
+        const raw = localStorage.getItem(companyDefaultsKey(keyName));
+        if (!raw) return null;
+        const d = JSON.parse(raw);
+        if (!d || typeof d !== "object") return null;
+        return {
+          makerPayor: typeof d.makerPayor === "string" ? d.makerPayor : "",
+          companyContact: typeof d.companyContact === "string" ? d.companyContact : "",
+        };
+      } catch {
+        return null;
+      }
+    };
+    const writeCompanyDefaults = (name, patch) => {
+      const keyName = normCompanyKey(name);
+      if (!keyName) return;
+      try {
+        const prev = readCompanyDefaults(keyName) || { makerPayor: "", companyContact: "" };
+        const next = {
+          makerPayor:
+            typeof patch?.makerPayor === "string" ? patch.makerPayor : prev.makerPayor,
+          companyContact:
+            typeof patch?.companyContact === "string"
+              ? patch.companyContact
+              : prev.companyContact,
+          ts: Date.now(),
+        };
+        localStorage.setItem(companyDefaultsKey(keyName), JSON.stringify(next));
+      } catch {}
+    };
+
     const el = {
       paper: document.getElementById("paper"),
       lastSaved: document.getElementById("lastSaved"),
       btnPrint: document.getElementById("btnPrint"),
+      btnPdf: document.getElementById("btnPdf"),
       btnAddImages: document.getElementById("btnAddImages"),
       imgPicker: document.getElementById("imgPicker"),
       imagePages: document.getElementById("imagePages"),
@@ -144,6 +199,15 @@
       manageAddInput: document.getElementById("manageAddInput"),
       manageAddBtn: document.getElementById("manageAddBtn"),
       manageList: document.getElementById("manageList"),
+      importModal: document.getElementById("importModal"),
+      importCancel: document.getElementById("importCancel"),
+      importConfirm: document.getElementById("importConfirm"),
+      importList: document.getElementById("importList"),
+      importStatus: document.getElementById("importStatus"),
+      importPreviewModal: document.getElementById("importPreviewModal"),
+      importPreviewTitle: document.getElementById("importPreviewTitle"),
+      importPreviewImg: document.getElementById("importPreviewImg"),
+      importPreviewClose: document.getElementById("importPreviewClose"),
     };
 
     let report = null; // {id, createdAt, updatedAt, fields, images}
@@ -153,7 +217,7 @@
     let saveTimer = null;
     let saveApiTimer = null;
     let modalImageId = null;
-    let manageKind = null; // "fee" | "check"
+    let manageKind = null; // "fee" | "check" | "reject"
 
     const defaultFeeList = () => [
       { id: uid(), label: "Pending", archived: false },
@@ -165,6 +229,13 @@
       { id: uid(), label: "Redeposited", archived: false },
       { id: uid(), label: "Paid Cash", archived: false },
       { id: uid(), label: "Paid Check", archived: false },
+    ];
+    const defaultRejectList = () => [
+      { id: uid(), label: "NSF", archived: false },
+      { id: uid(), label: "DUPLICATE", archived: false },
+      { id: uid(), label: "REFER TO MAKER", archived: false },
+      { id: uid(), label: "STOP PAYMENT", archived: false },
+      { id: uid(), label: "UNCOLLECT HOLD", archived: false },
     ];
 
     const blankReport = () => ({
@@ -197,6 +268,7 @@
       lists: {
         feePayment: defaultFeeList(),
         checkPayment: defaultCheckList(),
+        rejectReason: defaultRejectList(),
       },
       images: [], // {id, name, dataUrl, createdAt}
     });
@@ -219,6 +291,7 @@
           out.lists = {
             feePayment: Array.isArray(maybe.lists.feePayment) ? maybe.lists.feePayment : base.lists.feePayment,
             checkPayment: Array.isArray(maybe.lists.checkPayment) ? maybe.lists.checkPayment : base.lists.checkPayment,
+            rejectReason: Array.isArray(maybe.lists.rejectReason) ? maybe.lists.rejectReason : base.lists.rejectReason,
           };
         }
         if (Array.isArray(maybe.images)) out.images = maybe.images;
@@ -238,10 +311,15 @@
 
     const getList = (kind) => {
       report = ensureReportShape(report);
-      if (!report.lists) report.lists = { feePayment: defaultFeeList(), checkPayment: defaultCheckList() };
+      if (!report.lists) report.lists = { feePayment: defaultFeeList(), checkPayment: defaultCheckList(), rejectReason: defaultRejectList() };
       if (!Array.isArray(report.lists.feePayment)) report.lists.feePayment = defaultFeeList();
       if (!Array.isArray(report.lists.checkPayment)) report.lists.checkPayment = defaultCheckList();
-      return kind === "fee" ? report.lists.feePayment : report.lists.checkPayment;
+      if (!Array.isArray(report.lists.rejectReason)) report.lists.rejectReason = defaultRejectList();
+      return kind === "fee"
+        ? report.lists.feePayment
+        : kind === "check"
+          ? report.lists.checkPayment
+          : report.lists.rejectReason;
     };
 
     const activeOptions = (kind) => getList(kind).filter((o) => o && !o.archived);
@@ -251,6 +329,25 @@
       // Vacío => el dropdown debe mostrar "Select".
       if (isBlankLike(report.fields.feePaymentMethod)) report.fields.feePaymentMethod = "";
       if (isBlankLike(report.fields.checkPaymentMethod)) report.fields.checkPaymentMethod = "";
+      if (isBlankLike(report.fields.rejectReason)) report.fields.rejectReason = "";
+    };
+
+    const applyCompanyAutoFill = () => {
+      try {
+        const cname = normCompanyKey(report?.fields?.companyName);
+        if (!cname) return;
+        const defaults = readCompanyDefaults(cname);
+
+        // MAKER/PAYOR: si está vacío, por default = nombre compañía
+        if (!norm(report?.fields?.makerPayor)) {
+          report.fields.makerPayor = defaults?.makerPayor ? defaults.makerPayor : cname;
+        }
+
+        // COMPANY CONTACT: si está vacío, usar el último guardado para esa compañía
+        if (!norm(report?.fields?.companyContact) && defaults?.companyContact) {
+          report.fields.companyContact = defaults.companyContact;
+        }
+      } catch {}
     };
 
     const buildSelectOptions = (selectEl, kind, currentLabel) => {
@@ -308,8 +405,10 @@
       ensureSelectedDefaults();
       const feeSel = activePaper.querySelector('select[data-select="fee"]');
       const chkSel = activePaper.querySelector('select[data-select="check"]');
+      const rejSel = activePaper.querySelector('select[data-select="reject"]');
       buildSelectOptions(feeSel, "fee", report.fields.feePaymentMethod);
       buildSelectOptions(chkSel, "check", report.fields.checkPaymentMethod);
+      buildSelectOptions(rejSel, "reject", report.fields.rejectReason);
 
       // Extra field when Paid Check is selected (check number)
       const extraCheck = activePaper.querySelector('[data-extra="checkPaidNumber"]');
@@ -361,34 +460,144 @@
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(report));
       } catch {}
-      if (el.lastSaved) {
-        el.lastSaved.textContent = silent
-          ? `Última edición: ${fmtDateTime(report.updatedAt)}`
-          : "Guardando…";
-      }
+      try {
+        updateStatusPill({ phase: silent ? "savedLocal" : "saving" });
+      } catch {}
 
       if (canPostToParent) {
         try {
+          // Parent will handle server save + ack back.
           window.parent.postMessage({ type: "rc:save", noteId, payload: report }, "*");
         } catch {}
       } else {
         // Si se usa en pestaña (sin iframe), también guardar en el servidor
         // para que "Duplicar" copie la info correcta.
-        if (noteId && noteId !== "global") {
+        if (noteId && noteId !== "global") queueSaveToServer(report);
+      }
+
+      // Guardar defaults por compañía (solo si hay datos)
+      try {
+        const cname = report?.fields?.companyName || "";
+        const mp = norm(report?.fields?.makerPayor);
+        const cc = norm(report?.fields?.companyContact);
+        if (mp || cc) writeCompanyDefaults(cname, { makerPayor: mp, companyContact: cc });
+      } catch {}
+    };
+
+    const readQueue = () => {
+      try {
+        const raw = localStorage.getItem(SAVE_QUEUE_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch {
+        return [];
+      }
+    };
+    const writeQueue = (arr) => {
+      try {
+        localStorage.setItem(SAVE_QUEUE_KEY, JSON.stringify(arr));
+      } catch {}
+      queuedCount = Array.isArray(arr) ? arr.length : 0;
+    };
+
+    const updateStatusPill = ({ phase }) => {
+      if (!el.lastSaved) return;
+      isOnline = typeof navigator !== "undefined" ? !!navigator.onLine : true;
+      const baseEdited = report?.updatedAt ? fmtDateTime(report.updatedAt) : "—";
+      const who = userLabel ? ` • ${userLabel}` : "";
+      const q = queuedCount ? ` • cola: ${queuedCount}` : "";
+
+      el.lastSaved.classList.remove("pillOk", "pillWarn", "pillBad", "pillStrong");
+      if (!isOnline) {
+        el.lastSaved.classList.add("pillBad");
+        el.lastSaved.textContent = `Sin conexión (guardado local) • ${baseEdited}${q}${who}`;
+        return;
+      }
+      if (phase === "saving") {
+        el.lastSaved.classList.add("pillWarn");
+        el.lastSaved.textContent = `Guardando… • ${baseEdited}${q}${who}`;
+        return;
+      }
+      if (queuedCount > 0) {
+        el.lastSaved.classList.add("pillWarn");
+        el.lastSaved.textContent = `Pendiente de sincronizar • ${baseEdited}${q}${who}`;
+        return;
+      }
+      if (lastServerOkAt > 0) {
+        el.lastSaved.classList.add("pillOk");
+        el.lastSaved.textContent = `Guardado • ${baseEdited} • Sync: ${fmtTimeShort(lastServerOkAt)}${who}`;
+        return;
+      }
+      el.lastSaved.classList.add("pillStrong");
+      el.lastSaved.textContent = `Última edición: ${baseEdited}${who}`;
+    };
+
+    const enqueuePayload = (payload) => {
+      const q = readQueue();
+      // Keep only last 5, latest wins.
+      const next = [...q, { ts: Date.now(), payload }].slice(-5);
+      writeQueue(next);
+      try {
+        updateStatusPill({ phase: "savedLocal" });
+      } catch {}
+    };
+
+    const flushQueue = async () => {
+      if (canPostToParent) return;
+      if (!noteId || noteId === "global") return;
+      if (!navigator.onLine) return;
+      const q = readQueue();
+      if (!q.length) return;
+      // Send oldest->newest, but only keep last success.
+      for (const item of q) {
+        try {
+          const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}/report`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ payload: item.payload }),
+            credentials: "same-origin",
+          });
+          if (!res.ok) throw new Error("sync failed");
+        } catch {
+          // stop; we'll retry later
           try {
-            clearTimeout(saveApiTimer);
-            saveApiTimer = setTimeout(() => {
-              try {
-                fetch(`/api/notes/${encodeURIComponent(noteId)}/report`, {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ payload: report }),
-                  credentials: "same-origin",
-                }).catch(() => undefined);
-              } catch {}
-            }, 500);
+            updateStatusPill({ phase: "savedLocal" });
           } catch {}
+          return;
         }
+      }
+      writeQueue([]);
+      lastServerOkAt = Date.now();
+      try {
+        updateStatusPill({ phase: "savedLocal" });
+      } catch {}
+    };
+
+    const queueSaveToServer = (payload) => {
+      try {
+        clearTimeout(saveApiTimer);
+        saveApiTimer = setTimeout(async () => {
+          try {
+            if (!navigator.onLine) throw new Error("offline");
+            const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}/report`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ payload }),
+              credentials: "same-origin",
+            });
+            if (!res.ok) throw new Error("save failed");
+            lastServerOkAt = Date.now();
+            // if there was a queue, try to flush it too
+            await flushQueue();
+            try {
+              updateStatusPill({ phase: "savedLocal" });
+            } catch {}
+          } catch {
+            enqueuePayload(payload);
+          }
+        }, 500);
+      } catch {
+        enqueuePayload(payload);
       }
     };
 
@@ -439,10 +648,16 @@
 
             // Dropdown manage option (inside select list)
             if (
-              (key === "feePaymentMethod" || key === "checkPaymentMethod") &&
+              (key === "feePaymentMethod" || key === "checkPaymentMethod" || key === "rejectReason") &&
               String(t.value || "") === "__manage__"
             ) {
-              openManage(key === "feePaymentMethod" ? "fee" : "check");
+              openManage(
+                key === "feePaymentMethod"
+                  ? "fee"
+                  : key === "checkPaymentMethod"
+                    ? "check"
+                    : "reject",
+              );
               // Restore select value
               try { renderPaymentSelects(); } catch {}
               return;
@@ -451,6 +666,13 @@
             // Payment dropdowns: update immediately (incl. showing/hiding Check #)
             if (key === "feePaymentMethod" || key === "checkPaymentMethod") {
               report.fields[key] = t.value ?? "";
+              try { renderPaymentSelects(); } catch {}
+              scheduleSave();
+              return;
+            }
+
+            if (key === "rejectReason" && t && String(t.tagName || "") === "SELECT") {
+              report.fields.rejectReason = t.value ?? "";
               try { renderPaymentSelects(); } catch {}
               scheduleSave();
               return;
@@ -497,6 +719,15 @@
               const next = formatNamePhonePartial(t.value);
               if (t.value !== next) t.value = next;
               report.fields[key] = next;
+              try { writeCompanyDefaults(report?.fields?.companyName, { companyContact: next }); } catch {}
+              scheduleSave();
+              return;
+            }
+
+            // MAKER/PAYOR: guardar como default para esta compañía
+            if (key === "makerPayor") {
+              report.fields[key] = t.value ?? "";
+              try { writeCompanyDefaults(report?.fields?.companyName, { makerPayor: String(report.fields.makerPayor || "") }); } catch {}
               scheduleSave();
               return;
             }
@@ -545,6 +776,9 @@
             }
 
             report.fields[key] = t.value ?? "";
+            if (key === "companyName") {
+              try { applyCompanyAutoFill(); } catch {}
+            }
             if (key === "checkAmount" || key === "returnedFee") {
               computeTotalDue();
               const totalEl = activePaper.querySelector('[data-field="totalDue"]');
@@ -683,6 +917,7 @@
           // If the current report uses the old label, update it.
           if (manageKind === "fee" && eqi(report.fields.feePaymentMethod, prev)) report.fields.feePaymentMethod = n;
           if (manageKind === "check" && eqi(report.fields.checkPaymentMethod, prev)) report.fields.checkPaymentMethod = n;
+          if (manageKind === "reject" && eqi(report.fields.rejectReason, prev)) report.fields.rejectReason = n;
 
           persist(true);
           renderPaymentSelects();
@@ -709,7 +944,11 @@
       manageKind = kind;
       if (el.manageTitle) {
         el.manageTitle.textContent =
-          kind === "fee" ? "Editar lista (Check Fee)" : "Editar lista (Check Amount)";
+          kind === "fee"
+            ? "Editar lista (Check Fee)"
+            : kind === "check"
+              ? "Editar lista (Check Amount)"
+              : "Editar lista (Reject Reason)";
       }
       if (el.manageAddInput) el.manageAddInput.value = "";
       el.manageModal?.classList?.add("show");
@@ -740,6 +979,145 @@
         };
         reader.readAsDataURL(file);
       });
+    };
+
+    const PDFJS_VERSION = "2.16.105";
+    const ensurePdfJs = async () => {
+      if (window.pdfjsLib && window.pdfjsLib.getDocument) return window.pdfjsLib;
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`;
+        s.async = true;
+        s.onload = () => resolve(true);
+        s.onerror = () => reject(new Error("No se pudo cargar PDF.js"));
+        document.head.appendChild(s);
+      });
+      const lib = window.pdfjsLib;
+      if (!lib || !lib.getDocument) throw new Error("PDF.js no disponible");
+      try {
+        lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+      } catch {}
+      return lib;
+    };
+
+    const HTML2CANVAS_VERSION = "1.4.1";
+    const ensureHtml2Canvas = async () => {
+      if (window.html2canvas) return window.html2canvas;
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = `https://cdnjs.cloudflare.com/ajax/libs/html2canvas/${HTML2CANVAS_VERSION}/html2canvas.min.js`;
+        s.async = true;
+        s.onload = () => resolve(true);
+        s.onerror = () => reject(new Error("No se pudo cargar html2canvas"));
+        document.head.appendChild(s);
+      });
+      if (!window.html2canvas) throw new Error("html2canvas no disponible");
+      return window.html2canvas;
+    };
+
+    const JSPDF_VERSION = "2.5.1";
+    const ensureJsPdf = async () => {
+      if (window.jspdf && window.jspdf.jsPDF) return window.jspdf;
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = `https://cdnjs.cloudflare.com/ajax/libs/jspdf/${JSPDF_VERSION}/jspdf.umd.min.js`;
+        s.async = true;
+        s.onload = () => resolve(true);
+        s.onerror = () => reject(new Error("No se pudo cargar jsPDF"));
+        document.head.appendChild(s);
+      });
+      if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("jsPDF no disponible");
+      return window.jspdf;
+    };
+
+    const exportPdfBlob = async () => {
+      const html2canvas = await ensureHtml2Canvas();
+      const jspdf = await ensureJsPdf();
+      const { jsPDF } = jspdf;
+
+      const pages = [
+        document.getElementById("paper"),
+        ...Array.from(document.querySelectorAll("#imagePages .imagePaper")),
+      ].filter(Boolean);
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+
+      for (let i = 0; i < pages.length; i++) {
+        const elPage = pages[i];
+        if (!elPage) continue;
+        if (i > 0) doc.addPage();
+
+        const canvas = await html2canvas(elPage, {
+          scale: 2,
+          backgroundColor: "#ffffff",
+          useCORS: true,
+          onclone: (clonedDoc) => {
+            try {
+              clonedDoc.body.classList.add("rc-export");
+            } catch {}
+          },
+        });
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.92);
+        const imgW = canvas.width;
+        const imgH = canvas.height;
+        const scale = Math.min(pageW / imgW, pageH / imgH);
+        const drawW = imgW * scale;
+        const drawH = imgH * scale;
+        const x = (pageW - drawW) / 2;
+        const y = (pageH - drawH) / 2;
+        doc.addImage(imgData, "JPEG", x, y, drawW, drawH);
+      }
+
+      return doc.output("blob");
+    };
+
+    const readFileAsArrayBuffer = (file) =>
+      new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onerror = () => reject(new Error("read error"));
+        r.onload = () => resolve(r.result);
+        r.readAsArrayBuffer(file);
+      });
+
+    const pdfToImages = async (file) => {
+      const pdfjsLib = await ensurePdfJs();
+      const buf = await readFileAsArrayBuffer(file);
+      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+      const maxPages = Math.min(doc.numPages || 1, 12);
+      if ((doc.numPages || 1) > maxPages) {
+        try {
+          alert(`Este PDF tiene ${doc.numPages} páginas. Se importarán solo las primeras ${maxPages}.`);
+        } catch {}
+      }
+      const out = [];
+      for (let p = 1; p <= maxPages; p++) {
+        const page = await doc.getPage(p);
+        const baseVp = page.getViewport({ scale: 1 });
+        const targetW = 1400; // buen balance calidad/peso
+        const scale = Math.min(2.0, Math.max(1.0, targetW / Math.max(1, baseVp.width)));
+        const vp = page.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.floor(vp.width);
+        canvas.height = Math.floor(vp.height);
+        const ctx = canvas.getContext("2d", { alpha: false });
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+        out.push({
+          id: uid(),
+          name: `${file.name} - p${p}`,
+          dataUrl,
+          createdAt: nowISO(),
+        });
+        // liberar
+        try {
+          canvas.width = 1;
+          canvas.height = 1;
+        } catch {}
+      }
+      return out;
     };
 
     const renderImages = () => {
@@ -807,18 +1185,185 @@
       }
     };
 
-    const addImages = async (files) => {
+    let importQueue = []; // staged images [{id,name,dataUrl,createdAt}]
+
+    const openImportPreview = (im) => {
+      try {
+        if (!im) return;
+        if (el.importPreviewTitle) el.importPreviewTitle.textContent = im.name || "Vista previa";
+        if (el.importPreviewImg) el.importPreviewImg.src = im.dataUrl || "";
+        el.importPreviewModal?.classList?.add("show");
+      } catch {}
+    };
+    const closeImportPreview = () => {
+      try {
+        el.importPreviewModal?.classList?.remove("show");
+        if (el.importPreviewImg) el.importPreviewImg.src = "";
+      } catch {}
+    };
+
+    const closeImport = () => {
+      try { el.importModal?.classList?.remove("show"); } catch {}
+      importQueue = [];
+      if (el.importList) el.importList.innerHTML = "";
+    };
+
+    const moveImportItem = (from, to) => {
+      if (from < 0 || from >= importQueue.length) return;
+      if (to < 0 || to >= importQueue.length) return;
+      const next = importQueue.slice();
+      const [it] = next.splice(from, 1);
+      next.splice(to, 0, it);
+      importQueue = next;
+      renderImportList();
+    };
+
+    const removeImportItem = (idx) => {
+      if (idx < 0 || idx >= importQueue.length) return;
+      importQueue = importQueue.filter((_, i) => i !== idx);
+      renderImportList();
+    };
+
+    const renderImportList = () => {
+      if (!el.importList) return;
+      el.importList.innerHTML = "";
+      const total = importQueue.length;
+      if (el.importStatus) {
+        el.importStatus.textContent = total ? `Listo: ${total} item(s)` : "Sin items";
+      }
+      for (let i = 0; i < importQueue.length; i++) {
+        const im = importQueue[i];
+        const row = document.createElement("div");
+        row.className = "importItem";
+        row.draggable = true;
+        row.setAttribute("data-idx", String(i));
+
+        row.addEventListener("dragstart", (ev) => {
+          try {
+            ev.dataTransfer?.setData?.("text/plain", String(i));
+            if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
+            row.classList.add("dragging");
+          } catch {}
+        });
+        row.addEventListener("dragend", () => {
+          try { row.classList.remove("dragging"); } catch {}
+        });
+        row.addEventListener("dragover", (ev) => {
+          try {
+            ev.preventDefault();
+            if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
+          } catch {}
+        });
+        row.addEventListener("dragenter", (ev) => {
+          try {
+            ev.preventDefault();
+            row.classList.add("dragOver");
+          } catch {}
+        });
+        row.addEventListener("dragleave", () => {
+          try { row.classList.remove("dragOver"); } catch {}
+        });
+        row.addEventListener("drop", (ev) => {
+          try {
+            ev.preventDefault();
+            row.classList.remove("dragOver");
+            const rawFrom = ev.dataTransfer?.getData?.("text/plain");
+            const from = Number(rawFrom);
+            const to = i;
+            if (!Number.isFinite(from)) return;
+            if (from === to) return;
+            moveImportItem(from, to);
+          } catch {}
+        });
+
+        const th = document.createElement("div");
+        th.className = "importThumb";
+        const img = document.createElement("img");
+        img.src = im.dataUrl;
+        img.alt = im.name || "preview";
+        th.appendChild(img);
+        th.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          openImportPreview(im);
+        });
+
+        const meta = document.createElement("div");
+        meta.className = "importMeta";
+        const nm = document.createElement("div");
+        nm.className = "importName";
+        nm.textContent = im.name || "Item";
+        nm.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          openImportPreview(im);
+        });
+        const hint = document.createElement("div");
+        hint.className = "importHint";
+        hint.textContent = `#${i + 1}`;
+        meta.appendChild(nm);
+        meta.appendChild(hint);
+
+        const actions = document.createElement("div");
+        actions.className = "importActions";
+
+        const up = document.createElement("button");
+        up.type = "button";
+        up.className = "miniBtnGhost";
+        up.textContent = "↑";
+        up.disabled = i === 0;
+        up.addEventListener("click", () => moveImportItem(i, i - 1));
+
+        const down = document.createElement("button");
+        down.type = "button";
+        down.className = "miniBtnGhost";
+        down.textContent = "↓";
+        down.disabled = i === importQueue.length - 1;
+        down.addEventListener("click", () => moveImportItem(i, i + 1));
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "miniBtnGhost miniBtnDangerOutline";
+        del.textContent = "Borrar";
+        del.addEventListener("click", () => removeImportItem(i));
+
+        actions.appendChild(up);
+        actions.appendChild(down);
+        actions.appendChild(del);
+
+        row.appendChild(th);
+        row.appendChild(meta);
+        row.appendChild(actions);
+        el.importList.appendChild(row);
+      }
+    };
+
+    const openImport = () => {
+      try { el.importModal?.classList?.add("show"); } catch {}
+      renderImportList();
+    };
+
+    const stageFilesForImport = async (files) => {
       const list = Array.from(files || []);
       if (!list.length) return;
+      importQueue = [];
+      openImport();
+      if (el.importStatus) el.importStatus.textContent = "Preparando…";
       for (const f of list) {
         try {
-          const dataUrl = await fileToCompressedDataUrl(f);
-          report.images = report.images || [];
-          report.images.unshift({ id: uid(), name: f.name, dataUrl, createdAt: nowISO() });
+          const isPdf =
+            String(f.type || "").toLowerCase() === "application/pdf" ||
+            String(f.name || "").toLowerCase().endsWith(".pdf");
+          if (isPdf) {
+            if (el.importStatus) el.importStatus.textContent = `Importando PDF: ${f.name}…`;
+            const pages = await pdfToImages(f);
+            importQueue.push(...pages);
+          } else {
+            const dataUrl = await fileToCompressedDataUrl(f);
+            importQueue.push({ id: uid(), name: f.name, dataUrl, createdAt: nowISO() });
+          }
         } catch {}
+        renderImportList();
       }
-      scheduleSave();
-      renderImages();
+      renderImportList();
     };
 
     const waitForImagesReady = async () => {
@@ -934,6 +1479,25 @@
       let data = ev?.data;
       if (!data || typeof data !== "object") return;
       try {
+        if (data.type === "rc:setUserLabel") {
+          userLabel = String((data).label ?? "").trim();
+          try { updateStatusPill({ phase: "savedLocal" }); } catch {}
+          return;
+        }
+        if (data.type === "rc:serverSaved") {
+          if (data.noteId && String(data.noteId) !== String(noteId)) return;
+          lastServerOkAt = Number((data).at || Date.now());
+          queuedCount = Number((data).queued || 0) || 0;
+          if (typeof (data).label === "string") userLabel = (data).label;
+          try { updateStatusPill({ phase: "savedLocal" }); } catch {}
+          return;
+        }
+        if (data.type === "rc:serverSaveFailed") {
+          if (data.noteId && String(data.noteId) !== String(noteId)) return;
+          queuedCount = Number((data).queued || queuedCount) || queuedCount;
+          try { updateStatusPill({ phase: "savedLocal" }); } catch {}
+          return;
+        }
         if (data.type === "rc:flushNow") {
           if (data.noteId && String(data.noteId) !== String(noteId)) return;
           const requestId = data.requestId || null;
@@ -953,6 +1517,7 @@
           const name = String(data.companyName ?? "").trim();
           if (name && report?.fields) {
             report.fields.companyName = name.toUpperCase();
+            try { applyCompanyAutoFill(); } catch {}
             scheduleSave();
             renderPaper();
           }
@@ -980,6 +1545,7 @@
         if (initialCompanyName && report?.fields) {
           report.fields.companyName = initialCompanyName.toUpperCase();
         }
+        try { applyCompanyAutoFill(); } catch {}
         computeTotalDue();
         persist(true);
         renderPaper();
@@ -993,10 +1559,45 @@
       }
     });
 
+    // Online/offline status + autosync
+    try {
+      isOnline = typeof navigator !== "undefined" ? !!navigator.onLine : true;
+      queuedCount = readQueue().length;
+      updateStatusPill({ phase: "savedLocal" });
+      window.addEventListener("online", () => {
+        try { updateStatusPill({ phase: "savedLocal" }); } catch {}
+        void flushQueue();
+      });
+      window.addEventListener("offline", () => {
+        try { updateStatusPill({ phase: "savedLocal" }); } catch {}
+      });
+    } catch {}
+
     el.btnAddImages?.addEventListener?.("click", () => el.imgPicker?.click?.());
     el.imgPicker?.addEventListener?.("change", async (e) => {
-      await addImages(e.target.files);
+      await stageFilesForImport(e.target.files);
       el.imgPicker.value = "";
+    });
+
+    // Import modal controls
+    el.importCancel?.addEventListener?.("click", closeImport);
+    el.importModal?.addEventListener?.("click", (e) => {
+      if (e.target === el.importModal) closeImport();
+    });
+    el.importConfirm?.addEventListener?.("click", () => {
+      if (!importQueue.length) return closeImport();
+      report.images = report.images || [];
+      // Insertar primero respetando el orden elegido
+      report.images = [...importQueue, ...(report.images || [])];
+      scheduleSave();
+      renderImages();
+      closeImport();
+    });
+
+    // Import preview modal controls
+    el.importPreviewClose?.addEventListener?.("click", closeImportPreview);
+    el.importPreviewModal?.addEventListener?.("click", (e) => {
+      if (e.target === el.importPreviewModal) closeImportPreview();
     });
 
     el.btnPrint?.addEventListener?.("click", () => {
@@ -1007,6 +1608,68 @@
         return;
       }
       window.print();
+    });
+
+    el.btnPdf?.addEventListener?.("click", async () => {
+      try {
+        await waitForImagesReady();
+      } catch {}
+      try {
+        if (el.lastSaved) el.lastSaved.textContent = "Exportando PDF…";
+      } catch {}
+      try {
+        const cname = String(report?.fields?.companyName || "").trim() || "Reporte";
+        const blob = await exportPdfBlob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Returned Checks - ${cname}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        try {
+          alert(e instanceof Error ? e.message : "No se pudo exportar PDF");
+        } catch {}
+      } finally {
+        try {
+          updateStatusPill({ phase: "savedLocal" });
+        } catch {}
+      }
+    });
+
+    // Allow parent to request a PDF for bulk-export (returns ArrayBuffer)
+    window.addEventListener("message", async (ev) => {
+      const data = ev?.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type !== "rc:exportPdf") return;
+      if (data.noteId && String(data.noteId) !== String(noteId)) return;
+      const requestId = data.requestId || null;
+      try {
+        await waitForImagesReady();
+      } catch {}
+      try {
+        const cname = String(report?.fields?.companyName || "").trim() || "Reporte";
+        const blob = await exportPdfBlob();
+        const buf = await blob.arrayBuffer();
+        if (canPostToParent) {
+          window.parent.postMessage(
+            { type: "rc:exportPdfResult", noteId, requestId, ok: true, filename: `Returned Checks - ${cname}.pdf`, buffer: buf },
+            "*",
+            [buf],
+          );
+        }
+      } catch (e) {
+        if (canPostToParent) {
+          try {
+            window.parent.postMessage(
+              { type: "rc:exportPdfResult", noteId, requestId, ok: false, error: e instanceof Error ? e.message : "export failed" },
+              "*",
+            );
+          } catch {}
+        }
+      }
     });
 
     el.modalClose?.addEventListener?.("click", () => {
@@ -1048,6 +1711,7 @@
     });
 
     report = load();
+    try { applyCompanyAutoFill(); } catch {}
     computeTotalDue();
     ensureSelectedDefaults();
     persist(true);

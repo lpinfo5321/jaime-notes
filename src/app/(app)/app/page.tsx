@@ -3,6 +3,8 @@ import NotesList from "@/components/notes/NotesList";
 
 type NotesSearchParams = {
   q?: string;
+  qBy?: string;
+  status?: string;
 };
 
 export default async function NotesPage({
@@ -14,6 +16,7 @@ export default async function NotesPage({
   const supabase = await createClient();
 
   const q = (sp.q ?? "").trim();
+  const qBy = (sp.qBy ?? "company").trim() || "company";
 
   let query = supabase
     .from("notes")
@@ -23,7 +26,8 @@ export default async function NotesPage({
     .order("updated_at", { ascending: false })
     .limit(200);
 
-  if (q) query = query.or(`title.ilike.%${q}%,body.ilike.%${q}%`);
+  // Default search = only company name (title). Other modes are filtered client-side.
+  if (qBy === "company" && q) query = query.ilike("title", `%${q}%`);
 
   const { data: notes, error } = await query;
   const safeNotes = notes ?? [];

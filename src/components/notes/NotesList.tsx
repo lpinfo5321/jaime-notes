@@ -7,6 +7,7 @@ import {
   ArchiveRestore,
   CheckCircle2,
   Copy,
+  Download,
   ImageOff,
   MoreHorizontal,
   Paperclip,
@@ -43,6 +44,7 @@ type LastAppLocation = {
 };
 
 const LAST_APP_LOCATION_KEY = "rc:lastAppLocation:v1";
+const SELECT_MODE_KEY = "rc:selectMode:v1";
 
 function readLastAppLocation(): LastAppLocation | null {
   if (typeof window === "undefined") return null;
@@ -216,6 +218,45 @@ function statusFromPaymentMethod(
   return { text: "Pending", tone: "pending" };
 }
 
+function getLatestEntry(values: Record<string, unknown> | null | undefined): Entry | null {
+  const arr = toEntryArray(values);
+  if (!arr.length) return null;
+  const sorted = sortEntriesDesc(arr);
+  return sorted[0] ?? null;
+}
+
+function getLatestEntryDateIso(values: Record<string, unknown> | null | undefined): string {
+  const e = getLatestEntry(values);
+  const d = (e?.date ?? "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : "";
+}
+
+function getLatestEntryDateTime(values: Record<string, unknown> | null | undefined): number {
+  const iso = getLatestEntryDateIso(values);
+  const t = iso ? Date.parse(iso + "T00:00:00") : 0;
+  return Number.isFinite(t) ? t : 0;
+}
+
+function getLatestAgent(values: Record<string, unknown> | null | undefined): string {
+  const e = getLatestEntry(values);
+  return normText(e?.agent);
+}
+
+function getCheckPaymentStatusText(values: Record<string, unknown> | null | undefined) {
+  const payload = (values as any)?._report?.payload ?? null;
+  const fields = payload?.fields ?? null;
+  const raw = pickField(fields, ["checkPaymentMethod", "check_payment_method"]);
+  return statusFromPaymentMethod(raw, { allowRedeposited: true }).text;
+}
+
+function getPayText(values: Record<string, unknown> | null | undefined) {
+  const payload = (values as any)?._report?.payload ?? null;
+  const fields = payload?.fields ?? null;
+  const maker = pickField(fields, ["makerPayor", "maker_payor"]);
+  const payee = pickField(fields, ["payee"]);
+  return `${normText(maker)} ${normText(payee)}`.trim();
+}
+
 function fitTextToSingleLineInput(
   el: HTMLInputElement | null,
   opts?: { minPx?: number },
@@ -258,6 +299,7 @@ export default function NotesList({
   const router = useRouter();
   const sp = useSearchParams();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [open, setOpen] = useState<{
     id: string;
     mode: "list" | "new" | "edit";
@@ -269,10 +311,22 @@ export default function NotesList({
   const [confirmDel, setConfirmDel] = useState<{ id: string; title: string } | null>(
     null,
   );
+  const [confirmBulkDel, setConfirmBulkDel] = useState<{ ids: string[]; count: number } | null>(
+    null,
+  );
+  const [confirmMoveComplete, setConfirmMoveComplete] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [bucket, setBucket] = useState<Bucket>("pending");
   const [actionsFor, setActionsFor] = useState<{ id: string; title: string } | null>(
     null,
   );
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  // Filters + sorting (local UI only; does not affect DB)
+  const [filterAgent, setFilterAgent] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("");
   const [reportForCompany, setReportForCompany] = useState<{
     id: string;
     title: string;
@@ -288,6 +342,15 @@ export default function NotesList({
     // Cuando cambia el servidor (búsqueda / navegación), resincroniza.
     setItems(notes);
   }, [notes]);
+
+  // Sync filters from URL (controlled by header UI)
+  useEffect(() => {
+    const qBy = (sp.get("qBy") ?? "company").trim() || "company";
+    const q = (sp.get("q") ?? "").trim();
+    const status = (sp.get("status") ?? "").trim();
+    setFilterAgent(qBy === "pay" ? q : qBy === "company" ? q : "");
+    setFilterStatus(qBy === "status" ? status : "");
+  }, [sp]);
 
   // Soporte: /app?openReport=<noteId> (usado por /app/new)
   useEffect(() => {
@@ -316,6 +379,44 @@ export default function NotesList({
 
   const empty = items.length === 0;
   const sorted = useMemo(() => items, [items]);
+
+  // Multi-select is only for list view; reset on bucket change or when opening modals.
+  useEffect(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bucket]);
+  useEffect(() => {
+    if (open || reportForCompany) {
+      setSelectMode(false);
+      setSelectedIds(new Set());
+    }
+  }, [open, reportForCompany]);
+
+  // Allow toggling select mode from header button.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onToggle = () => {
+      if (open || reportForCompany) return;
+      setSelectMode((v) => !v);
+      setSelectedIds(new Set());
+    };
+    window.addEventListener("rc:toggleSelectMode" as any, onToggle as any);
+    return () => window.removeEventListener("rc:toggleSelectMode" as any, onToggle as any);
+  }, [open, reportForCompany]);
+
+  // Broadcast select-mode state so header can reflect it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(SELECT_MODE_KEY, selectMode ? "1" : "0");
+    } catch {}
+    try {
+      window.dispatchEvent(
+        new CustomEvent("rc:selectModeChanged", { detail: { selectMode } }),
+      );
+    } catch {}
+  }, [selectMode]);
 
   useEffect(() => {
     idsRef.current = new Set(items.map((n) => String(n.id)));
@@ -594,9 +695,129 @@ export default function NotesList({
     return out;
   }, [items]);
 
-  const filtered = useMemo(() => {
+  const baseBucket = useMemo(() => {
     return sorted.filter((n) => deriveBucketFromNote(n) === bucket);
   }, [sorted, bucket]);
+
+  const agentOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of baseBucket) {
+      const a = getLatestAgent(n.values);
+      if (a) set.add(a);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [baseBucket]);
+
+  const visible = useMemo(() => {
+    const pass = baseBucket.filter((n) => {
+      if (filterAgent) {
+        // filterAgent now means query text for company or pay (depending on mode)
+        const q = filterAgent.toLowerCase();
+        const qBy = (sp.get("qBy") ?? "company").trim() || "company";
+        if (qBy === "pay") {
+          const pay = getPayText(n.values).toLowerCase();
+          if (!pay.includes(q)) return false;
+        } else {
+          const title = String(n.title ?? "").toLowerCase();
+          if (!title.includes(q)) return false;
+        }
+      }
+      if (filterStatus) {
+        const s = getCheckPaymentStatusText(n.values);
+        if (s !== filterStatus) return false;
+      }
+      return true;
+    });
+    return pass;
+  }, [baseBucket, filterAgent, filterStatus, sp]);
+
+  const visibleIdSet = useMemo(() => new Set(visible.map((n) => String(n.id))), [visible]);
+  const selectedInBucket = useMemo(() => {
+    const ids: string[] = [];
+    for (const id of selectedIds) if (visibleIdSet.has(String(id))) ids.push(String(id));
+    return ids;
+  }, [selectedIds, visibleIdSet]);
+  const selectedCount = selectedInBucket.length;
+
+  function toggleSelected(noteId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const id = String(noteId);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllVisible() {
+    setSelectedIds(() => new Set(visible.map((n) => String(n.id))));
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function setManyBucket(noteIds: string[], nextBucket: Bucket) {
+    if (!noteIds.length) return;
+    const idSet = new Set(noteIds.map(String));
+    suppressRemoteUntilRef.current = Date.now() + 1500;
+    markLocalWrite();
+    setBulkBusy(true);
+    const nextValuesById = new Map<string, Record<string, unknown>>();
+    // Build payloads from current items so we never overwrite values on the server.
+    for (const n of items) {
+      const id = String(n.id);
+      if (!idSet.has(id)) continue;
+      const prevValues = ((n.values ?? {}) as Record<string, unknown>) ?? {};
+      const nextValues = { ...prevValues, _bucket: nextBucket } as Record<string, unknown>;
+      nextValuesById.set(id, nextValues);
+    }
+
+    setItems((prev) =>
+      prev.map((n) => {
+        const id = String(n.id);
+        const nextValues = nextValuesById.get(id);
+        return nextValues ? { ...n, values: nextValues } : n;
+      }),
+    );
+
+    const results = await Promise.allSettled(
+      noteIds.map(async (id) => {
+        const nextValues = nextValuesById.get(String(id)) ?? { _bucket: nextBucket };
+        const res = await fetch(`/api/notes/${encodeURIComponent(String(id))}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ values: nextValues }),
+        });
+        if (!res.ok) throw new Error("PATCH failed");
+      }),
+    );
+    const anyFail = results.some((r) => r.status === "rejected");
+    if (anyFail) router.refresh();
+    setBulkBusy(false);
+    setSelectedIds(new Set());
+  }
+
+  async function deleteMany(noteIds: string[]) {
+    if (!noteIds.length) return;
+    const idSet = new Set(noteIds.map(String));
+    suppressRemoteUntilRef.current = Date.now() + 1500;
+    markLocalWrite();
+    setBulkBusy(true);
+    setItems((prev) => prev.filter((n) => !idSet.has(String(n.id))));
+    const results = await Promise.allSettled(
+      noteIds.map(async (id) => {
+        const res = await fetch(`/api/notes/${encodeURIComponent(String(id))}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("DELETE failed");
+      }),
+    );
+    const anyFail = results.some((r) => r.status === "rejected");
+    if (anyFail) router.refresh();
+    setBulkBusy(false);
+    setSelectedIds(new Set());
+  }
 
   async function setNoteBucket(noteId: string, nextBucket: Bucket) {
     const target = items.find((n) => n.id === noteId);
@@ -615,6 +836,27 @@ export default function NotesList({
     } catch {
       router.refresh();
     }
+  }
+
+  function shouldSuggestMoveToCompleted(
+    noteId: string,
+    values: Record<string, unknown> | null | undefined,
+  ) {
+    const n = items.find((x) => String(x.id) === String(noteId)) ?? null;
+    if (!n) return false;
+    const currentBucket = deriveBucketFromNote(n);
+    if (currentBucket === "trash") return false;
+    if (currentBucket === "completed") return false;
+
+    const payload = (values as any)?._report?.payload ?? null;
+    const fields = payload?.fields ?? null;
+    const feeMethodRaw = pickField(fields, ["feePaymentMethod", "fee_payment_method"]);
+    const checkMethodRaw = pickField(fields, ["checkPaymentMethod", "check_payment_method"]);
+    const fee = statusFromPaymentMethod(feeMethodRaw, { allowRedeposited: true });
+    const chk = statusFromPaymentMethod(checkMethodRaw, { allowRedeposited: true });
+    const dueCents = getTotalDueCentsFromValues(values);
+    const isCompleted = fee.text !== "Pending" && chk.text !== "Pending" && dueCents > 0;
+    return isCompleted;
   }
 
   function BucketBar() {
@@ -655,6 +897,320 @@ export default function NotesList({
               </button>
             );
           })}
+        </div>
+      </div>
+    );
+  }
+
+  function csvEscape(v: unknown) {
+    const s = v == null ? "" : String(v);
+    const needs = /[",\n\r]/.test(s);
+    const out = s.replace(/"/g, '""');
+    return needs ? `"${out}"` : out;
+  }
+
+  function downloadText(filename: string, content: string, mime = "text/plain") {
+    try {
+      const blob = new Blob([content], { type: mime + ";charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      // fallback
+      try {
+        (navigator as any)?.clipboard?.writeText?.(content);
+        alert("No se pudo descargar. Copié el contenido al portapapeles.");
+      } catch {
+        alert("No se pudo descargar.");
+      }
+    }
+  }
+
+  function downloadBlob(filename: string, blob: Blob) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("No se pudo descargar.");
+    }
+  }
+
+  async function exportSelectedPdfsZip() {
+    const ids = selectedInBucket;
+    if (!ids.length) return;
+
+    setBulkBusy(true);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+
+      const exportOne = (noteId: string) =>
+        new Promise<{ filename: string; buffer: ArrayBuffer }>((resolve, reject) => {
+          const note = items.find((n) => String(n.id) === String(noteId)) ?? null;
+          const payload = (note?.values as any)?._report?.payload ?? null;
+          const companyTitle = (note?.title ?? "").trim() || "Reporte";
+
+          const iframe = document.createElement("iframe");
+          iframe.style.position = "fixed";
+          iframe.style.left = "-99999px";
+          iframe.style.top = "0";
+          iframe.style.width = "800px";
+          iframe.style.height = "1100px";
+          iframe.style.opacity = "0";
+          iframe.setAttribute(
+            "sandbox",
+            "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads",
+          );
+          iframe.src = `/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}`;
+
+          const reqId =
+            (globalThis.crypto as any)?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+
+          let timeout: number | null = null;
+
+          const cleanup = () => {
+            window.removeEventListener("message", onMsg);
+            if (timeout) window.clearTimeout(timeout);
+            timeout = null;
+            try {
+              iframe.remove();
+            } catch {}
+          };
+
+          const onMsg = (ev: MessageEvent) => {
+            const data: any = ev?.data;
+            if (!data || typeof data !== "object") return;
+            if (data.type === "rc:exportPdfResult" && String(data.noteId) === String(noteId)) {
+              if (data.requestId !== reqId) return;
+              if (data.ok && data.buffer) {
+                const filename = String(data.filename || `Returned Checks - ${companyTitle}.pdf`);
+                const buffer = data.buffer as ArrayBuffer;
+                cleanup();
+                resolve({ filename, buffer });
+              } else {
+                cleanup();
+                reject(new Error(String(data.error || "No se pudo exportar")));
+              }
+            }
+          };
+
+          window.addEventListener("message", onMsg);
+
+          iframe.addEventListener("load", () => {
+            try {
+              // init payload to ensure data is present
+              iframe.contentWindow?.postMessage(
+                { type: "rc:init", noteId, initialReport: payload },
+                "*",
+              );
+              // request export
+              iframe.contentWindow?.postMessage(
+                { type: "rc:exportPdf", noteId, requestId: reqId },
+                "*",
+              );
+            } catch {}
+          });
+
+          timeout = window.setTimeout(() => {
+            cleanup();
+            reject(new Error("Tiempo de espera exportando PDF"));
+          }, 45000);
+
+          document.body.appendChild(iframe);
+        });
+
+      // Export sequentially to avoid memory spikes
+      for (const id of ids) {
+        const { filename, buffer } = await exportOne(String(id));
+        zip.file(filename, buffer);
+      }
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadBlob(`PDFs-${stamp}.zip`, blob);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error exportando PDFs");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  function exportSelectedCsv() {
+    const ids = selectedInBucket;
+    if (!ids.length) return;
+    const idSet = new Set(ids.map(String));
+    const rows = items.filter((n) => idSet.has(String(n.id)));
+    const header = [
+      "id",
+      "company",
+      "bucket",
+      "total_due",
+      "status_check",
+      "status_fee",
+      "latest_note_date",
+      "latest_agent",
+      "latest_note",
+    ];
+    const lines = [header.join(",")];
+    for (const n of rows) {
+      const bucketNow = deriveBucketFromNote(n);
+      const total = formatUsd(getTotalDueCentsFromValues(n.values));
+      const payload = (n.values as any)?._report?.payload ?? null;
+      const fields = payload?.fields ?? null;
+      const feeMethodRaw = pickField(fields, ["feePaymentMethod", "fee_payment_method"]);
+      const checkMethodRaw = pickField(fields, ["checkPaymentMethod", "check_payment_method"]);
+      const fee = statusFromPaymentMethod(feeMethodRaw, { allowRedeposited: true }).text;
+      const chk = statusFromPaymentMethod(checkMethodRaw, { allowRedeposited: true }).text;
+      const latest = getLatestEntry(n.values);
+      const latestDate = latest?.date ? formatUsMmDdYy(latest.date) : "";
+      const latestAgent = latest?.agent ?? "";
+      const latestNote = latest?.note ?? "";
+      const line = [
+        csvEscape(n.id),
+        csvEscape((n.title ?? "").trim()),
+        csvEscape(bucketNow),
+        csvEscape(total),
+        csvEscape(chk),
+        csvEscape(fee),
+        csvEscape(latestDate),
+        csvEscape(latestAgent),
+        csvEscape(latestNote),
+      ].join(",");
+      lines.push(line);
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadText(`export-${stamp}.csv`, lines.join("\n"), "text/csv");
+  }
+
+  function MultiSelectBar() {
+    if (!selectMode) return null;
+    // Always show bar in select mode (even if 0 selected) so user can exit quickly.
+    const showTrashActions = bucket === "trash";
+    return (
+      <div className="fixed inset-x-0 bottom-[68px] z-[65] px-3 pb-3">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 p-2 shadow-lg backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/35">
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
+              Selección: <span className="tabular-nums">{selectedCount}</span>
+            </div>
+            <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Toca los checks en las tarjetas
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={selectAllVisible}
+              disabled={bulkBusy || visible.length === 0}
+            >
+              Seleccionar todo
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={clearSelection}
+              disabled={bulkBusy || selectedCount === 0}
+            >
+              Limpiar
+            </button>
+
+            <div className="hidden h-8 w-px bg-zinc-200/80 dark:bg-zinc-800/70 sm:block" />
+
+            <button
+              type="button"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={() => void setManyBucket(selectedInBucket, "pending")}
+              disabled={bulkBusy || selectedCount === 0}
+            >
+              A Pendientes
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={() => void setManyBucket(selectedInBucket, "completed")}
+              disabled={bulkBusy || selectedCount === 0}
+            >
+              A Completados
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={() => void setManyBucket(selectedInBucket, "trash")}
+              disabled={bulkBusy || selectedCount === 0}
+            >
+              A Papelera
+            </button>
+
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={exportSelectedCsv}
+              disabled={bulkBusy || selectedCount === 0}
+              title="Exportar seleccionados"
+            >
+              <Download className="h-4 w-4" />
+              Exportar
+            </button>
+
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={() => void exportSelectedPdfsZip()}
+              disabled={bulkBusy || selectedCount === 0}
+              title="Exportar PDFs (ZIP)"
+            >
+              <Download className="h-4 w-4" />
+              PDFs
+            </button>
+
+            {showTrashActions ? (
+              <>
+                <button
+                  type="button"
+                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200 dark:hover:bg-emerald-950/30"
+                  onClick={() => void setManyBucket(selectedInBucket, "pending")}
+                  disabled={bulkBusy || selectedCount === 0}
+                >
+                  Restaurar
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-900 hover:bg-red-100 disabled:opacity-60 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-200 dark:hover:bg-red-950/30"
+                  onClick={() =>
+                    setConfirmBulkDel({ ids: selectedInBucket, count: selectedCount })
+                  }
+                  disabled={bulkBusy || selectedCount === 0}
+                >
+                  Eliminar
+                </button>
+              </>
+            ) : null}
+
+            <button
+              type="button"
+              className="rounded-xl bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              onClick={() => {
+                setSelectMode(false);
+                setSelectedIds(new Set());
+              }}
+              disabled={bulkBusy}
+            >
+              Listo
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -795,7 +1351,7 @@ export default function NotesList({
   return (
     <div className="mx-auto w-full max-w-7xl pb-24">
       <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
-        {filtered.map((note) => (
+        {visible.map((note) => (
           <CompanyCard
             key={note.id}
             note={note}
@@ -804,6 +1360,9 @@ export default function NotesList({
             firstDoc={firstDocUrlsByNoteId[String(note.id)] ?? null}
             busy={busyId === note.id}
             setBusy={(b) => setBusyId(b ? note.id : null)}
+            selectMode={selectMode}
+            selected={selectedIds.has(String(note.id))}
+            onToggleSelected={() => toggleSelected(String(note.id))}
             onOpenList={() => setOpen({ id: note.id, mode: "list" })}
             onOpenNew={() => setOpen({ id: note.id, mode: "new" })}
             onOpenReport={() =>
@@ -862,6 +1421,23 @@ export default function NotesList({
         />
       ) : null}
 
+      {confirmBulkDel ? (
+        <ConfirmDialog
+          title="Eliminar seleccionados"
+          message={`¿Eliminar definitivamente ${confirmBulkDel.count} compañía(s)?`}
+          confirmText="Sí, eliminar"
+          cancelText="No"
+          onCancel={() => setConfirmBulkDel(null)}
+          onConfirm={() => {
+            const ids = confirmBulkDel.ids;
+            setConfirmBulkDel(null);
+            clearSelection();
+            setSelectMode(false);
+            void deleteMany(ids);
+          }}
+        />
+      ) : null}
+
       {reportForCompany ? (
         <ReportModal
           noteId={reportForCompany.id}
@@ -876,7 +1452,30 @@ export default function NotesList({
             patchCompany(reportForCompany.id, { values: nextValues });
             setReportForCompany((prev) => (prev ? { ...prev, values: nextValues } : prev));
           }}
-          onClose={() => setReportForCompany(null)}
+          onClose={() => {
+            const noteId = reportForCompany.id;
+            const title = reportForCompany.title;
+            const values = reportForCompany.values;
+            setReportForCompany(null);
+            if (shouldSuggestMoveToCompleted(noteId, values)) {
+              setConfirmMoveComplete({ id: noteId, title });
+            }
+          }}
+        />
+      ) : null}
+
+      {confirmMoveComplete ? (
+        <ConfirmDialog
+          title="Mover a Completados"
+          message={`El reporte de "${confirmMoveComplete.title}" parece estar completo. ¿Quieres moverlo a Completados?`}
+          confirmText="Sí, mover"
+          cancelText="No"
+          onCancel={() => setConfirmMoveComplete(null)}
+          onConfirm={() => {
+            const id = confirmMoveComplete.id;
+            setConfirmMoveComplete(null);
+            void setNoteBucket(id, "completed");
+          }}
         />
       ) : null}
 
@@ -888,6 +1487,7 @@ export default function NotesList({
         />
       ) : null}
 
+      <MultiSelectBar />
       <BucketBar />
     </div>
   );
@@ -900,6 +1500,9 @@ function CompanyCard({
   firstDoc,
   busy,
   setBusy,
+  selectMode,
+  selected,
+  onToggleSelected,
   onOpenList,
   onOpenNew,
   onOpenReport,
@@ -914,6 +1517,9 @@ function CompanyCard({
   firstDoc: { url: string; filename: string; mime: string } | null;
   busy: boolean;
   setBusy: (busy: boolean) => void;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelected: () => void;
   onOpenList: () => void;
   onOpenNew: () => void;
   onOpenReport: () => void;
@@ -1072,17 +1678,37 @@ function CompanyCard({
   return (
     <div
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-4 shadow-sm transition hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900 sm:p-5",
+        "group relative flex h-full flex-col overflow-hidden rounded-3xl border border-zinc-200/70 bg-white/60 p-4 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl transition hover:shadow-[0_22px_80px_rgba(15,23,42,0.12)] dark:border-zinc-800/50 dark:bg-zinc-950/25 dark:shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:p-5",
         busy && "pointer-events-none opacity-60",
       )}
     >
+      {selectMode ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelected();
+          }}
+          className={cn(
+            "absolute left-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm backdrop-blur transition",
+            selected
+              ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200"
+              : "border-zinc-200/80 bg-white/60 text-zinc-700 hover:bg-white/80 dark:border-zinc-800/70 dark:bg-zinc-950/30 dark:text-zinc-200 dark:hover:bg-zinc-950/45",
+          )}
+          title={selected ? "Quitar de selección" : "Seleccionar"}
+          aria-pressed={selected}
+        >
+          {selected ? <CheckCircle2 className="h-5 w-5" /> : <div className="h-4 w-4 rounded-full border border-current/60" />}
+        </button>
+      ) : null}
+
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
           onActions();
         }}
-        className="absolute right-3 top-3 z-10 inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white/80 p-2 text-zinc-700 shadow-sm hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-200 dark:hover:bg-zinc-950"
+        className="absolute right-3 top-3 z-10 inline-flex items-center justify-center rounded-xl border border-zinc-200/80 bg-white/60 p-2 text-zinc-700 shadow-sm backdrop-blur hover:bg-white/80 dark:border-zinc-800/70 dark:bg-zinc-950/30 dark:text-zinc-200 dark:hover:bg-zinc-950/45"
         title="Acciones"
       >
         <MoreHorizontal className="h-4 w-4" />
@@ -1237,12 +1863,60 @@ function ReportModal({
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const queuedKey = useMemo(() => `rc:reportSaveQueueParent.v1:${noteId}`, [noteId]);
   const preparedResolverRef = useRef<((ok: boolean) => void) | null>(null);
   const [iframeShown, setIframeShown] = useState(false);
   const showFallbackTimerRef = useRef<number | null>(null);
   const flushResolverRef = useRef<((ok: boolean) => void) | null>(null);
   const flushReqRef = useRef<string | null>(null);
   const [closing, setClosing] = useState(false);
+
+  const userLabelRef = useRef<string>("");
+
+  function postAck(msg: any) {
+    try {
+      iframeRef.current?.contentWindow?.postMessage(msg, "*");
+    } catch {}
+  }
+
+  function readQueue(): { ts: number; payload: any }[] {
+    try {
+      const raw = window.localStorage.getItem(queuedKey);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeQueue(arr: { ts: number; payload: any }[]) {
+    try {
+      window.localStorage.setItem(queuedKey, JSON.stringify(arr));
+    } catch {}
+  }
+
+  function enqueue(payload: any) {
+    const q = readQueue();
+    const next = [...q, { ts: Date.now(), payload }].slice(-8);
+    writeQueue(next);
+    postAck({ type: "rc:serverSaveFailed", noteId, queued: next.length });
+  }
+
+  async function flushQueue() {
+    if (!navigator.onLine) return;
+    const q = readQueue();
+    if (!q.length) return;
+    for (const item of q) {
+      const res = await fetch(`/api/notes/${noteId}/report`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ payload: item.payload }),
+      });
+      if (!res.ok) throw new Error("flush failed");
+    }
+    writeQueue([]);
+    postAck({ type: "rc:serverSaved", noteId, at: Date.now(), queued: 0, label: userLabelRef.current });
+  }
 
   function postToIframe(message: unknown) {
     try {
@@ -1299,13 +1973,24 @@ function ReportModal({
         if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = window.setTimeout(async () => {
           try {
-            await fetch(`/api/notes/${noteId}/report`, {
+            if (!navigator.onLine) throw new Error("offline");
+            const res = await fetch(`/api/notes/${noteId}/report`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ payload: data.payload }),
             });
+            if (!res.ok) throw new Error("save failed");
+            // On success, also attempt to flush any queued changes.
+            try {
+              await flushQueue();
+            } catch {
+              // If flush fails, at least ack current save.
+              postAck({ type: "rc:serverSaved", noteId, at: Date.now(), queued: readQueue().length, label: userLabelRef.current });
+              return;
+            }
+            postAck({ type: "rc:serverSaved", noteId, at: Date.now(), queued: 0, label: userLabelRef.current });
           } catch {
-            // ignore
+            enqueue((data as any).payload);
           }
         }, 450);
       }
@@ -1319,6 +2004,37 @@ function ReportModal({
       flushResolverRef.current = null;
       flushReqRef.current = null;
     };
+  }, [noteId]);
+
+  // Provide a "who" label for the report UI (best effort).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.auth.getUser();
+        const email = data?.user?.email ?? "";
+        if (cancelled) return;
+        userLabelRef.current = email ? String(email) : "";
+        postAck({ type: "rc:setUserLabel", label: userLabelRef.current });
+        // Also push current queue size so pill is accurate immediately.
+        postAck({ type: "rc:serverSaveFailed", noteId, queued: readQueue().length });
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteId]);
+
+  // Auto flush on reconnect.
+  useEffect(() => {
+    const onOnline = () => {
+      void flushQueue().catch(() => undefined);
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId]);
 
   async function flushAndClose() {

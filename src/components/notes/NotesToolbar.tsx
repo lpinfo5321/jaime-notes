@@ -46,7 +46,7 @@ export default function NotesToolbar({ initial }: Props) {
   }
 
   return (
-    <div className="sticky top-[56px] z-10 -mx-4 border-b border-zinc-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
+    <div className="sticky top-[56px] z-10 -mx-4 border-b border-zinc-200/70 bg-white/60 px-4 py-3 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/35">
       <div className="mx-auto flex max-w-6xl flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">

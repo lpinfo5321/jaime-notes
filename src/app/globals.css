@@ -4,8 +4,17 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* Base */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0b1220;
+
+  /* Modern surfaces */
+  --app-bg: #f7f7fb;
+  --app-panel: rgba(255, 255, 255, 0.72);
+  --app-panel-strong: rgba(255, 255, 255, 0.92);
+  --app-border: rgba(15, 23, 42, 0.10);
+  --app-muted: rgba(15, 23, 42, 0.62);
+  --app-ring: rgba(99, 102, 241, 0.35);
 }
 
 @theme inline {
@@ -17,8 +26,15 @@
 
 /* Manual dark mode (next-themes sets .dark on <html>) */
 .dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #05060a;
+  --foreground: #e8eaf0;
+
+  --app-bg: #05060a;
+  --app-panel: rgba(13, 16, 24, 0.62);
+  --app-panel-strong: rgba(13, 16, 24, 0.82);
+  --app-border: rgba(255, 255, 255, 0.08);
+  --app-muted: rgba(231, 234, 240, 0.62);
+  --app-ring: rgba(99, 102, 241, 0.45);
 }
 
 /* If user chooses "system" theme, keep a sensible default */
@@ -37,7 +53,90 @@ html.dark {
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, Segoe UI,
+    Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  background:
+    radial-gradient(1000px 680px at 18% -10%, rgba(99, 102, 241, 0.18), transparent 62%),
+    radial-gradient(960px 640px at 84% 0%, rgba(16, 185, 129, 0.12), transparent 60%),
+    radial-gradient(900px 680px at 50% 105%, rgba(245, 158, 11, 0.10), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0)),
+    var(--app-bg);
+  background-attachment: fixed;
+}
+
+/* Subtle grain + vignette (modern look) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1200px 800px at 50% 0%, rgba(0, 0, 0, 0.06), transparent 55%),
+    radial-gradient(900px 700px at 50% 110%, rgba(0, 0, 0, 0.10), transparent 60%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.018),
+      rgba(0, 0, 0, 0.018) 1px,
+      rgba(255, 255, 255, 0.00) 1px,
+      rgba(255, 255, 255, 0.00) 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.012),
+      rgba(0, 0, 0, 0.012) 1px,
+      rgba(255, 255, 255, 0.00) 1px,
+      rgba(255, 255, 255, 0.00) 4px
+    );
+  mix-blend-mode: soft-light;
+  opacity: 0.8;
+}
+
+html.dark body::before {
+  background:
+    radial-gradient(1200px 820px at 50% 0%, rgba(255, 255, 255, 0.06), transparent 58%),
+    radial-gradient(1000px 780px at 50% 115%, rgba(0, 0, 0, 0.55), transparent 55%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.022),
+      rgba(255, 255, 255, 0.022) 1px,
+      rgba(0, 0, 0, 0.00) 1px,
+      rgba(0, 0, 0, 0.00) 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.015),
+      rgba(255, 255, 255, 0.015) 1px,
+      rgba(0, 0, 0, 0.00) 1px,
+      rgba(0, 0, 0, 0.00) 4px
+    );
+  mix-blend-mode: overlay;
+  opacity: 0.55;
+}
+
+/* Ensure app content stays above background overlay */
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: rgba(99, 102, 241, 0.25);
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px var(--app-ring);
+    border-radius: 12px;
+  }
 }

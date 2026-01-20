@@ -7,6 +7,8 @@ import { Home, Plus, Search } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
 
+const SELECT_MODE_KEY = "rc:selectMode:v1";
+
 export default function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
@@ -15,25 +17,73 @@ export default function AppHeader() {
   const isNotesHome = pathname === "/app";
 
   const [q, setQ] = useState(sp.get("q") ?? "");
+  const [selectMode, setSelectMode] = useState(false);
+  const [qBy, setQBy] = useState(sp.get("qBy") ?? "company"); // company | pay | status
+  const [status, setStatus] = useState(sp.get("status") ?? "");
 
   useEffect(() => {
     setQ(sp.get("q") ?? "");
+    setQBy(sp.get("qBy") ?? "company");
+    setStatus(sp.get("status") ?? "");
   }, [sp]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      setSelectMode(window.localStorage.getItem(SELECT_MODE_KEY) === "1");
+    } catch {}
+    const onChanged = (ev: any) => {
+      try {
+        const next = !!ev?.detail?.selectMode;
+        setSelectMode(next);
+      } catch {}
+    };
+    window.addEventListener("rc:selectModeChanged" as any, onChanged as any);
+    return () => window.removeEventListener("rc:selectModeChanged" as any, onChanged as any);
+  }, []);
 
   useEffect(() => {
     if (!isNotesHome) return;
     const t = window.setTimeout(() => {
       const params = new URLSearchParams(sp);
-      if (q.trim()) params.set("q", q.trim());
-      else params.delete("q");
+      // Only use q for company/pay modes (status uses dropdown)
+      if (qBy !== "status") {
+        if (q.trim()) params.set("q", q.trim());
+        else params.delete("q");
+      } else {
+        params.delete("q");
+      }
+      // always persist mode
+      if (qBy && qBy !== "company") params.set("qBy", qBy);
+      else params.delete("qBy");
       router.replace(`${pathname}?${params.toString()}`);
     }, 250);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, isNotesHome]);
+  }, [q, qBy, isNotesHome]);
+
+  function setParam(key: string, value?: string) {
+    const params = new URLSearchParams(sp);
+    if (!value) params.delete(key);
+    else params.set(key, value);
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+  function setMode(next: "company" | "pay" | "status") {
+    setQBy(next);
+    const params = new URLSearchParams(sp);
+    if (next === "company") params.delete("qBy");
+    else params.set("qBy", next);
+    if (next === "status") {
+      params.delete("q");
+      // keep status as-is (or blank)
+    } else {
+      params.delete("status");
+    }
+    router.replace(`${pathname}?${params.toString()}`);
+  }
 
   return (
-    <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
+    <header className="sticky top-0 z-20 border-b border-zinc-200/70 bg-white/60 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/35">
       <div className="mx-auto max-w-6xl px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <Link href="/app" className="text-sm font-semibold tracking-tight">
@@ -43,7 +93,7 @@ export default function AppHeader() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              className="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-200 dark:hover:bg-zinc-900/60"
               onClick={() => {
                 try {
                   // Disable auto-resume for the next navigation only.
@@ -67,7 +117,7 @@ export default function AppHeader() {
             </button>
             <ThemeToggle />
             <form action="/auth/logout" method="post">
-              <button className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+              <button className="rounded-xl px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-200 dark:hover:bg-zinc-900/60">
                 Salir
               </button>
             </form>
@@ -75,21 +125,99 @@ export default function AppHeader() {
         </div>
 
         {isNotesHome ? (
-          <div className="mt-3 flex items-center gap-2">
-            <label className="relative block flex-1">
-              <span className="sr-only">Buscar</span>
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar notas..."
-                className="w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-zinc-700"
-              />
-            </label>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <div className="flex h-9 w-full max-w-3xl items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 px-2 shadow-sm backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-900/50">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setMode("company")}
+                  className={`rounded-xl px-2 py-1 text-[11px] font-black ${
+                    (qBy || "company") === "company"
+                      ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  }`}
+                  title="Buscar por compañía"
+                >
+                  Compañía
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("pay")}
+                  className={`rounded-xl px-2 py-1 text-[11px] font-black ${
+                    qBy === "pay"
+                      ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  }`}
+                  title="Buscar por PAY (Maker/Payor o Payee)"
+                >
+                  PAY
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("status")}
+                  className={`rounded-xl px-2 py-1 text-[11px] font-black ${
+                    qBy === "status"
+                      ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  }`}
+                  title="Filtrar por status"
+                >
+                  Status
+                </button>
+              </div>
+
+              <div className="h-5 w-px bg-zinc-200/80 dark:bg-zinc-800/70" />
+
+              {qBy === "status" ? (
+                <select
+                  value={status}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setStatus(v);
+                    setParam("status", v);
+                  }}
+                  className="h-8 w-full rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-sm font-semibold text-zinc-800 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-100 dark:ring-zinc-700"
+                  title="Status (Check)"
+                >
+                  <option value="">Todos</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Paid Cash">Paid Cash</option>
+                  <option value="Paid Check">Paid Check</option>
+                  <option value="Redeposited">Redeposited</option>
+                </select>
+              ) : (
+                <>
+                  <Search className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder={
+                      qBy === "pay"
+                        ? "Buscar PAY…"
+                        : "Buscar compañía…"
+                    }
+                    className="h-8 w-full bg-transparent pr-2 text-sm outline-none"
+                  />
+                </>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45"
+              onClick={() => {
+                try {
+                  window.dispatchEvent(new CustomEvent("rc:toggleSelectMode"));
+                } catch {}
+              }}
+              title="Seleccionar varias"
+            >
+              {selectMode ? "Cancelar" : "Seleccionar"}
+            </button>
 
             <Link
               href="/app/new"
-              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
               title="Nueva"
               aria-label="Nueva"
             >
