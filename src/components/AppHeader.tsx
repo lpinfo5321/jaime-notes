@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Home, Plus, Search } from "lucide-react";
+import { Home, MoreHorizontal, Plus, Search } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
 
@@ -20,11 +20,13 @@ export default function AppHeader() {
   const [selectMode, setSelectMode] = useState(false);
   const [qBy, setQBy] = useState(sp.get("qBy") ?? "company"); // company | pay | status
   const [status, setStatus] = useState(sp.get("status") ?? "");
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
   useEffect(() => {
     setQ(sp.get("q") ?? "");
     setQBy(sp.get("qBy") ?? "company");
     setStatus(sp.get("status") ?? "");
+    setMobileActionsOpen(false);
   }, [sp]);
 
   useEffect(() => {
@@ -126,7 +128,7 @@ export default function AppHeader() {
 
         {isNotesHome ? (
           <div className="mt-3 flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-center">
-            <div className="flex h-11 w-full max-w-none items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 px-2 shadow-sm backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-900/50 sm:max-w-3xl">
+            <div className="relative flex h-11 w-full max-w-none items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 px-2 shadow-sm backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-900/50 sm:max-w-3xl">
               {/* Mobile: dropdown para elegir el filtro (más limpio) */}
               <select
                 value={(qBy as any) || "company"}
@@ -213,9 +215,45 @@ export default function AppHeader() {
                   />
                 </>
               )}
+
+              {/* Mobile: esconder botones y ponerlos en menú */}
+              <button
+                type="button"
+                className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45 sm:hidden"
+                onClick={() => setMobileActionsOpen((v) => !v)}
+                title="Acciones"
+                aria-label="Acciones"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+
+              {mobileActionsOpen ? (
+                <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/90 p-2 shadow-xl backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-950/80 sm:hidden">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                    onClick={() => {
+                      setMobileActionsOpen(false);
+                      try {
+                        window.dispatchEvent(new CustomEvent("rc:toggleSelectMode"));
+                      } catch {}
+                    }}
+                  >
+                    <span>{selectMode ? "Cancelar selección" : "Seleccionar"}</span>
+                  </button>
+                  <Link
+                    href="/app/new"
+                    className="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                    onClick={() => setMobileActionsOpen(false)}
+                  >
+                    <span>Nueva</span>
+                    <Plus className="h-4 w-4" />
+                  </Link>
+                </div>
+              ) : null}
             </div>
 
-            <div className="flex items-center justify-end gap-2">
+            <div className="hidden items-center justify-end gap-2 sm:flex">
               <button
                 type="button"
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45"

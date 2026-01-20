@@ -79,7 +79,8 @@
     };
     const moneyToNumber = (v) => {
       if (v == null) return 0;
-      const s = String(v).replace(/[^0-9.\-]/g, "").trim();
+      // allow comma as decimal separator too (mobile ES keyboards)
+      const s = String(v).replace(/,/g, ".").replace(/[^0-9.\-]/g, "").trim();
       const n = Number(s);
       return Number.isFinite(n) ? n : 0;
     };
@@ -103,9 +104,9 @@
     };
 
     const sanitizeMoneyTyping = (raw) => {
-      // allow digits and one dot, no $ while typing
+      // allow digits and one dot (or comma), no $ while typing
       let s = String(raw || "");
-      s = s.replace(/[^0-9.]/g, "");
+      s = s.replace(/,/g, ".").replace(/[^0-9.]/g, "");
       const parts = s.split(".");
       if (parts.length <= 1) return parts[0].slice(0, 10);
       const intPart = parts[0].slice(0, 10);
