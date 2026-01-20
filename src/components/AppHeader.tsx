@@ -125,9 +125,22 @@ export default function AppHeader() {
         </div>
 
         {isNotesHome ? (
-          <div className="mt-3 flex items-center justify-center gap-2">
-            <div className="flex h-9 w-full max-w-3xl items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 px-2 shadow-sm backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-900/50">
-              <div className="flex items-center gap-1">
+          <div className="mt-3 flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-center">
+            <div className="flex h-11 w-full max-w-none items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 px-2 shadow-sm backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-900/50 sm:max-w-3xl">
+              {/* Mobile: dropdown para elegir el filtro (más limpio) */}
+              <select
+                value={(qBy as any) || "company"}
+                onChange={(e) => setMode(e.target.value as any)}
+                className="h-9 w-[120px] rounded-xl border border-zinc-200/70 bg-white/70 px-2 text-xs font-black text-zinc-800 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-100 dark:ring-zinc-700 sm:hidden"
+                title="Filtro"
+              >
+                <option value="company">Compañía</option>
+                <option value="pay">PAY</option>
+                <option value="status">Status</option>
+              </select>
+
+              {/* Desktop: chips */}
+              <div className="hidden items-center gap-1 sm:flex">
                 <button
                   type="button"
                   onClick={() => setMode("company")}
@@ -176,7 +189,7 @@ export default function AppHeader() {
                     setStatus(v);
                     setParam("status", v);
                   }}
-                  className="h-8 w-full rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-sm font-semibold text-zinc-800 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-100 dark:ring-zinc-700"
+                  className="h-10 w-full rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-sm font-semibold text-zinc-800 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-100 dark:ring-zinc-700"
                   title="Status (Check)"
                 >
                   <option value="">Todos</option>
@@ -196,33 +209,35 @@ export default function AppHeader() {
                         ? "Buscar PAY…"
                         : "Buscar compañía…"
                     }
-                    className="h-8 w-full bg-transparent pr-2 text-sm outline-none"
+                    className="h-10 w-full bg-transparent pr-2 text-base outline-none sm:text-sm"
                   />
                 </>
               )}
             </div>
 
-            <button
-              type="button"
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45"
-              onClick={() => {
-                try {
-                  window.dispatchEvent(new CustomEvent("rc:toggleSelectMode"));
-                } catch {}
-              }}
-              title="Seleccionar varias"
-            >
-              {selectMode ? "Cancelar" : "Seleccionar"}
-            </button>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45"
+                onClick={() => {
+                  try {
+                    window.dispatchEvent(new CustomEvent("rc:toggleSelectMode"));
+                  } catch {}
+                }}
+                title="Seleccionar varias"
+              >
+                {selectMode ? "Cancelar" : "Seleccionar"}
+              </button>
 
-            <Link
-              href="/app/new"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-              title="Nueva"
-              aria-label="Nueva"
-            >
-              <Plus className="h-4 w-4" />
-            </Link>
+              <Link
+                href="/app/new"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+                title="Nueva"
+                aria-label="Nueva"
+              >
+                <Plus className="h-4 w-4" />
+              </Link>
+            </div>
           </div>
         ) : null}
       </div>

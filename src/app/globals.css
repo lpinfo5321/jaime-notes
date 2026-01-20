@@ -65,6 +65,17 @@ body {
   background-attachment: fixed;
 }
 
+/* Dark mode: keep the same style but much darker */
+html.dark body {
+  background:
+    radial-gradient(1000px 700px at 18% -10%, rgba(99, 102, 241, 0.10), transparent 64%),
+    radial-gradient(980px 660px at 84% 0%, rgba(16, 185, 129, 0.07), transparent 62%),
+    radial-gradient(900px 720px at 50% 110%, rgba(245, 158, 11, 0.06), transparent 60%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.00)),
+    #02030a;
+  background-attachment: fixed;
+}
+
 /* Subtle grain + vignette (modern look) */
 body::before {
   content: "";
@@ -111,8 +122,8 @@ html.dark body::before {
       rgba(0, 0, 0, 0.00) 1px,
       rgba(0, 0, 0, 0.00) 4px
     );
-  mix-blend-mode: overlay;
-  opacity: 0.55;
+  mix-blend-mode: multiply;
+  opacity: 0.45;
 }
 
 /* Ensure app content stays above background overlay */
