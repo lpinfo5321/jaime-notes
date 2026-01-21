@@ -966,6 +966,23 @@
     </div>
   </div>
 
-  <script src="/appreporte/app.js" defer></script>
+  <script>
+    // Cache-buster del JS en Vercel/CDN: usar el mismo `v=` del URL del iframe.
+    (function () {
+      try {
+        var sp = new URLSearchParams(location.search || "");
+        var v = sp.get("v") || "";
+        var s = document.createElement("script");
+        s.defer = true;
+        s.src = "/appreporte/app.js" + (v ? ("?v=" + encodeURIComponent(v)) : "");
+        document.head.appendChild(s);
+      } catch {
+        var s2 = document.createElement("script");
+        s2.defer = true;
+        s2.src = "/appreporte/app.js";
+        document.head.appendChild(s2);
+      }
+    })();
+  </script>
 </body>
 </html>

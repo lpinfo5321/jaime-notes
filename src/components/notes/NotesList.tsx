@@ -54,7 +54,7 @@ const LAST_APP_LOCATION_KEY = "rc:lastAppLocation:v1";
 const SELECT_MODE_KEY = "rc:selectMode:v1";
 // Cache-buster para `public/appreporte/*` (Vercel a veces cachea el HTML/JS viejo).
 // Sube este string cuando quieras forzar a todos a cargar la versión nueva.
-const APPREPORTE_V = "20260121-4";
+const APPREPORTE_V = "20260121-5";
 
 function readLastAppLocation(): LastAppLocation | null {
   if (typeof window === "undefined") return null;
