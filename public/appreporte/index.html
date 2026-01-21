@@ -91,6 +91,7 @@
       border:1px dashed rgba(107,114,128,.35);
       background: rgba(243,244,246,.55);
     }
+
     .pillStrong{
       border-style: solid;
       border-color: rgba(15,23,42,.12);
@@ -507,6 +508,41 @@
       color: rgba(185,28,28,1);
     }
 
+    /* Admin images modal (reordenar + portada) */
+    .adminHint{
+      margin-top:10px;
+      color:rgba(107,114,128,.9);
+      font-size:12px;
+      font-weight:700;
+    }
+    .adminCoverBadge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(16,185,129,.30);
+      background: rgba(16,185,129,.10);
+      color: rgba(6,95,70,.95);
+      font-weight:900;
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .miniBtnGhostSm{
+      border:1px solid rgba(229,231,235,.95);
+      background: rgba(243,244,246,.55);
+      color:#111827;
+      border-radius: 12px;
+      padding:8px 10px;
+      cursor:pointer;
+      font-size:12px;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    .miniBtnGhostSm:hover{ background: rgba(243,244,246,.82); }
+    .miniBtnGhostSm:active{ transform: translateY(1px); }
+    .miniBtnGhostSm:disabled{ opacity:.45; cursor:not-allowed; }
+
     /* Mobile */
     @media (max-width: 520px){
       :root{
@@ -700,9 +736,9 @@
       </div>
     </div>
     <div class="topbarRight">
-      <div class="pill" id="lastSaved">Sin cambios</div>
       <input id="imgPicker" type="file" accept="image/*,application/pdf" multiple style="display:none" />
       <button class="btn" id="btnAddImages">Agregar imágenes / PDF</button>
+      <button class="btn" id="btnManageImages">Reorganizar</button>
       <button class="btn" id="btnPdf">Exportar PDF</button>
       <button class="btn btnPrimary" id="btnPrint">Imprimir</button>
     </div>
@@ -905,6 +941,27 @@
       </div>
       <div class="modalBody">
         <img id="importPreviewImg" alt="preview" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin images modal (reordenar + portada) -->
+  <div class="modal" id="adminImagesModal">
+    <div class="modalCard" style="max-width:880px">
+      <div class="modalTop">
+        <b>Reorganizar imágenes</b>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn" id="adminImagesClose" type="button">Cerrar</button>
+        </div>
+      </div>
+      <div class="modalBody" style="background:#fff; display:block;">
+        <div style="padding:12px;">
+          <div class="pill" id="adminImagesStatus" style="display:inline-flex;">Arrastra y suelta para ordenar</div>
+          <div class="importList" id="adminImagesList"></div>
+          <div class="adminHint">
+            La <span style="font-weight:900;">primera</span> imagen es la <span style="font-weight:900;">portada</span>. Puedes arrastrar o usar ↑↓. “Hacer portada” mueve la imagen al inicio.
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -30,7 +30,43 @@ export async function GET(
   const v = (note.values ?? {}) as any;
   const payload = v?._report?.payload ?? null;
   const updatedAt = v?._report?.updatedAt ?? null;
-  return NextResponse.json({ payload, updatedAt }, { status: 200 });
+  const updatedBy = v?._report?.updatedBy ?? null;
+  const history = Array.isArray(v?._report?.history) ? v._report.history : null;
+  const historyCount = Array.isArray(history) ? history.length : 0;
+
+  // Rehidratar URLs firmadas para que el iframe pueda mostrar imágenes guardadas (path-only).
+  // NO muta lo guardado en DB; solo en la respuesta.
+  try {
+    const imgs = Array.isArray(payload?.images) ? (payload.images as any[]) : [];
+    if (imgs.length) {
+      const nextImgs = await Promise.all(
+        imgs.map(async (im) => {
+          const path = typeof im?.path === "string" ? im.path.trim() : "";
+          if (!path) return im;
+          // Si ya viene con url, respetar.
+          const hasUrl = typeof im?.url === "string" && im.url.trim();
+          if (hasUrl) return im;
+          const { data } = await supabase.storage
+            .from("attachments")
+            .createSignedUrl(path, 60 * 60 * 24); // 24h
+          const signedUrl = data?.signedUrl ? String(data.signedUrl) : "";
+          return signedUrl ? { ...im, url: signedUrl } : im;
+        }),
+      );
+      const hydrated = { ...(payload ?? {}), images: nextImgs };
+      return NextResponse.json(
+        { payload: hydrated, updatedAt, updatedBy, historyCount },
+        { status: 200 },
+      );
+    }
+  } catch {
+    // ignore and return raw payload
+  }
+
+  return NextResponse.json(
+    { payload, updatedAt, updatedBy, historyCount },
+    { status: 200 },
+  );
 }
 
 export async function POST(
@@ -61,16 +97,54 @@ export async function POST(
   }
 
   const prev = (note.values ?? {}) as Record<string, unknown>;
+  const now = new Date().toISOString();
+  const updatedBy = { id: user.id, email: user.email ?? null };
+
+  const prevReport = (prev as any)?._report ?? null;
+  const prevHistory = Array.isArray(prevReport?.history) ? (prevReport.history as any[]) : [];
+  const nextHistory = [...prevHistory, { at: now, by: updatedBy }].slice(-50);
+
+  // Derivar portada desde la primera imagen del reporte (si existe).
+  // El payload guardado por el parent ya viene "sanitizado": images[] contiene { id,name,path }.
+  let coverPath: string | null = null;
+  let coverFilename: string | null = null;
+  try {
+    const imgs = Array.isArray((input.data.payload as any)?.images)
+      ? ((input.data.payload as any).images as any[])
+      : [];
+    const first = imgs[0] ?? null;
+    const p = typeof first?.path === "string" ? first.path.trim() : "";
+    coverPath = p ? p : null;
+    const n = typeof first?.name === "string" ? first.name.trim() : "";
+    coverFilename = n ? n : null;
+  } catch {
+    coverPath = null;
+    coverFilename = null;
+  }
+
   const next = {
     ...prev,
     _report: {
       payload: input.data.payload,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
+      updatedBy,
+      history: nextHistory,
     },
   };
 
+  // Si tenemos portada basada en path, guardarla en values para que la tarjeta
+  // la muestre al recargar y para evitar "portada vieja" por _coverInline.
+  if (coverPath) {
+    (next as any)._cover = {
+      path: coverPath,
+      filename: coverFilename ?? "Portada",
+      updatedAt: now,
+    };
+    (next as any)._coverInline = null;
+  }
+
   const { error: upErr } = await supabase.from("notes").update({ values: next }).eq("id", id);
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, updatedAt: now, updatedBy, historyCount: nextHistory.length });
 }
 

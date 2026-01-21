@@ -6,14 +6,10 @@
     const STORAGE_KEY = `returnedChecks.v3:${noteId}`;
     const legacyKeyV2 = `returnedChecks.v2:${noteId}`;
     const SCROLL_KEY = `returnedChecks.scrollY:${noteId}`;
-    const SAVE_QUEUE_KEY = `rc:reportSaveQueue.v1:${noteId}`;
 
     let readySent = false;
     let initReceived = false;
-    let userLabel = "";
-    let lastServerOkAt = 0;
-    let queuedCount = 0;
-    let isOnline = true;
+    // Se eliminó el modo offline/cola + el indicador de "Sync" para evitar confusión.
     const postReady = () => {
       if (readySent) return;
       readySent = true;
@@ -189,6 +185,7 @@
       btnPrint: document.getElementById("btnPrint"),
       btnPdf: document.getElementById("btnPdf"),
       btnAddImages: document.getElementById("btnAddImages"),
+      btnManageImages: document.getElementById("btnManageImages"),
       imgPicker: document.getElementById("imgPicker"),
       imagePages: document.getElementById("imagePages"),
       imagesEmpty: document.getElementById("imagesEmpty"),
@@ -213,6 +210,10 @@
       importPreviewTitle: document.getElementById("importPreviewTitle"),
       importPreviewImg: document.getElementById("importPreviewImg"),
       importPreviewClose: document.getElementById("importPreviewClose"),
+      adminImagesModal: document.getElementById("adminImagesModal"),
+      adminImagesClose: document.getElementById("adminImagesClose"),
+      adminImagesList: document.getElementById("adminImagesList"),
+      adminImagesStatus: document.getElementById("adminImagesStatus"),
     };
 
     let report = null; // {id, createdAt, updatedAt, fields, images}
@@ -462,22 +463,36 @@
     const persist = (silent = false) => {
       if (!report) return;
       report.updatedAt = nowISO();
+      // Importante: no persistir base64 (dataUrl) en localStorage ni enviarlo al parent.
+      // Esto mantiene la app rápida y evita payloads gigantes, pero igual permite preview instantáneo en memoria.
+      const payloadToPersist = (() => {
+        try {
+          const imgs = Array.isArray(report.images) ? report.images : [];
+          const cleanImgs = imgs.map((im) => {
+            if (!im || typeof im !== "object") return im;
+            const out = { ...im };
+            // dataUrl solo es para preview local, no persistir.
+            if (typeof out.dataUrl === "string") delete out.dataUrl;
+            return out;
+          });
+          return { ...report, images: cleanImgs };
+        } catch {
+          return report;
+        }
+      })();
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(report));
-      } catch {}
-      try {
-        updateStatusPill({ phase: silent ? "savedLocal" : "saving" });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payloadToPersist));
       } catch {}
 
       if (canPostToParent) {
         try {
           // Parent will handle server save + ack back.
-          window.parent.postMessage({ type: "rc:save", noteId, payload: report }, "*");
+          window.parent.postMessage({ type: "rc:save", noteId, payload: payloadToPersist }, "*");
         } catch {}
       } else {
         // Si se usa en pestaña (sin iframe), también guardar en el servidor
         // para que "Duplicar" copie la info correcta.
-        if (noteId && noteId !== "global") queueSaveToServer(report);
+        if (noteId && noteId !== "global") queueSaveToServer(payloadToPersist);
       }
 
       // Guardar defaults por compañía (solo si hay datos)
@@ -489,120 +504,26 @@
       } catch {}
     };
 
-    const readQueue = () => {
-      try {
-        const raw = localStorage.getItem(SAVE_QUEUE_KEY);
-        const arr = raw ? JSON.parse(raw) : [];
-        return Array.isArray(arr) ? arr : [];
-      } catch {
-        return [];
-      }
-    };
-    const writeQueue = (arr) => {
-      try {
-        localStorage.setItem(SAVE_QUEUE_KEY, JSON.stringify(arr));
-      } catch {}
-      queuedCount = Array.isArray(arr) ? arr.length : 0;
-    };
-
-    const updateStatusPill = ({ phase }) => {
-      if (!el.lastSaved) return;
-      isOnline = typeof navigator !== "undefined" ? !!navigator.onLine : true;
-      const baseEdited = report?.updatedAt ? fmtDateTime(report.updatedAt) : "—";
-      const who = userLabel ? ` • ${userLabel}` : "";
-      const q = queuedCount ? ` • cola: ${queuedCount}` : "";
-
-      el.lastSaved.classList.remove("pillOk", "pillWarn", "pillBad", "pillStrong");
-      if (!isOnline) {
-        el.lastSaved.classList.add("pillBad");
-        el.lastSaved.textContent = `Sin conexión (guardado local) • ${baseEdited}${q}${who}`;
-        return;
-      }
-      if (phase === "saving") {
-        el.lastSaved.classList.add("pillWarn");
-        el.lastSaved.textContent = `Guardando… • ${baseEdited}${q}${who}`;
-        return;
-      }
-      if (queuedCount > 0) {
-        el.lastSaved.classList.add("pillWarn");
-        el.lastSaved.textContent = `Pendiente de sincronizar • ${baseEdited}${q}${who}`;
-        return;
-      }
-      if (lastServerOkAt > 0) {
-        el.lastSaved.classList.add("pillOk");
-        el.lastSaved.textContent = `Guardado • ${baseEdited} • Sync: ${fmtTimeShort(lastServerOkAt)}${who}`;
-        return;
-      }
-      el.lastSaved.classList.add("pillStrong");
-      el.lastSaved.textContent = `Última edición: ${baseEdited}${who}`;
-    };
-
-    const enqueuePayload = (payload) => {
-      const q = readQueue();
-      // Keep only last 5, latest wins.
-      const next = [...q, { ts: Date.now(), payload }].slice(-5);
-      writeQueue(next);
-      try {
-        updateStatusPill({ phase: "savedLocal" });
-      } catch {}
-    };
-
-    const flushQueue = async () => {
-      if (canPostToParent) return;
-      if (!noteId || noteId === "global") return;
-      if (!navigator.onLine) return;
-      const q = readQueue();
-      if (!q.length) return;
-      // Send oldest->newest, but only keep last success.
-      for (const item of q) {
-        try {
-          const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}/report`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ payload: item.payload }),
-            credentials: "same-origin",
-          });
-          if (!res.ok) throw new Error("sync failed");
-        } catch {
-          // stop; we'll retry later
-          try {
-            updateStatusPill({ phase: "savedLocal" });
-          } catch {}
-          return;
-        }
-      }
-      writeQueue([]);
-      lastServerOkAt = Date.now();
-      try {
-        updateStatusPill({ phase: "savedLocal" });
-      } catch {}
-    };
-
     const queueSaveToServer = (payload) => {
       try {
         clearTimeout(saveApiTimer);
         saveApiTimer = setTimeout(async () => {
           try {
-            if (!navigator.onLine) throw new Error("offline");
+            // Sin modo offline/cola: si no hay conexión, no intentamos guardar.
+            if (!navigator.onLine) return;
             const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}/report`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ payload }),
               credentials: "same-origin",
             });
-            if (!res.ok) throw new Error("save failed");
-            lastServerOkAt = Date.now();
-            // if there was a queue, try to flush it too
-            await flushQueue();
-            try {
-              updateStatusPill({ phase: "savedLocal" });
-            } catch {}
+            void res;
           } catch {
-            enqueuePayload(payload);
+            // ignore
           }
         }, 500);
       } catch {
-        enqueuePayload(payload);
+        // ignore
       }
     };
 
@@ -1174,12 +1095,38 @@
         const body = document.createElement("div");
         body.className = "imageBody";
         const img = document.createElement("img");
-        img.src = im.dataUrl;
+        img.src = im.dataUrl || im.url || "";
         img.alt = im.name || "image";
+        img.addEventListener("error", async () => {
+          // Recovery: si el signed URL expiró o no vino, rehidratar desde el servidor.
+          try {
+            const p = String(im.path || "").trim();
+            if (!p) return;
+            const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}/report`, {
+              method: "GET",
+              credentials: "same-origin",
+              cache: "no-store",
+            });
+            const json = await res.json().catch(() => ({}));
+            const payload = json?.payload || null;
+            const list = Array.isArray(payload?.images) ? payload.images : [];
+            const match = list.find((x) => String(x?.path || "").trim() === p);
+            const nextUrl = match && typeof match.url === "string" ? match.url : "";
+            if (nextUrl) {
+              im.url = nextUrl;
+              img.src = nextUrl;
+              try {
+                if (el.modalImg && modalImageId === im.id) el.modalImg.src = nextUrl;
+              } catch {}
+            }
+          } catch {
+            // ignore
+          }
+        });
         img.addEventListener("click", () => {
           modalImageId = im.id;
           if (el.modalTitle) el.modalTitle.textContent = im.name || "Imagen";
-          if (el.modalImg) el.modalImg.src = im.dataUrl;
+          if (el.modalImg) el.modalImg.src = im.dataUrl || im.url || "";
           el.modal?.classList?.add("show");
         });
         body.appendChild(img);
@@ -1191,6 +1138,8 @@
     };
 
     let importQueue = []; // staged images [{id,name,dataUrl,createdAt}]
+    let pendingImportQueue = null;
+    let importing = false;
 
     const openImportPreview = (im) => {
       try {
@@ -1207,10 +1156,182 @@
       } catch {}
     };
 
+    // Admin images modal (reordenar + portada)
+    const closeAdminImages = () => {
+      try {
+        el.adminImagesModal?.classList?.remove("show");
+      } catch {}
+    };
+
+    const moveReportImage = (from, to) => {
+      try {
+        const imgs = Array.isArray(report?.images) ? report.images.slice() : [];
+        if (from < 0 || from >= imgs.length) return;
+        if (to < 0 || to >= imgs.length) return;
+        const [it] = imgs.splice(from, 1);
+        imgs.splice(to, 0, it);
+        report.images = imgs;
+        scheduleSave();
+        renderImages();
+        renderAdminImages();
+      } catch {}
+    };
+
+    const setAsCover = (idx) => {
+      try {
+        const imgs = Array.isArray(report?.images) ? report.images.slice() : [];
+        if (idx < 0 || idx >= imgs.length) return;
+        const [it] = imgs.splice(idx, 1);
+        imgs.unshift(it);
+        report.images = imgs;
+        scheduleSave();
+        renderImages();
+        renderAdminImages();
+      } catch {}
+    };
+
+    const renderAdminImages = () => {
+      if (!el.adminImagesList) return;
+      const imgs = Array.isArray(report?.images) ? report.images : [];
+      el.adminImagesList.innerHTML = "";
+      try {
+        if (el.adminImagesStatus) {
+          el.adminImagesStatus.textContent = imgs.length
+            ? `Total: ${imgs.length} • #1 = Portada`
+            : "No hay imágenes";
+        }
+      } catch {}
+      if (!imgs.length) return;
+
+      for (let i = 0; i < imgs.length; i++) {
+        const im = imgs[i];
+        const row = document.createElement("div");
+        row.className = "importItem";
+        row.draggable = true;
+        row.setAttribute("data-idx", String(i));
+
+        row.addEventListener("dragstart", (ev) => {
+          try {
+            ev.dataTransfer?.setData?.("text/plain", String(i));
+            if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
+            row.classList.add("dragging");
+          } catch {}
+        });
+        row.addEventListener("dragend", () => {
+          try { row.classList.remove("dragging"); } catch {}
+        });
+        row.addEventListener("dragover", (ev) => {
+          try {
+            ev.preventDefault();
+            if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
+          } catch {}
+        });
+        row.addEventListener("dragenter", (ev) => {
+          try {
+            ev.preventDefault();
+            row.classList.add("dragOver");
+          } catch {}
+        });
+        row.addEventListener("dragleave", () => {
+          try { row.classList.remove("dragOver"); } catch {}
+        });
+        row.addEventListener("drop", (ev) => {
+          try {
+            ev.preventDefault();
+            row.classList.remove("dragOver");
+            const rawFrom = ev.dataTransfer?.getData?.("text/plain");
+            const from = Number(rawFrom);
+            const to = i;
+            if (!Number.isFinite(from)) return;
+            if (from === to) return;
+            moveReportImage(from, to);
+          } catch {}
+        });
+
+        const th = document.createElement("div");
+        th.className = "importThumb";
+        const img = document.createElement("img");
+        img.src = im.dataUrl || im.url || "";
+        img.alt = im.name || "preview";
+        th.appendChild(img);
+        th.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          // Reusar modal principal
+          try {
+            modalImageId = im.id;
+            if (el.modalTitle) el.modalTitle.textContent = im.name || "Imagen";
+            if (el.modalImg) el.modalImg.src = im.dataUrl || im.url || "";
+            el.modal?.classList?.add("show");
+          } catch {}
+        });
+
+        const meta = document.createElement("div");
+        meta.className = "importMeta";
+        const nm = document.createElement("div");
+        nm.className = "importName";
+        nm.textContent = im.name || "Imagen";
+        const hint = document.createElement("div");
+        hint.className = "importHint";
+        if (i === 0) {
+          hint.innerHTML = `<span class="adminCoverBadge">Portada</span>`;
+        } else {
+          hint.textContent = `#${i + 1}`;
+        }
+        meta.appendChild(nm);
+        meta.appendChild(hint);
+
+        const actions = document.createElement("div");
+        actions.className = "importActions";
+
+        const up = document.createElement("button");
+        up.type = "button";
+        up.className = "miniBtnGhostSm";
+        up.textContent = "↑";
+        up.disabled = i === 0;
+        up.addEventListener("click", () => moveReportImage(i, i - 1));
+
+        const down = document.createElement("button");
+        down.type = "button";
+        down.className = "miniBtnGhostSm";
+        down.textContent = "↓";
+        down.disabled = i === imgs.length - 1;
+        down.addEventListener("click", () => moveReportImage(i, i + 1));
+
+        const cover = document.createElement("button");
+        cover.type = "button";
+        cover.className = "miniBtnGhostSm";
+        cover.textContent = "Hacer portada";
+        cover.disabled = i === 0;
+        cover.addEventListener("click", () => setAsCover(i));
+
+        actions.appendChild(up);
+        actions.appendChild(down);
+        actions.appendChild(cover);
+
+        row.appendChild(th);
+        row.appendChild(meta);
+        row.appendChild(actions);
+        el.adminImagesList.appendChild(row);
+      }
+    };
+
+    const openAdminImages = () => {
+      try {
+        renderAdminImages();
+        el.adminImagesModal?.classList?.add("show");
+      } catch {}
+    };
+
     const closeImport = () => {
       try { el.importModal?.classList?.remove("show"); } catch {}
       importQueue = [];
       if (el.importList) el.importList.innerHTML = "";
+      try {
+        importing = false;
+        pendingImportQueue = null;
+        if (el.importConfirm) el.importConfirm.disabled = false;
+        if (el.importCancel) el.importCancel.disabled = false;
+      } catch {}
     };
 
     const moveImportItem = (from, to) => {
@@ -1234,9 +1355,11 @@
       el.importList.innerHTML = "";
       const total = importQueue.length;
       if (el.importStatus) {
-        el.importStatus.textContent = total
-          ? `Listo: ${total} item(s) • La primera será la portada`
-          : "Sin items";
+        el.importStatus.textContent = importing
+          ? `Subiendo ${total}…`
+          : total
+            ? `Listo: ${total} item(s) • La primera será la portada`
+            : "Sin items";
       }
       for (let i = 0; i < importQueue.length; i++) {
         const im = importQueue[i];
@@ -1476,9 +1599,7 @@
       } catch {
         // ignore
       } finally {
-        try {
-          if (el.lastSaved) el.lastSaved.textContent = `Última edición: ${fmtDateTime(report?.updatedAt)}`;
-        } catch {}
+        // indicador desactivado
       }
     };
 
@@ -1486,23 +1607,44 @@
       let data = ev?.data;
       if (!data || typeof data !== "object") return;
       try {
-        if (data.type === "rc:setUserLabel") {
-          userLabel = String((data).label ?? "").trim();
-          try { updateStatusPill({ phase: "savedLocal" }); } catch {}
-          return;
-        }
-        if (data.type === "rc:serverSaved") {
+        if (data.type === "rc:uploadedImages") {
           if (data.noteId && String(data.noteId) !== String(noteId)) return;
-          lastServerOkAt = Number((data).at || Date.now());
-          queuedCount = Number((data).queued || 0) || 0;
-          if (typeof (data).label === "string") userLabel = (data).label;
-          try { updateStatusPill({ phase: "savedLocal" }); } catch {}
-          return;
-        }
-        if (data.type === "rc:serverSaveFailed") {
-          if (data.noteId && String(data.noteId) !== String(noteId)) return;
-          queuedCount = Number((data).queued || queuedCount) || queuedCount;
-          try { updateStatusPill({ phase: "savedLocal" }); } catch {}
+          // Parent finished uploading. Replace staged base64 images with url/path refs.
+          const ok = data.ok !== false;
+          const imgs = Array.isArray(data.images) ? data.images : [];
+          importing = false;
+          const staged = Array.isArray(pendingImportQueue) ? pendingImportQueue.slice() : null;
+          pendingImportQueue = null;
+          try {
+            if (el.importConfirm) el.importConfirm.disabled = false;
+            if (el.importCancel) el.importCancel.disabled = false;
+          } catch {}
+          if (!ok || !imgs.length) {
+            try {
+              if (el.importStatus) el.importStatus.textContent = "No se pudieron subir las imágenes. Intenta de nuevo.";
+            } catch {}
+            return;
+          }
+          report.images = report.images || [];
+          // Insertar primero respetando el orden elegido (ya viene ordenado)
+          // UX: preview instantáneo usando dataUrl local mientras carga la URL firmada.
+          // No se persiste (persist() lo filtra), solo es para que se vea "instantáneo".
+          if (staged && staged.length) {
+            for (let i = 0; i < imgs.length; i++) {
+              try {
+                if (staged[i] && typeof staged[i].dataUrl === "string") {
+                  imgs[i].dataUrl = staged[i].dataUrl;
+                }
+              } catch {}
+            }
+          }
+          report.images = [...imgs, ...(report.images || [])];
+          persist(true);
+          // CRÍTICO: avisar al parent para guardar en el servidor.
+          // Sin esto, al cerrar/reabrir se pierden las imágenes/portada porque solo quedaron en localStorage del iframe.
+          scheduleSave();
+          renderImages();
+          closeImport();
           return;
         }
         if (data.type === "rc:flushNow") {
@@ -1515,7 +1657,8 @@
           } catch {}
           if (canPostToParent) {
             try {
-              window.parent.postMessage({ type: "rc:flushed", noteId, requestId }, "*");
+              // Include payload so parent can force-save reliably (no race with debounce).
+              window.parent.postMessage({ type: "rc:flushed", noteId, requestId, payload: report }, "*");
             } catch {}
           }
           return;
@@ -1567,20 +1710,10 @@
     });
 
     // Online/offline status + autosync
-    try {
-      isOnline = typeof navigator !== "undefined" ? !!navigator.onLine : true;
-      queuedCount = readQueue().length;
-      updateStatusPill({ phase: "savedLocal" });
-      window.addEventListener("online", () => {
-        try { updateStatusPill({ phase: "savedLocal" }); } catch {}
-        void flushQueue();
-      });
-      window.addEventListener("offline", () => {
-        try { updateStatusPill({ phase: "savedLocal" }); } catch {}
-      });
-    } catch {}
+    // (Sin modo offline/cola) no hacemos autosync ni mostramos estado.
 
     el.btnAddImages?.addEventListener?.("click", () => el.imgPicker?.click?.());
+    el.btnManageImages?.addEventListener?.("click", () => openAdminImages());
     el.imgPicker?.addEventListener?.("change", async (e) => {
       await stageFilesForImport(e.target.files);
       el.imgPicker.value = "";
@@ -1593,10 +1726,38 @@
     });
     el.importConfirm?.addEventListener?.("click", () => {
       if (!importQueue.length) return closeImport();
+      // En iframe: subir a Storage via parent (evita request gigante con base64).
+      if (canPostToParent) {
+        importing = true;
+        pendingImportQueue = importQueue.slice();
+        try {
+          if (el.importStatus) el.importStatus.textContent = `Subiendo ${pendingImportQueue.length}…`;
+        } catch {}
+        try {
+          if (el.importConfirm) el.importConfirm.disabled = true;
+          if (el.importCancel) el.importCancel.disabled = true;
+        } catch {}
+        try {
+          window.parent.postMessage({ type: "rc:uploadImages", noteId, images: pendingImportQueue }, "*");
+        } catch {
+          importing = false;
+          pendingImportQueue = null;
+          if (el.importConfirm) el.importConfirm.disabled = false;
+          if (el.importCancel) el.importCancel.disabled = false;
+          // fallback: guardar local base64
+          report.images = report.images || [];
+          report.images = [...importQueue, ...(report.images || [])];
+          persist(true);
+          renderImages();
+          closeImport();
+        }
+        return;
+      }
+
+      // En pestaña directa (sin parent): guardar local base64 (best effort)
       report.images = report.images || [];
-      // Insertar primero respetando el orden elegido
       report.images = [...importQueue, ...(report.images || [])];
-      scheduleSave();
+      persist(true);
       renderImages();
       closeImport();
     });
@@ -1605,6 +1766,12 @@
     el.importPreviewClose?.addEventListener?.("click", closeImportPreview);
     el.importPreviewModal?.addEventListener?.("click", (e) => {
       if (e.target === el.importPreviewModal) closeImportPreview();
+    });
+
+    // Admin images modal controls
+    el.adminImagesClose?.addEventListener?.("click", closeAdminImages);
+    el.adminImagesModal?.addEventListener?.("click", (e) => {
+      if (e.target === el.adminImagesModal) closeAdminImages();
     });
 
     el.btnPrint?.addEventListener?.("click", () => {
@@ -1640,9 +1807,7 @@
           alert(e instanceof Error ? e.message : "No se pudo exportar PDF");
         } catch {}
       } finally {
-        try {
-          updateStatusPill({ phase: "savedLocal" });
-        } catch {}
+        // indicador desactivado
       }
     });
 

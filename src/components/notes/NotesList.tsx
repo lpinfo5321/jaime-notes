@@ -16,6 +16,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import {
+  enqueueReport,
+  flushQueuedReportsOnce,
+  getQueuedReport,
+  getQueuedReportsCount,
+  removeQueuedReport,
+} from "@/lib/reportQueue";
+import { setSyncSnapshot } from "@/lib/syncStatus";
 
 export type NoteListItem = {
   id: string;
@@ -44,6 +52,9 @@ type LastAppLocation = {
 
 const LAST_APP_LOCATION_KEY = "rc:lastAppLocation:v1";
 const SELECT_MODE_KEY = "rc:selectMode:v1";
+// Cache-buster para `public/appreporte/*` (Vercel a veces cachea el HTML/JS viejo).
+// Sube este string cuando quieras forzar a todos a cargar la versión nueva.
+const APPREPORTE_V = "20260121-4";
 
 function readLastAppLocation(): LastAppLocation | null {
   if (typeof window === "undefined") return null;
@@ -334,6 +345,11 @@ export default function NotesList({
   } | null>(null);
 
   const [items, setItems] = useState<NoteListItem[]>(notes);
+  // Portadas: `coverUrls` viene del server (y no cambia “en vivo”).
+  // Mantenemos un override local para que al guardar el reporte se refleje al instante.
+  const [localCoverUrls, setLocalCoverUrls] = useState<Record<string, string>>(
+    () => coverUrls ?? {},
+  );
   const didRestoreRef = useRef(false);
   const handledOpenReportRef = useRef<string | null>(null);
 
@@ -341,6 +357,11 @@ export default function NotesList({
     // Cuando cambia el servidor (búsqueda / navegación), resincroniza.
     setItems(notes);
   }, [notes]);
+
+  useEffect(() => {
+    // Mantener base del server, pero no pisar overrides locales recientes.
+    setLocalCoverUrls((prev) => ({ ...(coverUrls ?? {}), ...(prev ?? {}) }));
+  }, [coverUrls]);
 
   // Sync filters from URL (controlled by header UI)
   useEffect(() => {
@@ -364,7 +385,7 @@ export default function NotesList({
       id: note.id,
       title: (note.title ?? "").trim() || "Sin nombre",
       values: (note.values ?? null) as any,
-      coverUrl: coverUrls?.[note.id] ?? null,
+      coverUrl: localCoverUrls?.[note.id] ?? null,
     });
 
     // Limpia el parámetro para que no se vuelva a disparar en refresh
@@ -374,7 +395,7 @@ export default function NotesList({
       const next = params.toString();
       router.replace(next ? `/app?${next}` : "/app");
     } catch {}
-  }, [sp, items, coverUrls, router]);
+  }, [sp, items, localCoverUrls, router]);
 
   const empty = items.length === 0;
   const sorted = useMemo(() => items, [items]);
@@ -442,7 +463,7 @@ export default function NotesList({
         id: note.id,
         title: (note.title ?? "").trim() || "Sin nombre",
         values: (note.values ?? null) as any,
-        coverUrl: coverUrls?.[note.id] ?? null,
+        coverUrl: localCoverUrls?.[note.id] ?? null,
       });
     } else if (loc.view === "note" && note) {
       setOpen({
@@ -459,7 +480,7 @@ export default function NotesList({
     } catch {}
 
     didRestoreRef.current = true;
-  }, [items, coverUrls]);
+  }, [items, localCoverUrls]);
 
   // Guardar cambios de "ubicación" (nota abierta / reporte / pestaña)
   useEffect(() => {
@@ -971,7 +992,7 @@ export default function NotesList({
             "sandbox",
             "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads",
           );
-          iframe.src = `/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}`;
+          iframe.src = `/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}&v=${encodeURIComponent(APPREPORTE_V)}`;
 
           const reqId =
             (globalThis.crypto as any)?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -1354,7 +1375,7 @@ export default function NotesList({
           <CompanyCard
             key={note.id}
             note={note}
-            coverUrl={coverUrls[note.id] ?? null}
+            coverUrl={localCoverUrls[note.id] ?? coverUrls[note.id] ?? null}
             meta={attachmentMetaByNoteId[String(note.id)] ?? null}
             firstDoc={firstDocUrlsByNoteId[String(note.id)] ?? null}
             busy={busyId === note.id}
@@ -1369,7 +1390,7 @@ export default function NotesList({
                 id: note.id,
                 title: (note.title ?? "").trim() || "Sin nombre",
                 values: (note.values ?? null) as Record<string, unknown> | null,
-                coverUrl: coverUrls[note.id] ?? null,
+                coverUrl: localCoverUrls[note.id] ?? null,
               })
             }
             onPatch={(patch) => patchCompany(note.id, patch)}
@@ -1445,9 +1466,37 @@ export default function NotesList({
           onLocalReportUpdate={(payload) => {
             const now = new Date().toISOString();
             const prevValues = ((reportForCompany.values ?? {}) as Record<string, unknown>) ?? {};
+            const prevReport = (prevValues as any)?._report ?? null;
+
+            // Guardar localmente el payload del reporte en forma "sanitizada"
+            // (sin base64 ni signed URLs) para evitar estados gigantes y lentitud.
+            let safePayload = payload as any;
+            try {
+              const imgs = Array.isArray((payload as any)?.images) ? (payload as any).images : [];
+              const cleanImgs = imgs
+                .map((im: any) => ({
+                  id: typeof im?.id === "string" ? im.id : "",
+                  name: typeof im?.name === "string" ? im.name : "Imagen",
+                  path: typeof im?.path === "string" ? im.path : "",
+                  createdAt: typeof im?.createdAt === "string" ? im.createdAt : undefined,
+                }))
+                .filter((im: any) => !!im.id && !!im.path);
+              safePayload = { ...(payload ?? {}), images: cleanImgs };
+            } catch {
+              safePayload = payload as any;
+            }
+
             const nextValues = {
               ...prevValues,
-              _report: { payload, updatedAt: now },
+              _report: {
+                ...(prevReport ?? {}),
+                payload: safePayload,
+                // Mantener el "updatedAt" del servidor; los cambios locales van por separado.
+                updatedAt: typeof prevReport?.updatedAt === "string" ? prevReport.updatedAt : null,
+                updatedBy: prevReport?.updatedBy ?? null,
+                localUpdatedAt: now,
+                localDirty: true,
+              },
             } as Record<string, unknown>;
 
             // Portada SIEMPRE = primera imagen del reporte (según orden actual).
@@ -1455,18 +1504,73 @@ export default function NotesList({
               const first = Array.isArray((payload as any)?.images)
                 ? (payload as any).images[0]
                 : null;
-              if (first?.dataUrl) {
+              const nextCover =
+                typeof first?.dataUrl === "string" && String(first.dataUrl).startsWith("data:image/")
+                  ? String(first.dataUrl)
+                  : typeof first?.url === "string" && String(first.url).trim()
+                    ? String(first.url).trim()
+                    : null;
+              const nextPath = typeof first?.path === "string" ? String(first.path) : null;
+
+              if (nextCover) {
                 nextValues._coverInline = {
-                  dataUrl: String(first.dataUrl),
+                  dataUrl: nextCover,
                   filename: String(first.name || "Portada"),
                   updatedAt: now,
                 };
-                // ya no usamos cover por attachment aquí
-                nextValues._cover = null;
+                // inline cover takes precedence
+                if (nextPath) {
+                  nextValues._cover = { path: nextPath, updatedAt: now, filename: String(first.name || "Portada") } as any;
+                } else {
+                  nextValues._cover = null;
+                }
+                // Update local cover so the card updates immediately.
+                setLocalCoverUrls((prev) => ({ ...(prev ?? {}), [reportForCompany.id]: nextCover }));
+              } else if (nextPath) {
+                // If we have a storage path (report images uploaded), use it as cover (server will sign it).
+                nextValues._coverInline = null;
+                nextValues._cover = { path: nextPath, updatedAt: now, filename: String(first?.name || "Portada") } as any;
+                // Update local cover immediately by signing the path (avoid "blank cover" until refresh)
+                void (async () => {
+                  try {
+                    const supabase = createClient();
+                    const { data } = await supabase.storage
+                      .from("attachments")
+                      .createSignedUrl(nextPath, 60 * 60 * 24);
+                    const signedUrl = data?.signedUrl ? String(data.signedUrl) : "";
+                    if (signedUrl) {
+                      setLocalCoverUrls((prev) => ({ ...(prev ?? {}), [reportForCompany.id]: signedUrl }));
+                    }
+                  } catch {
+                    // ignore
+                  }
+                })();
               }
             } catch {}
             patchCompany(reportForCompany.id, { values: nextValues });
-            setReportForCompany((prev) => (prev ? { ...prev, values: nextValues } : prev));
+            setReportForCompany((prev) =>
+              prev ? { ...prev, values: nextValues, coverUrl: localCoverUrls[reportForCompany.id] ?? prev.coverUrl } : prev,
+            );
+          }}
+          onReportSynced={(meta) => {
+            try {
+              const prevValues = ((reportForCompany.values ?? {}) as Record<string, unknown>) ?? {};
+              const prevReport = (prevValues as any)?._report ?? null;
+              const nextValues = {
+                ...prevValues,
+                _report: {
+                  ...(prevReport ?? {}),
+                  updatedAt: typeof meta?.updatedAt === "string" ? meta.updatedAt : prevReport?.updatedAt ?? null,
+                  updatedBy: meta?.updatedBy ?? prevReport?.updatedBy ?? null,
+                  localDirty: false,
+                  localUpdatedAt: null,
+                },
+              } as Record<string, unknown>;
+              patchCompany(reportForCompany.id, { values: nextValues });
+              setReportForCompany((prev) => (prev ? { ...prev, values: nextValues } : prev));
+            } catch {
+              // ignore
+            }
           }}
           onClose={() => {
             const noteId = reportForCompany.id;
@@ -1869,25 +1973,66 @@ function ReportModal({
   companyTitle,
   initialReport,
   onLocalReportUpdate,
+  onReportSynced,
   onClose,
 }: {
   noteId: string;
   companyTitle: string;
   initialReport: any;
   onLocalReportUpdate: (payload: unknown) => void;
+  onReportSynced?: (meta: { updatedAt?: string | null; updatedBy?: any | null }) => void;
   onClose: () => void;
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
-  const queuedKey = useMemo(() => `rc:reportSaveQueueParent.v1:${noteId}`, [noteId]);
   const preparedResolverRef = useRef<((ok: boolean) => void) | null>(null);
   const [iframeShown, setIframeShown] = useState(false);
   const showFallbackTimerRef = useRef<number | null>(null);
   const flushResolverRef = useRef<((ok: boolean) => void) | null>(null);
   const flushReqRef = useRef<string | null>(null);
   const [closing, setClosing] = useState(false);
+  const [initReport, setInitReport] = useState<any>(initialReport);
+  const [online, setOnline] = useState<boolean>(() => {
+    try {
+      return !!navigator.onLine;
+    } catch {
+      return true;
+    }
+  });
+  const [saveUi, setSaveUi] = useState<"idle" | "saving" | "saved" | "queued" | "error">("idle");
+  const [lastMeta, setLastMeta] = useState<{ at: string | null; by: string | null }>({
+    at: null,
+    by: null,
+  });
 
-  const userLabelRef = useRef<string>("");
+  const lastPayloadRef = useRef<any>(null);
+  const savingRef = useRef(false);
+
+  function sanitizeFilename(name: string) {
+    return String(name || "imagen")
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-zA-Z0-9._-]/g, "")
+      .slice(0, 120);
+  }
+
+  function sanitizeReportForServer(payload: any) {
+    try {
+      const imgs = Array.isArray(payload?.images) ? payload.images : [];
+      const cleanImgs = imgs
+        .map((im: any) => ({
+          id: typeof im?.id === "string" ? im.id : "",
+          name: typeof im?.name === "string" ? im.name : "Imagen",
+          path: typeof im?.path === "string" ? im.path : "",
+          createdAt: typeof im?.createdAt === "string" ? im.createdAt : undefined,
+        }))
+        .filter((im: any) => !!im.id && !!im.path);
+      // Keep everything else, but replace images array with path-based entries (no base64, no signed url)
+      return { ...(payload ?? {}), images: cleanImgs };
+    } catch {
+      return payload;
+    }
+  }
 
   function postAck(msg: any) {
     try {
@@ -1895,43 +2040,84 @@ function ReportModal({
     } catch {}
   }
 
-  function readQueue(): { ts: number; payload: any }[] {
+  async function postReportPayloadToServer(safePayload: any) {
+    const res = await fetch(`/api/notes/${noteId}/report`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ payload: safePayload }),
+    });
+    if (!res.ok) throw new Error("save failed");
+    const json = await res.json().catch(() => ({}));
+    const updatedAt = typeof json?.updatedAt === "string" ? json.updatedAt : null;
+    const updatedBy = json?.updatedBy ?? null;
+    const byLabel =
+      typeof updatedBy?.email === "string" && updatedBy.email.trim()
+        ? updatedBy.email.trim()
+        : typeof updatedBy?.id === "string"
+          ? updatedBy.id
+          : null;
+    setLastMeta({ at: updatedAt, by: byLabel });
     try {
-      const raw = window.localStorage.getItem(queuedKey);
-      const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function writeQueue(arr: { ts: number; payload: any }[]) {
-    try {
-      window.localStorage.setItem(queuedKey, JSON.stringify(arr));
+      onReportSynced?.({ updatedAt, updatedBy });
     } catch {}
+    return { updatedAt, updatedBy, byLabel };
   }
 
-  function enqueue(payload: any) {
-    const q = readQueue();
-    const next = [...q, { ts: Date.now(), payload }].slice(-8);
-    writeQueue(next);
-    postAck({ type: "rc:serverSaveFailed", noteId, queued: next.length });
-  }
-
-  async function flushQueue() {
-    if (!navigator.onLine) return;
-    const q = readQueue();
-    if (!q.length) return;
-    for (const item of q) {
-      const res = await fetch(`/api/notes/${noteId}/report`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ payload: item.payload }),
+  async function saveNow(payload: any) {
+    if (!payload) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaveUi("saving");
+    setSyncSnapshot({
+      online,
+      saving: true,
+      state: "saving",
+      queuedReports: getQueuedReportsCount(),
+    });
+    try {
+      const safePayload = sanitizeReportForServer(payload);
+      // Offline => en cola (sin sorpresas)
+      if (!online) {
+        enqueueReport(noteId, safePayload);
+        setSaveUi("queued");
+        setSyncSnapshot({
+          online: false,
+          saving: false,
+          state: "queued",
+          queuedReports: getQueuedReportsCount(),
+        });
+        return;
+      }
+      const meta = await postReportPayloadToServer(safePayload);
+      removeQueuedReport(noteId);
+      setSaveUi("saved");
+      setSyncSnapshot({
+        online: true,
+        saving: false,
+        state: "saved",
+        lastSavedAt: meta.updatedAt ?? undefined,
+        lastSavedBy: meta.byLabel ?? undefined,
+        queuedReports: getQueuedReportsCount(),
       });
-      if (!res.ok) throw new Error("flush failed");
+    } catch {
+      // Si falla (típicamente red), lo dejamos en cola y se sube al reconectar.
+      try {
+        const safePayload = sanitizeReportForServer(payload);
+        enqueueReport(noteId, safePayload);
+      } catch {
+        // ignore
+      }
+      setSaveUi("queued");
+      setSyncSnapshot({
+        online,
+        saving: false,
+        state: "queued",
+        queuedReports: getQueuedReportsCount(),
+      });
+    } finally {
+      savingRef.current = false;
+      setSyncSnapshot({ saving: false, queuedReports: getQueuedReportsCount() });
     }
-    writeQueue([]);
-    postAck({ type: "rc:serverSaved", noteId, at: Date.now(), queued: 0, label: userLabelRef.current });
   }
 
   function postToIframe(message: unknown) {
@@ -1941,6 +2127,88 @@ function ReportModal({
       // ignore
     }
   }
+
+  async function enrichReportForIframe(payload: any) {
+    // The server stores images as {id,name,path} (no signed url).
+    // For UI, we need a temporary signed URL to actually display them.
+    try {
+      const imgs = Array.isArray(payload?.images) ? (payload.images as any[]) : [];
+      if (!imgs.length) return payload;
+      const supabase = createClient();
+      const nextImgs = await Promise.all(
+        imgs.map(async (im) => {
+          const path = typeof im?.path === "string" ? String(im.path).trim() : "";
+          if (!path) return im;
+          const hasUrl = typeof im?.url === "string" && String(im.url).trim();
+          const hasDataUrl = typeof im?.dataUrl === "string" && String(im.dataUrl).startsWith("data:image/");
+          if (hasUrl || hasDataUrl) return im;
+          const { data } = await supabase.storage
+            .from("attachments")
+            .createSignedUrl(path, 60 * 60 * 24); // 24h
+          const signedUrl = data?.signedUrl ? String(data.signedUrl) : "";
+          return signedUrl ? { ...im, url: signedUrl } : im;
+        }),
+      );
+      return { ...(payload ?? {}), images: nextImgs };
+    } catch {
+      return payload;
+    }
+  }
+
+  useEffect(() => {
+    // Keep init payload hydrated with signed URLs so reopening shows images immediately.
+    let cancelled = false;
+    void (async () => {
+      // Recovery: si hay algo en cola, eso es lo más nuevo.
+      const queued = getQueuedReport(noteId);
+      if (queued?.payload) {
+        try {
+          setSaveUi("queued");
+          setSyncSnapshot({ queuedReports: getQueuedReportsCount(), state: "queued" });
+          onLocalReportUpdate(queued.payload);
+        } catch {}
+      }
+      const base = queued?.payload ? queued.payload : initialReport;
+      const enriched = await enrichReportForIframe(base);
+      if (cancelled) return;
+      setInitReport(enriched);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteId]);
+
+  useEffect(() => {
+    // Leer metadata del servidor (última edición por / fecha).
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/notes/${noteId}/report`, { method: "GET" });
+        const json = await res.json().catch(() => ({}));
+        const updatedAt = typeof json?.updatedAt === "string" ? json.updatedAt : null;
+        const updatedBy = json?.updatedBy ?? null;
+        const byLabel =
+          typeof updatedBy?.email === "string" && updatedBy.email.trim()
+            ? updatedBy.email.trim()
+            : typeof updatedBy?.id === "string"
+              ? updatedBy.id
+              : null;
+        if (cancelled) return;
+        setLastMeta({ at: updatedAt, by: byLabel });
+        setSyncSnapshot({
+          lastSavedAt: updatedAt,
+          lastSavedBy: byLabel,
+        });
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteId]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -1975,11 +2243,20 @@ function ReportModal({
         flushReqRef.current &&
         (data as any).requestId === flushReqRef.current
       ) {
+        // Prefer payload from flush ack (most reliable on quick-close)
+        try {
+          if ((data as any).payload) lastPayloadRef.current = (data as any).payload;
+        } catch {}
         flushResolverRef.current?.(true);
         flushResolverRef.current = null;
         flushReqRef.current = null;
       }
       if (data.type === "rc:save" && data.noteId === noteId) {
+        // Always track latest payload so closing can force-save immediately.
+        try {
+          lastPayloadRef.current = (data as any).payload ?? null;
+        } catch {}
+
         // Update UI immediately (card should reflect total without refresh)
         try {
           onLocalReportUpdate((data as any).payload);
@@ -1988,27 +2265,75 @@ function ReportModal({
         // Throttle saves to avoid spamming DB while typing
         if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = window.setTimeout(async () => {
-          try {
-            if (!navigator.onLine) throw new Error("offline");
-            const res = await fetch(`/api/notes/${noteId}/report`, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ payload: data.payload }),
-            });
-            if (!res.ok) throw new Error("save failed");
-            // On success, also attempt to flush any queued changes.
-            try {
-              await flushQueue();
-            } catch {
-              // If flush fails, at least ack current save.
-              postAck({ type: "rc:serverSaved", noteId, at: Date.now(), queued: readQueue().length, label: userLabelRef.current });
-              return;
-            }
-            postAck({ type: "rc:serverSaved", noteId, at: Date.now(), queued: 0, label: userLabelRef.current });
-          } catch {
-            enqueue((data as any).payload);
-          }
+          await saveNow((data as any).payload);
         }, 450);
+      }
+
+      if (data.type === "rc:uploadImages" && (data as any).noteId === noteId) {
+        // Upload report images to Storage + attachments table, then reply with signed URLs.
+        void (async () => {
+          try {
+            const supabase = createClient();
+            const {
+              data: { user },
+              error: userErr,
+            } = await supabase.auth.getUser();
+            if (userErr || !user) throw new Error("No autenticado");
+
+            const imgs = Array.isArray((data as any).images) ? (data as any).images : [];
+            const out: any[] = [];
+            for (const im of imgs) {
+              const id = typeof im?.id === "string" ? im.id : (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
+              const nameRaw = typeof im?.name === "string" ? im.name : "imagen.jpg";
+              const createdAt = typeof im?.createdAt === "string" ? im.createdAt : new Date().toISOString();
+              const dataUrl = typeof im?.dataUrl === "string" ? im.dataUrl : "";
+              if (!dataUrl.startsWith("data:image/")) continue;
+
+              const safeName = sanitizeFilename(nameRaw) || "imagen.jpg";
+              const uid = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+              const path = `${user.id}/${noteId}/${uid}-${safeName.replace(/\.[a-z0-9]+$/i, "")}.jpg`;
+
+              const blob = await fetch(dataUrl).then((r) => r.blob());
+              const { error: upErr } = await supabase.storage
+                .from("attachments")
+                .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+              if (upErr) throw upErr;
+
+              const { error: dbErr } = await supabase.from("attachments").insert({
+                user_id: user.id,
+                note_id: noteId,
+                path,
+                filename: safeName,
+                mime_type: "image/jpeg",
+                size: blob.size,
+              });
+              if (dbErr) throw dbErr;
+
+              const { data: signed, error: signErr } = await supabase.storage
+                .from("attachments")
+                .createSignedUrl(path, 60 * 60 * 24);
+              if (signErr) throw signErr;
+
+              out.push({
+                id,
+                name: safeName,
+                path,
+                url: signed?.signedUrl ?? "",
+                createdAt,
+              });
+            }
+
+            postAck({ type: "rc:uploadedImages", noteId, ok: true, images: out });
+          } catch (e) {
+            postAck({
+              type: "rc:uploadedImages",
+              noteId,
+              ok: false,
+              error: e instanceof Error ? e.message : "upload failed",
+              images: [],
+            });
+          }
+        })();
       }
     }
     window.addEventListener("message", onMessage);
@@ -2031,10 +2356,8 @@ function ReportModal({
         const { data } = await supabase.auth.getUser();
         const email = data?.user?.email ?? "";
         if (cancelled) return;
-        userLabelRef.current = email ? String(email) : "";
-        postAck({ type: "rc:setUserLabel", label: userLabelRef.current });
-        // Also push current queue size so pill is accurate immediately.
-        postAck({ type: "rc:serverSaveFailed", noteId, queued: readQueue().length });
+        // (Sin indicador "Sync") no mandamos label ni estado.
+        void email;
       } catch {}
     })();
     return () => {
@@ -2043,13 +2366,47 @@ function ReportModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId]);
 
-  // Auto flush on reconnect.
+  // Offline/online status + autosync al reconectar.
   useEffect(() => {
     const onOnline = () => {
-      void flushQueue().catch(() => undefined);
+      setOnline(true);
+      setSyncSnapshot({ online: true, queuedReports: getQueuedReportsCount() });
+      // Autosync + recovery: si había algo en cola para este note, subimos.
+      void (async () => {
+        try {
+          const queued = getQueuedReport(noteId);
+          if (queued?.payload) {
+            setSaveUi("saving");
+            await postReportPayloadToServer(queued.payload);
+            removeQueuedReport(noteId);
+            setSaveUi("saved");
+            setSyncSnapshot({
+              online: true,
+              saving: false,
+              state: "saved",
+              queuedReports: getQueuedReportsCount(),
+            });
+          } else {
+            // También intentamos flush global rápido (por si se editó en otra pestaña).
+            await flushQueuedReportsOnce({ onlyNoteId: noteId });
+          }
+        } catch {
+          setSaveUi("queued");
+          setSyncSnapshot({ state: "queued", queuedReports: getQueuedReportsCount() });
+        }
+      })();
+    };
+    const onOffline = () => {
+      setOnline(false);
+      setSaveUi((s) => (s === "saving" ? "queued" : s));
+      setSyncSnapshot({ online: false });
     };
     window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId]);
 
@@ -2072,9 +2429,17 @@ function ReportModal({
             flushResolverRef.current = null;
             flushReqRef.current = null;
           }
-        }, 500);
+        }, 1200);
       });
       void ok;
+      // Ensure the last payload is actually saved before unmounting.
+      try {
+        if (saveTimerRef.current) {
+          window.clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+      } catch {}
+      await saveNow(lastPayloadRef.current);
     } catch {
       // ignore
     } finally {
@@ -2150,23 +2515,53 @@ function ReportModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-2 sm:p-4"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-2 sm:items-center sm:p-4"
       onClick={() => void flushAndClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className="h-[92svh] w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+        className="flex h-[calc(100dvh-16px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900 sm:h-[92dvh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-3 dark:border-zinc-800 sm:px-4">
-          <div className="min-w-0">
+        <div className="flex flex-col gap-2 border-b border-zinc-200 px-3 py-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
               Reporte
             </div>
             <div className="mt-0.5 truncate text-sm font-semibold">{companyTitle}</div>
           </div>
-          <div className="ml-3 flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-3">
+            <div className="mr-auto flex flex-wrap items-center gap-2">
+              {!online ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
+                  Sin conexión (se guarda en cola)
+                </div>
+              ) : null}
+              {saveUi === "saving" ? (
+                <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+                  Guardando…
+                </div>
+              ) : saveUi === "queued" ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
+                  En cola
+                </div>
+              ) : saveUi === "error" ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-900 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-200">
+                  Error al guardar
+                </div>
+              ) : saveUi === "saved" ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
+                  Guardado
+                </div>
+              ) : null}
+              {lastMeta?.at ? (
+                <div className="hidden rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 sm:block">
+                  Última edición: {lastMeta.by ?? "—"} ·{" "}
+                  {new Date(lastMeta.at).toLocaleString()}
+                </div>
+              ) : null}
+            </div>
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -2179,7 +2574,7 @@ function ReportModal({
               Imprimir
             </button>
             <a
-              href={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}`}
+              href={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}&v=${encodeURIComponent(APPREPORTE_V)}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -2203,7 +2598,7 @@ function ReportModal({
           </div>
         </div>
 
-        <div className="relative h-[calc(92svh-60px)] bg-zinc-100 dark:bg-zinc-950">
+        <div className="relative min-h-0 flex-1 bg-zinc-100 dark:bg-zinc-950">
           {!iframeShown ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center">
               <div className="rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3 text-sm font-semibold text-zinc-700 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200">
@@ -2214,7 +2609,7 @@ function ReportModal({
           <iframe
             title="Reporte Return Checks"
             ref={iframeRef}
-            src={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}`}
+            src={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}&v=${encodeURIComponent(APPREPORTE_V)}`}
             className={cn(
               "h-full w-full transition-opacity duration-150",
               iframeShown ? "opacity-100" : "opacity-0",
@@ -2230,7 +2625,7 @@ function ReportModal({
                   setIframeShown(true);
                   showFallbackTimerRef.current = null;
                 }, 800);
-                postToIframe({ type: "rc:init", noteId, initialReport });
+                postToIframe({ type: "rc:init", noteId, initialReport: initReport });
                 postToIframe({ type: "rc:setCompanyName", companyName: companyTitle });
               } catch {}
             }}
@@ -2623,33 +3018,17 @@ function CompanyModal({
     }
   }
 
-  async function deleteCompany() {
-    const ok = confirm("¿Eliminar esta compañía completa? (Sí/No)");
-    if (!ok) return;
-    onBusy(true);
-    try {
-      onLocalWrite();
-      const res = await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("No se pudo eliminar");
-      onDeleteCompany();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Error eliminando");
-    } finally {
-      onBusy(false);
-    }
-  }
-
   const isEditingExisting = !!selectedId && entries.some((e) => e.id === selectedId);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4"
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-2 sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className="h-[92svh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+        className="flex h-[calc(100dvh-16px)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900 sm:h-[92dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-3 dark:border-zinc-800 sm:px-4">
@@ -2676,7 +3055,7 @@ function CompanyModal({
           </button>
         </div>
 
-        <div className="h-[calc(92svh-60px)] overflow-auto p-3 sm:p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(env(safe-area-inset-bottom)+16px)] sm:p-4">
           <div className="grid gap-4 md:grid-cols-[320px_1fr]">
           {/* Lista de notas */}
           <div className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
@@ -2691,7 +3070,7 @@ function CompanyModal({
               </button>
             </div>
 
-            <div className="max-h-[55dvh] space-y-2 overflow-auto pr-1">
+            <div className="max-h-none space-y-2 pr-1 md:max-h-[55dvh] md:overflow-auto">
               {entries.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
                   Aún no hay notas. Crea la primera con “Nueva”.
@@ -2792,12 +3171,12 @@ function CompanyModal({
                 value={draftNote}
                 onChange={(e) => setDraftNote(e.target.value)}
                 placeholder="Escribe la nota…"
-                className="min-h-[180px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-zinc-700"
+                className="min-h-[140px] w-full resize-y rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-zinc-700 sm:min-h-[180px]"
               />
             </label>
 
             {/* Controles abajo */}
-            <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-end">
+            <div className="sticky bottom-0 -mx-4 mt-4 flex flex-col gap-2 border-t border-zinc-200 bg-white/95 px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+16px)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
                 onClick={saveEntry}

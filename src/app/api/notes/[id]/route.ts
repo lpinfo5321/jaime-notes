@@ -30,7 +30,29 @@ export async function PATCH(
   }
 
   const patch = input.data;
-  const { error } = await supabase.from("notes").update(patch).eq("id", id);
+
+  // IMPORTANT:
+  // `values` is a JSON blob that is updated from multiple UIs (notes, report, attachments).
+  // If we overwrite it, we can accidentally delete keys written elsewhere (e.g. _report).
+  // So when PATCH includes `values`, we merge it with the latest server `values`.
+  let updatePayload: typeof patch = patch;
+  if (patch.values) {
+    const { data: note, error: readErr } = await supabase
+      .from("notes")
+      .select("values")
+      .eq("id", id)
+      .single();
+    if (readErr || !note) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const prev = ((note as any).values ?? {}) as Record<string, unknown>;
+    updatePayload = {
+      ...patch,
+      values: { ...prev, ...(patch.values ?? {}) },
+    };
+  }
+
+  const { error } = await supabase.from("notes").update(updatePayload).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
