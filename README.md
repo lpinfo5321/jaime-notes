@@ -1,4 +1,4 @@
-# Jaime Notes (MVP)
+﻿# Jaime Notes (MVP)
 
 App web tipo Google Keep, enfocada a **notas/expedientes con plantillas** y **adjuntos (fotos/PDFs/escaneos)**. Funciona en celular/tablet/PC y sincroniza en la nube usando **Supabase** (Auth + Postgres + Storage).
 
@@ -45,3 +45,8 @@ Abre `http://localhost:3000`.
 
 - La sincronización entre dispositivos la hace Supabase (Auth + DB + Storage).
 - El bucket `attachments` se protege por policies: cada usuario sólo ve sus archivos en su carpeta.
+
+
+
+Link de datos de app también aquí 
+https://supabase.com/dashboard/project/xhjhzfenoyjuvozygsld

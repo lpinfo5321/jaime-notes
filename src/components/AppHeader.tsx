@@ -133,7 +133,7 @@ export default function AppHeader() {
               <select
                 value={(qBy as any) || "company"}
                 onChange={(e) => setMode(e.target.value as any)}
-                className="h-9 w-[120px] rounded-xl border border-zinc-200/70 bg-white/70 px-2 text-xs font-black text-zinc-800 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-100 dark:ring-zinc-700 sm:hidden"
+                className="h-9 w-[120px] rounded-xl border border-zinc-200/70 bg-white/70 px-2 text-xs font-black text-zinc-800 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-100 dark:ring-zinc-700 md:hidden"
                 title="Filtro"
               >
                 <option value="company">Compañía</option>
@@ -219,7 +219,7 @@ export default function AppHeader() {
               {/* Mobile: esconder botones y ponerlos en menú */}
               <button
                 type="button"
-                className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45 sm:hidden"
+                className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45 md:hidden"
                 onClick={() => setMobileActionsOpen((v) => !v)}
                 title="Acciones"
                 aria-label="Acciones"
@@ -228,7 +228,7 @@ export default function AppHeader() {
               </button>
 
               {mobileActionsOpen ? (
-                <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/90 p-2 shadow-xl backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-950/80 sm:hidden">
+                <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/90 p-2 shadow-xl backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-950/80 md:hidden">
                   <button
                     type="button"
                     className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
@@ -253,7 +253,7 @@ export default function AppHeader() {
               ) : null}
             </div>
 
-            <div className="hidden items-center justify-end gap-2 sm:flex">
+            <div className="hidden items-center justify-end gap-2 md:flex">
               <button
                 type="button"
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45"

@@ -1234,7 +1234,9 @@
       el.importList.innerHTML = "";
       const total = importQueue.length;
       if (el.importStatus) {
-        el.importStatus.textContent = total ? `Listo: ${total} item(s)` : "Sin items";
+        el.importStatus.textContent = total
+          ? `Listo: ${total} item(s) • La primera será la portada`
+          : "Sin items";
       }
       for (let i = 0; i < importQueue.length; i++) {
         const im = importQueue[i];
@@ -1303,7 +1305,7 @@
         });
         const hint = document.createElement("div");
         hint.className = "importHint";
-        hint.textContent = `#${i + 1}`;
+        hint.textContent = i === 0 ? `#${i + 1} • Portada` : `#${i + 1}`;
         meta.appendChild(nm);
         meta.appendChild(hint);
 

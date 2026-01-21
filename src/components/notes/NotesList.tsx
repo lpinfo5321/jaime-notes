@@ -1445,10 +1445,31 @@ export default function NotesList({
           initialReport={(reportForCompany.values as any)?._report?.payload ?? null}
           onLocalReportUpdate={(payload) => {
             const now = new Date().toISOString();
+            const prevValues = ((reportForCompany.values ?? {}) as Record<string, unknown>) ?? {};
             const nextValues = {
-              ...((reportForCompany.values ?? {}) as Record<string, unknown>),
+              ...prevValues,
               _report: { payload, updatedAt: now },
             } as Record<string, unknown>;
+
+            // Auto-portada: si no hay cover todavía, usa la primera imagen del reporte.
+            try {
+              const hasCoverInline =
+                typeof (prevValues as any)?._coverInline?.dataUrl === "string" &&
+                String((prevValues as any)._coverInline.dataUrl).startsWith("data:image/");
+              const hasCoverPath =
+                typeof (prevValues as any)?._cover?.path === "string" &&
+                String((prevValues as any)._cover.path);
+              const first = Array.isArray((payload as any)?.images)
+                ? (payload as any).images[0]
+                : null;
+              if (!hasCoverInline && !hasCoverPath && first?.dataUrl) {
+                nextValues._coverInline = {
+                  dataUrl: String(first.dataUrl),
+                  filename: String(first.name || "Portada"),
+                  updatedAt: now,
+                };
+              }
+            } catch {}
             patchCompany(reportForCompany.id, { values: nextValues });
             setReportForCompany((prev) => (prev ? { ...prev, values: nextValues } : prev));
           }}
@@ -2781,14 +2802,7 @@ function CompanyModal({
             </label>
 
             {/* Controles abajo */}
-            <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
-                onClick={deleteCompany}
-                className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/40"
-              >
-                Eliminar compañía
-              </button>
+            <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
                 onClick={saveEntry}
