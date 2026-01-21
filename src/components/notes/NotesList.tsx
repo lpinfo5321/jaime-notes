@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import AttachmentsPanel from "@/components/notes/attachments/AttachmentsPanel";
 
 export type NoteListItem = {
   id: string;
@@ -1451,23 +1450,19 @@ export default function NotesList({
               _report: { payload, updatedAt: now },
             } as Record<string, unknown>;
 
-            // Auto-portada: si no hay cover todavía, usa la primera imagen del reporte.
+            // Portada SIEMPRE = primera imagen del reporte (según orden actual).
             try {
-              const hasCoverInline =
-                typeof (prevValues as any)?._coverInline?.dataUrl === "string" &&
-                String((prevValues as any)._coverInline.dataUrl).startsWith("data:image/");
-              const hasCoverPath =
-                typeof (prevValues as any)?._cover?.path === "string" &&
-                String((prevValues as any)._cover.path);
               const first = Array.isArray((payload as any)?.images)
                 ? (payload as any).images[0]
                 : null;
-              if (!hasCoverInline && !hasCoverPath && first?.dataUrl) {
+              if (first?.dataUrl) {
                 nextValues._coverInline = {
                   dataUrl: String(first.dataUrl),
                   filename: String(first.name || "Portada"),
                   updatedAt: now,
                 };
+                // ya no usamos cover por attachment aquí
+                nextValues._cover = null;
               }
             } catch {}
             patchCompany(reportForCompany.id, { values: nextValues });
@@ -2812,9 +2807,7 @@ function CompanyModal({
               </button>
             </div>
 
-            <div className="mt-4">
-              <AttachmentsPanel noteId={note.id} />
-            </div>
+            {/* Adjuntos / Escaneos eliminado (solo se maneja desde el reporte) */}
           </div>
           </div>
         </div>

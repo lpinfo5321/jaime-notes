@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import AttachmentsPanel from "@/components/notes/attachments/AttachmentsPanel";
 import ExportButton from "./ExportButton";
 
 type Note = {
@@ -137,9 +136,7 @@ export default function NoteEditor({ note }: { note: Note }) {
         </div>
       </div>
 
-      <div className="mt-4">
-        <AttachmentsPanel noteId={note.id} />
-      </div>
+      {/* Adjuntos / Escaneos eliminado (solo se maneja desde el reporte) */}
 
       {note.template_snapshot &&
       typeof note.template_snapshot === "object" &&
