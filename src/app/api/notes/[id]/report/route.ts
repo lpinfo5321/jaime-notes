@@ -2,6 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
+// IMPORTANTE (Vercel/CDN): este endpoint no debe cachearse.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const schema = z
   .object({
     payload: z.unknown(),
@@ -56,7 +60,7 @@ export async function GET(
       const hydrated = { ...(payload ?? {}), images: nextImgs };
       return NextResponse.json(
         { payload: hydrated, updatedAt, updatedBy, historyCount },
-        { status: 200 },
+        { status: 200, headers: { "cache-control": "no-store, max-age=0" } },
       );
     }
   } catch {
@@ -65,7 +69,7 @@ export async function GET(
 
   return NextResponse.json(
     { payload, updatedAt, updatedBy, historyCount },
-    { status: 200 },
+    { status: 200, headers: { "cache-control": "no-store, max-age=0" } },
   );
 }
 
@@ -104,6 +108,19 @@ export async function POST(
   const prevHistory = Array.isArray(prevReport?.history) ? (prevReport.history as any[]) : [];
   const nextHistory = [...prevHistory, { at: now, by: updatedBy }].slice(-50);
 
+  // Evitar "sorpresas": si por algún motivo llega un payload sin imágenes (o images=[]),
+  // NO debemos borrar imágenes ya guardadas en el servidor (esto pasa con autosave/cola en mala conexión).
+  let payloadToStore: any = input.data.payload as any;
+  try {
+    const incomingImgs = Array.isArray((payloadToStore as any)?.images) ? (payloadToStore as any).images : null;
+    const prevImgs = Array.isArray((prevReport as any)?.payload?.images) ? (prevReport as any).payload.images : null;
+    if (incomingImgs && incomingImgs.length === 0 && prevImgs && prevImgs.length > 0) {
+      payloadToStore = { ...(payloadToStore ?? {}), images: prevImgs };
+    }
+  } catch {
+    // ignore
+  }
+
   // Derivar portada desde la primera imagen del reporte (si existe).
   // El payload guardado por el parent ya viene "sanitizado": images[] contiene { id,name,path }.
   let coverPath: string | null = null;
@@ -125,7 +142,7 @@ export async function POST(
   const next = {
     ...prev,
     _report: {
-      payload: input.data.payload,
+      payload: payloadToStore,
       updatedAt: now,
       updatedBy,
       history: nextHistory,
