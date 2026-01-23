@@ -1999,11 +1999,6 @@ function ReportModal({
       return true;
     }
   });
-  const [saveUi, setSaveUi] = useState<"idle" | "saving" | "saved" | "queued" | "error">("idle");
-  const [lastMeta, setLastMeta] = useState<{ at: string | null; by: string | null }>({
-    at: null,
-    by: null,
-  });
 
   const lastPayloadRef = useRef<any>(null);
   const savingRef = useRef(false);
@@ -2047,27 +2042,19 @@ function ReportModal({
       body: JSON.stringify({ payload: safePayload }),
     });
     if (!res.ok) throw new Error("save failed");
-    const json = await res.json().catch(() => ({}));
-    const updatedAt = typeof json?.updatedAt === "string" ? json.updatedAt : null;
-    const updatedBy = json?.updatedBy ?? null;
-    const byLabel =
-      typeof updatedBy?.email === "string" && updatedBy.email.trim()
-        ? updatedBy.email.trim()
-        : typeof updatedBy?.id === "string"
-          ? updatedBy.id
-          : null;
-    setLastMeta({ at: updatedAt, by: byLabel });
     try {
-      onReportSynced?.({ updatedAt, updatedBy });
+      // Mantener sync local (sin mostrar "última edición" / email).
+      const json = await res.json().catch(() => ({}));
+      const updatedAt = typeof json?.updatedAt === "string" ? json.updatedAt : null;
+      onReportSynced?.({ updatedAt });
     } catch {}
-    return { updatedAt, updatedBy, byLabel };
+    return;
   }
 
   async function saveNow(payload: any) {
     if (!payload) return;
     if (savingRef.current) return;
     savingRef.current = true;
-    setSaveUi("saving");
     setSyncSnapshot({
       online,
       saving: true,
@@ -2079,7 +2066,6 @@ function ReportModal({
       // Offline => en cola (sin sorpresas)
       if (!online) {
         enqueueReport(noteId, safePayload);
-        setSaveUi("queued");
         setSyncSnapshot({
           online: false,
           saving: false,
@@ -2088,15 +2074,12 @@ function ReportModal({
         });
         return;
       }
-      const meta = await postReportPayloadToServer(safePayload);
+      await postReportPayloadToServer(safePayload);
       removeQueuedReport(noteId);
-      setSaveUi("saved");
       setSyncSnapshot({
         online: true,
         saving: false,
         state: "saved",
-        lastSavedAt: meta.updatedAt ?? undefined,
-        lastSavedBy: meta.byLabel ?? undefined,
         queuedReports: getQueuedReportsCount(),
       });
     } catch {
@@ -2107,7 +2090,6 @@ function ReportModal({
       } catch {
         // ignore
       }
-      setSaveUi("queued");
       setSyncSnapshot({
         online,
         saving: false,
@@ -2163,7 +2145,6 @@ function ReportModal({
       const queued = getQueuedReport(noteId);
       if (queued?.payload) {
         try {
-          setSaveUi("queued");
           setSyncSnapshot({ queuedReports: getQueuedReportsCount(), state: "queued" });
           onLocalReportUpdate(queued.payload);
         } catch {}
@@ -2172,37 +2153,6 @@ function ReportModal({
       const enriched = await enrichReportForIframe(base);
       if (cancelled) return;
       setInitReport(enriched);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noteId]);
-
-  useEffect(() => {
-    // Leer metadata del servidor (última edición por / fecha).
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch(`/api/notes/${noteId}/report`, { method: "GET" });
-        const json = await res.json().catch(() => ({}));
-        const updatedAt = typeof json?.updatedAt === "string" ? json.updatedAt : null;
-        const updatedBy = json?.updatedBy ?? null;
-        const byLabel =
-          typeof updatedBy?.email === "string" && updatedBy.email.trim()
-            ? updatedBy.email.trim()
-            : typeof updatedBy?.id === "string"
-              ? updatedBy.id
-              : null;
-        if (cancelled) return;
-        setLastMeta({ at: updatedAt, by: byLabel });
-        setSyncSnapshot({
-          lastSavedAt: updatedAt,
-          lastSavedBy: byLabel,
-        });
-      } catch {
-        // ignore
-      }
     })();
     return () => {
       cancelled = true;
@@ -2347,25 +2297,6 @@ function ReportModal({
     };
   }, [noteId]);
 
-  // Provide a "who" label for the report UI (best effort).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const supabase = createClient();
-        const { data } = await supabase.auth.getUser();
-        const email = data?.user?.email ?? "";
-        if (cancelled) return;
-        // (Sin indicador "Sync") no mandamos label ni estado.
-        void email;
-      } catch {}
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noteId]);
-
   // Offline/online status + autosync al reconectar.
   useEffect(() => {
     const onOnline = () => {
@@ -2376,10 +2307,9 @@ function ReportModal({
         try {
           const queued = getQueuedReport(noteId);
           if (queued?.payload) {
-            setSaveUi("saving");
+            setSyncSnapshot({ online: true, saving: true, state: "saving" });
             await postReportPayloadToServer(queued.payload);
             removeQueuedReport(noteId);
-            setSaveUi("saved");
             setSyncSnapshot({
               online: true,
               saving: false,
@@ -2391,14 +2321,12 @@ function ReportModal({
             await flushQueuedReportsOnce({ onlyNoteId: noteId });
           }
         } catch {
-          setSaveUi("queued");
           setSyncSnapshot({ state: "queued", queuedReports: getQueuedReportsCount() });
         }
       })();
     };
     const onOffline = () => {
       setOnline(false);
-      setSaveUi((s) => (s === "saving" ? "queued" : s));
       setSyncSnapshot({ online: false });
     };
     window.addEventListener("online", onOnline);
@@ -2532,36 +2460,6 @@ function ReportModal({
             <div className="mt-0.5 truncate text-sm font-semibold">{companyTitle}</div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-3">
-            <div className="mr-auto flex flex-wrap items-center gap-2">
-              {!online ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-                  Sin conexión (se guarda en cola)
-                </div>
-              ) : null}
-              {saveUi === "saving" ? (
-                <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-                  Guardando…
-                </div>
-              ) : saveUi === "queued" ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-                  En cola
-                </div>
-              ) : saveUi === "error" ? (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-900 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-200">
-                  Error al guardar
-                </div>
-              ) : saveUi === "saved" ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
-                  Guardado
-                </div>
-              ) : null}
-              {lastMeta?.at ? (
-                <div className="hidden rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 sm:block">
-                  Última edición: {lastMeta.by ?? "—"} ·{" "}
-                  {new Date(lastMeta.at).toLocaleString()}
-                </div>
-              ) : null}
-            </div>
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
