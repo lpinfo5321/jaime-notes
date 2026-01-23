@@ -6,8 +6,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Home, MoreHorizontal, Plus, Search } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
-import { flushQueuedReportsOnce, getQueuedReportsCount } from "@/lib/reportQueue";
-import { getSyncSnapshot, setSyncSnapshot, subscribeSyncSnapshot, type SyncSnapshot } from "@/lib/syncStatus";
 
 const SELECT_MODE_KEY = "rc:selectMode:v1";
 
@@ -23,7 +21,6 @@ export default function AppHeader() {
   const [qBy, setQBy] = useState(sp.get("qBy") ?? "company"); // company | pay | status
   const [status, setStatus] = useState(sp.get("status") ?? "");
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
-  const [sync, setSync] = useState<SyncSnapshot>(() => getSyncSnapshot());
 
   useEffect(() => {
     setQ(sp.get("q") ?? "");
@@ -45,36 +42,6 @@ export default function AppHeader() {
     };
     window.addEventListener("rc:selectModeChanged" as any, onChanged as any);
     return () => window.removeEventListener("rc:selectModeChanged" as any, onChanged as any);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    // Inicializar estado global
-    try {
-      setSyncSnapshot({ online: !!navigator.onLine, queuedReports: getQueuedReportsCount() });
-    } catch {
-      setSyncSnapshot({ queuedReports: getQueuedReportsCount() });
-    }
-    const unsub = subscribeSyncSnapshot(setSync);
-
-    const onOnline = () => {
-      setSyncSnapshot({ online: true });
-      void flushQueuedReportsOnce();
-    };
-    const onOffline = () => setSyncSnapshot({ online: false });
-
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-    // Intento rápido al montar
-    try {
-      if (navigator.onLine) void flushQueuedReportsOnce();
-    } catch {}
-
-    return () => {
-      unsub?.();
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
-    };
   }, []);
 
   useEffect(() => {
@@ -126,35 +93,6 @@ export default function AppHeader() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-2 sm:flex">
-              {!sync.online ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-                  Sin conexión
-                </div>
-              ) : null}
-              {sync.saving || sync.state === "saving" ? (
-                <div className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-                  Guardando…
-                </div>
-              ) : sync.state === "queued" ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-                  En cola
-                </div>
-              ) : sync.state === "error" ? (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-900 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-200">
-                  Error
-                </div>
-              ) : sync.state === "saved" ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
-                  Guardado
-                </div>
-              ) : null}
-              {sync.queuedReports > 0 ? (
-                <div className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-                  Cola: {sync.queuedReports}
-                </div>
-              ) : null}
-            </div>
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-200 dark:hover:bg-zinc-900/60"
