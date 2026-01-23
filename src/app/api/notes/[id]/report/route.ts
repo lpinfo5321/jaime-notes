@@ -39,9 +39,46 @@ export async function GET(
   const historyCount = Array.isArray(history) ? history.length : 0;
 
   // Rehidratar URLs firmadas para que el iframe pueda mostrar imágenes guardadas (path-only).
+  // Recovery: si `payload.images` está vacío pero sí hay imágenes en `attachments`,
+  // reconstruimos el array desde la tabla para evitar "Imágenes 0" aunque ya existan adjuntos.
   // NO muta lo guardado en DB; solo en la respuesta.
   try {
-    const imgs = Array.isArray(payload?.images) ? (payload.images as any[]) : [];
+    const payloadImgs = Array.isArray(payload?.images) ? (payload.images as any[]) : [];
+    let imgs = payloadImgs;
+
+    if (!imgs.length) {
+      const { data: atts } = await supabase
+        .from("attachments")
+        .select("path,filename,mime_type,created_at")
+        .eq("note_id", id)
+        .order("created_at", { ascending: true })
+        .limit(200);
+
+      const recovered = (atts ?? [])
+        .filter((a: any) => String(a?.mime_type ?? "").startsWith("image/"))
+        .map((a: any) => {
+          const path = typeof a?.path === "string" ? a.path.trim() : "";
+          if (!path) return null;
+          const filename =
+            typeof a?.filename === "string" && a.filename.trim()
+              ? a.filename.trim()
+              : "Imagen";
+          const createdAt =
+            typeof a?.created_at === "string" ? a.created_at : undefined;
+          return {
+            id: path, // id estable
+            name: filename,
+            path,
+            createdAt,
+          };
+        })
+        .filter(Boolean) as any[];
+
+      if (recovered.length) {
+        imgs = recovered;
+      }
+    }
+
     if (imgs.length) {
       const nextImgs = await Promise.all(
         imgs.map(async (im) => {
