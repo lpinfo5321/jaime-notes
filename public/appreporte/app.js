@@ -534,7 +534,28 @@
       }, 350);
     };
 
+    // Política de Returned Check Fee (según tabla física):
+    // Up to $50 => $25
+    // $50.01 to $300 => $30
+    // $300.01 to $800 => $40
+    // Over $800 => 5% of check amount
+    const computeReturnedFee = () => {
+      try {
+        const amt = Math.max(0, moneyToNumber(report?.fields?.checkAmount));
+        let fee = 0;
+        if (amt <= 50) fee = 25;
+        else if (amt <= 300) fee = 30;
+        else if (amt <= 800) fee = 40;
+        else fee = amt * 0.05;
+        report.fields.returnedFee = formatMoney(fee);
+      } catch {
+        // ignore
+      }
+    };
+
     const computeTotalDue = () => {
+      // Siempre recalcular la fee automáticamente a partir del Check Amount
+      computeReturnedFee();
       const total =
         moneyToNumber(report.fields.checkAmount) +
         moneyToNumber(report.fields.returnedFee);
@@ -552,6 +573,7 @@
         const val = (report?.fields || {})[key] ?? "";
         if (inp.tagName === "INPUT" || inp.tagName === "SELECT") inp.value = val;
         if (key === "totalDue") inp.setAttribute("readonly", "readonly");
+        if (key === "returnedFee") inp.setAttribute("readonly", "readonly");
       });
       // Dropdowns
       renderPaymentSelects();
@@ -620,11 +642,15 @@
             }
 
             // Money inputs: only numeric while typing, format on blur
-            if (key === "checkAmount" || key === "returnedFee") {
+            // Nota: returnedFee ahora se calcula solo (no editable).
+            if (key === "returnedFee") return;
+            if (key === "checkAmount") {
               const next = sanitizeMoneyTyping(t.value);
               if (t.value !== next) t.value = next;
               report.fields[key] = next;
               computeTotalDue();
+              const feeEl = activePaper.querySelector('[data-field="returnedFee"]');
+              if (feeEl) feeEl.value = report.fields.returnedFee;
               const totalEl = activePaper.querySelector('[data-field="totalDue"]');
               if (totalEl) totalEl.value = report.fields.totalDue;
               scheduleSave();
@@ -705,8 +731,10 @@
             if (key === "companyName") {
               try { applyCompanyAutoFill(); } catch {}
             }
-            if (key === "checkAmount" || key === "returnedFee") {
+            if (key === "checkAmount") {
               computeTotalDue();
+              const feeEl = activePaper.querySelector('[data-field="returnedFee"]');
+              if (feeEl) feeEl.value = report.fields.returnedFee;
               const totalEl = activePaper.querySelector('[data-field="totalDue"]');
               if (totalEl) totalEl.value = report.fields.totalDue;
             }
@@ -736,12 +764,19 @@
                 scheduleSave();
                 return;
               }
-              if (key === "checkAmount" || key === "returnedFee") {
+              if (key === "returnedFee") {
+                // returnedFee ahora es automático
+                t.value = report.fields.returnedFee || "";
+                return;
+              }
+              if (key === "checkAmount") {
                 const n = moneyToNumber(t.value);
                 const pretty = formatMoney(n);
                 t.value = pretty;
                 report.fields[key] = pretty;
                 computeTotalDue();
+                const feeEl = activePaper.querySelector('[data-field="returnedFee"]');
+                if (feeEl) feeEl.value = report.fields.returnedFee;
                 const totalEl = activePaper.querySelector('[data-field="totalDue"]');
                 if (totalEl) totalEl.value = report.fields.totalDue;
                 scheduleSave();
