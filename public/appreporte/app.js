@@ -1046,6 +1046,62 @@
       return out;
     };
 
+    let hydratingFromServer = false;
+    let hydratedAtLeastOnce = false;
+    const hydrateImagesFromServer = async (opts = { allowReplaceIfEmpty: true, allowMergeUrls: true }) => {
+      try {
+        if (hydratingFromServer) return false;
+        if (!noteId || noteId === "global") return false;
+        if (!navigator.onLine) return false;
+        hydratingFromServer = true;
+        const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}/report`, {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (!res.ok) return false;
+        const json = await res.json().catch(() => ({}));
+        const payload = json?.payload || null;
+        const serverImgs = Array.isArray(payload?.images) ? payload.images : [];
+        const localImgs = Array.isArray(report?.images) ? report.images : [];
+
+        // Si local está vacío pero server tiene imágenes, reemplazar (caso: Vercel/estado viejo).
+        if (opts.allowReplaceIfEmpty && (!localImgs.length && serverImgs.length)) {
+          report.images = serverImgs;
+          hydratedAtLeastOnce = true;
+          return true;
+        }
+
+        // Merge: rellenar urls firmadas por path (sin tocar el orden local).
+        if (opts.allowMergeUrls && localImgs.length && serverImgs.length) {
+          const byPath = new Map();
+          for (const im of serverImgs) {
+            const p = String(im?.path || "").trim();
+            if (!p) continue;
+            byPath.set(p, im);
+          }
+          report.images = localImgs.map((im) => {
+            const p = String(im?.path || "").trim();
+            if (!p) return im;
+            const hasUrl = typeof im?.url === "string" && String(im.url).trim();
+            const hasData = typeof im?.dataUrl === "string" && String(im.dataUrl).startsWith("data:image/");
+            if (hasUrl || hasData) return im;
+            const s = byPath.get(p);
+            const nextUrl = s && typeof s.url === "string" ? String(s.url).trim() : "";
+            return nextUrl ? { ...im, url: nextUrl } : im;
+          });
+          hydratedAtLeastOnce = true;
+          return true;
+        }
+
+        return false;
+      } catch {
+        return false;
+      } finally {
+        hydratingFromServer = false;
+      }
+    };
+
     const renderImages = () => {
       const imgs = report.images || [];
       if (el.attCount) el.attCount.textContent = `${imgs.length} image(s)`;
@@ -1054,10 +1110,35 @@
         document.body.classList.toggle("rc-noimages", !imgs.length);
       } catch {}
       if (!imgs.length) {
+        // Recovery: si server sí tiene imágenes, rehidratar una vez y re-render.
+        if (!hydratedAtLeastOnce) {
+          hydrateImagesFromServer({ allowReplaceIfEmpty: true, allowMergeUrls: true }).then((changed) => {
+            if (changed) {
+              try { renderImages(); } catch {}
+            }
+          });
+        }
         if (el.imagesEmpty) el.imagesEmpty.style.display = "block";
         return;
       }
       if (el.imagesEmpty) el.imagesEmpty.style.display = "none";
+
+      // Si hay imágenes con path pero sin url/dataUrl, pedir urls firmadas y re-render.
+      const needsUrl = imgs.some((im) => {
+        const p = String(im?.path || "").trim();
+        if (!p) return false;
+        const hasUrl = typeof im?.url === "string" && String(im.url).trim();
+        const hasData = typeof im?.dataUrl === "string" && String(im.dataUrl).startsWith("data:image/");
+        return !hasUrl && !hasData;
+      });
+      if (needsUrl && !hydratedAtLeastOnce) {
+        hydrateImagesFromServer({ allowReplaceIfEmpty: false, allowMergeUrls: true }).then((changed) => {
+          if (changed) {
+            try { renderImages(); } catch {}
+          }
+        });
+      }
+
       for (const im of imgs) {
         const page = document.createElement("div");
         page.className = "paper imagePaper";
