@@ -98,14 +98,16 @@ export default function AppHeader() {
               className="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-200 dark:hover:bg-zinc-900/60"
               onClick={() => {
                 try {
-                  // Disable auto-resume for the next navigation only.
                   window.sessionStorage.setItem(DISABLE_RESUME_ONCE_KEY, "1");
-                  // Reset last route to /app and reset the /app UI state.
                   window.localStorage.setItem(LAST_ROUTE_KEY, JSON.stringify({ v: 1, ts: Date.now(), url: "/app" }));
                   window.localStorage.setItem(
                     "rc:lastAppLocation:v1",
                     JSON.stringify({ v: 1, ts: Date.now(), bucket: "pending", view: "list", scrollY: 0 }),
                   );
+                } catch {}
+                // Emit event so NotesList resets to dashboard without full remount
+                try {
+                  window.dispatchEvent(new CustomEvent("rc:goToDashboard"));
                 } catch {}
                 router.replace("/app");
                 try {
