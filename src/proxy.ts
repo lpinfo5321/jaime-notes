@@ -4,12 +4,10 @@ import { tryGetPublicEnv } from "@/lib/env";
 
 const PROTECTED_PREFIXES = ["/app", "/api/notes", "/api/templates"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const hasEnv = !!tryGetPublicEnv();
 
-  // Nota: en Vercel (Edge/Middleware) algunas veces las env vars no se leen como esperas.
-  // Por eso NO redirigimos a /setup desde aquí. La verificación se hace en server layouts.
   if (!hasEnv) return NextResponse.next();
 
   const { supabase, response } = updateSession(request);
@@ -40,4 +38,3 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
-
