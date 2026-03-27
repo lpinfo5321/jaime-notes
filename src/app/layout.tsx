@@ -18,9 +18,12 @@ export const metadata: Metadata = {
   description: "Gestión de cheques retornados",
   manifest: "/manifest.json",
   icons: {
-    icon: "/logo.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
+      { url: "/logo.png", sizes: "any", type: "image/png" },
+    ],
     apple: "/logo.png",
-    shortcut: "/logo.png",
+    shortcut: "/favicon.ico",
   },
   appleWebApp: {
     capable: true,
