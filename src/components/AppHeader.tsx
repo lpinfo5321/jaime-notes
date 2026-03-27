@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Home, MoreHorizontal, Plus, Search } from "lucide-react";
@@ -88,8 +89,16 @@ export default function AppHeader() {
     <header className="sticky top-0 z-20 border-b border-zinc-200/70 bg-white/60 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/35">
       <div className="mx-auto max-w-6xl px-4 py-3">
         <div className="flex items-center justify-between gap-2">
-          <Link href="/app" className="text-sm font-semibold tracking-tight">
-            Return Checks
+          <Link href="/app" className="flex items-center gap-2 shrink-0">
+            <Image
+              src="/logo.png"
+              alt="Return Checks"
+              width={36}
+              height={36}
+              className="rounded-lg object-contain"
+              priority
+            />
+            <span className="text-sm font-semibold tracking-tight hidden sm:inline">Return Checks</span>
           </Link>
 
           <div className="flex items-center gap-2">
