@@ -293,6 +293,9 @@ export default function DocumentsView() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
   const [q, setQ] = useState("");
   const [preview, setPreview] = useState<Doc | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Doc | null>(null);
@@ -302,11 +305,23 @@ export default function DocumentsView() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setNeedsSetup(false);
+    setError(null);
     try {
       const res = await fetch("/api/documents");
       const json = await res.json();
-      setDocs(json.documents ?? []);
-    } catch {}
+      if (json.error) {
+        if (json.error.includes("does not exist") || json.error.includes("relation")) {
+          setNeedsSetup(true);
+        } else {
+          setError(json.error);
+        }
+      } else {
+        setDocs(json.documents ?? []);
+      }
+    } catch (e: any) {
+      setError("Error de red: " + (e?.message ?? "desconocido"));
+    }
     setLoading(false);
   }, []);
 
@@ -322,11 +337,14 @@ export default function DocumentsView() {
     const arr = Array.from(files);
     if (!arr.length) return;
     setUploading(true);
+    setError(null);
 
-    for (const file of arr) {
+    for (let i = 0; i < arr.length; i++) {
+      const file = arr[i];
+      setUploadProgress(`Subiendo ${i + 1} de ${arr.length}: ${file.name}`);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) break;
+        if (!user) { setError("No autenticado. Recarga la página."); break; }
 
         const ext = file.name.split(".").pop() ?? "";
         const safe = sanitizeName(file.name);
@@ -336,7 +354,10 @@ export default function DocumentsView() {
           .from(BUCKET)
           .upload(path, file, { contentType: file.type, upsert: false });
 
-        if (upErr) { console.error(upErr); continue; }
+        if (upErr) {
+          setError(`Error al subir "${file.name}": ${upErr.message}`);
+          continue;
+        }
 
         const res = await fetch("/api/documents", {
           method: "POST",
@@ -344,16 +365,24 @@ export default function DocumentsView() {
           body: JSON.stringify({
             name: file.name,
             path,
-            mime_type: file.type || (ext ? `application/${ext}` : "application/octet-stream`"),
+            mime_type: file.type || (ext ? `application/${ext}` : "application/octet-stream"),
             size: file.size,
           }),
         });
         const json = await res.json();
-        if (json.id) await load();
-      } catch (e) {
-        console.error(e);
+        if (json.error) {
+          setError(`Error al guardar "${file.name}": ${json.error}`);
+          if (json.error.includes("does not exist") || json.error.includes("relation")) {
+            setNeedsSetup(true);
+          }
+        } else if (json.id) {
+          await load();
+        }
+      } catch (e: any) {
+        setError(`Error inesperado: ${e?.message ?? "desconocido"}`);
       }
     }
+    setUploadProgress(null);
     setUploading(false);
   }
 
@@ -410,6 +439,49 @@ export default function DocumentsView() {
           onChange={(e) => { if (e.target.files) uploadFiles(e.target.files); e.target.value = ""; }}
         />
       </div>
+
+      {/* ── Error banner ── */}
+      {needsSetup && (
+        <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-950/30">
+          <p className="mb-2 text-sm font-semibold text-amber-800 dark:text-amber-300">⚠️ Falta un paso de configuración</p>
+          <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">La tabla de documentos no existe en Supabase. Ve a <strong>SQL Editor</strong> en tu proyecto y ejecuta:</p>
+          <pre className="overflow-x-auto rounded-xl bg-amber-100 p-3 text-[11px] text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 whitespace-pre-wrap">{`create table if not exists public.documents (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  name       text not null,
+  path       text not null,
+  mime_type  text not null default '',
+  size       bigint not null default 0,
+  description text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table public.documents enable row level security;
+create policy "docs select" on public.documents for select using (auth.uid() = user_id);
+create policy "docs insert" on public.documents for insert with check (auth.uid() = user_id);
+create policy "docs update" on public.documents for update using (auth.uid() = user_id);
+create policy "docs delete" on public.documents for delete using (auth.uid() = user_id);
+create trigger documents_updated_at before update on public.documents
+  for each row execute procedure public.set_updated_at();`}</pre>
+          <button onClick={load} className="mt-3 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {error && !needsSetup && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-950/30">
+          <p className="flex-1 text-sm text-red-700 dark:text-red-300">{error}</p>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+
+      {uploadProgress && (
+        <div className="mb-5 flex items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/50 dark:bg-blue-950/30">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600" />
+          <p className="text-sm text-blue-700 dark:text-blue-300">{uploadProgress}</p>
+        </div>
+      )}
 
       {/* ── Search ── */}
       <div className="mb-6 flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 px-3 py-2 shadow-sm backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-900/50">
