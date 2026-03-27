@@ -102,14 +102,18 @@ export default function AppHeader() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <Link
-              href="/app/contacts"
+            <button
+              type="button"
               className="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-200 dark:hover:bg-zinc-900/60"
               title="Contactos"
+              onClick={() => {
+                try { window.dispatchEvent(new CustomEvent("rc:showContacts")); } catch {}
+                router.replace("/app");
+              }}
             >
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Contactos</span>
-            </Link>
+            </button>
 
             <button
               type="button"
