@@ -196,21 +196,26 @@ function DeleteModal({ name, onConfirm, onCancel, busy }: {
   name: string; onConfirm: () => void; onCancel: () => void; busy: boolean;
 }) {
   return createPortal(
-    <div className="animate-fade-in fixed inset-0 z-[99998] flex items-center justify-center p-4">
-      <div className="pointer-events-none absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="animate-scale-in relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-950">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 dark:bg-red-950/40">
-          <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+    <div
+      style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99999, background:"rgba(0,0,0,0.55)", display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}
+      onClick={onCancel}
+    >
+      <div
+        style={{ width:"100%", maxWidth:"400px", background:"white", borderRadius:"20px", padding:"24px", boxShadow:"0 25px 50px rgba(0,0,0,0.3)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"48px", height:"48px", borderRadius:"14px", background:"#fee2e2", marginBottom:"16px" }}>
+          <Trash2 style={{ width:"22px", height:"22px", color:"#dc2626" }} />
         </div>
-        <h3 className="mb-1 text-base font-semibold text-zinc-900 dark:text-zinc-50">Eliminar documento</h3>
-        <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
-          ¿Eliminar <strong className="text-zinc-700 dark:text-zinc-200">{name}</strong>? Esta acción no se puede deshacer.
+        <h3 style={{ margin:"0 0 6px", fontSize:"15px", fontWeight:700, color:"#111827" }}>Eliminar documento</h3>
+        <p style={{ margin:"0 0 20px", fontSize:"13px", color:"#6b7280" }}>
+          ¿Eliminar <strong style={{ color:"#374151" }}>{name}</strong>? Esta acción no se puede deshacer.
         </p>
-        <div className="flex gap-2">
-          <button onClick={onCancel} className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900">
+        <div style={{ display:"flex", gap:"8px" }}>
+          <button onClick={onCancel} style={{ flex:1, padding:"10px", borderRadius:"12px", border:"1px solid #e5e7eb", background:"white", fontSize:"13px", fontWeight:600, color:"#4b5563", cursor:"pointer" }}>
             Cancelar
           </button>
-          <button onClick={onConfirm} disabled={busy} className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+          <button onClick={onConfirm} disabled={busy} style={{ flex:1, padding:"10px", borderRadius:"12px", border:"none", background:"#dc2626", fontSize:"13px", fontWeight:600, color:"white", cursor:"pointer", opacity: busy ? 0.6 : 1 }}>
             {busy ? "Eliminando…" : "Eliminar"}
           </button>
         </div>
@@ -342,23 +347,28 @@ function RenameModal({ doc, onSave, onClose }: {
   }
 
   return createPortal(
-    <div className="animate-fade-in fixed inset-0 z-[99998] flex items-center justify-center p-4">
-      <div className="pointer-events-none absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} style={{ pointerEvents: "auto" }} />
-      <div className="animate-scale-in relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-950">
-        <h3 className="mb-4 text-base font-semibold text-zinc-900 dark:text-zinc-50">Renombrar documento</h3>
+    <div
+      style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99999, background:"rgba(0,0,0,0.55)", display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ width:"100%", maxWidth:"400px", background:"white", borderRadius:"20px", padding:"24px", boxShadow:"0 25px 50px rgba(0,0,0,0.3)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 style={{ margin:"0 0 16px", fontSize:"15px", fontWeight:700, color:"#111827" }}>Renombrar documento</h3>
         <input
           ref={inputRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm outline-none ring-blue-400 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+          style={{ width:"100%", padding:"10px 12px", borderRadius:"12px", border:"1px solid #e5e7eb", background:"#f9fafb", fontSize:"14px", outline:"none", boxSizing:"border-box" }}
           placeholder="Nombre del documento"
         />
-        <div className="mt-4 flex gap-2">
-          <button onClick={onClose} className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300">
+        <div style={{ display:"flex", gap:"8px", marginTop:"16px" }}>
+          <button onClick={onClose} style={{ flex:1, padding:"10px", borderRadius:"12px", border:"1px solid #e5e7eb", background:"white", fontSize:"13px", fontWeight:600, color:"#4b5563", cursor:"pointer" }}>
             Cancelar
           </button>
-          <button onClick={handleSave} disabled={busy || !name.trim()} className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900">
+          <button onClick={handleSave} disabled={busy || !name.trim()} style={{ flex:1, padding:"10px", borderRadius:"12px", border:"none", background:"#111827", fontSize:"13px", fontWeight:600, color:"white", cursor:"pointer", opacity: (busy || !name.trim()) ? 0.5 : 1 }}>
             {busy ? "Guardando…" : "Guardar"}
           </button>
         </div>
