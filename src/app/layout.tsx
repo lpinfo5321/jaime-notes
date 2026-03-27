@@ -15,7 +15,18 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Return Checks",
-  description: "Notas/expedientes con plantillas y adjuntos (tipo Keep) para tu negocio.",
+  description: "Gestión de cheques retornados",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+    shortcut: "/logo.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Return Checks",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({
