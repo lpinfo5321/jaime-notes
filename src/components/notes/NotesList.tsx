@@ -3190,17 +3190,70 @@ function ReportModal({
   }, [companyTitle]);
 
   async function shareReport() {
-    const reportUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}&v=${encodeURIComponent(APPREPORTE_V)}`;
-    if (typeof navigator !== "undefined" && navigator.share) {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const reqId = `share-${Date.now()}`;
+    const filename = `Returned Checks - ${companyTitle}.pdf`;
+
+    let buffer: ArrayBuffer | null = null;
+
+    try {
+      buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", onMsg);
+          reject(new Error("Tiempo de espera"));
+        }, 45000);
+
+        function onMsg(ev: MessageEvent) {
+          const data: any = ev?.data;
+          if (!data || typeof data !== "object") return;
+          if (data.type !== "rc:exportPdfResult") return;
+          if (String(data.noteId) !== String(noteId)) return;
+          if (data.requestId !== reqId) return;
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMsg);
+          if (data.ok && data.buffer) {
+            resolve(data.buffer as ArrayBuffer);
+          } else {
+            reject(new Error(String(data.error || "Error exportando PDF")));
+          }
+        }
+
+        window.addEventListener("message", onMsg);
+        try {
+          iframe.contentWindow?.postMessage({ type: "rc:exportPdf", noteId, requestId: reqId }, "*");
+        } catch (e) {
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMsg);
+          reject(e);
+        }
+      });
+    } catch (err) {
+      alert(`No se pudo generar el PDF: ${err instanceof Error ? err.message : err}`);
+      return;
+    }
+
+    if (!buffer) return;
+
+    const blob = new Blob([buffer], { type: "application/pdf" });
+    const file = new File([blob], filename, { type: "application/pdf" });
+
+    // Try native share with file (mobile)
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ title: companyTitle, text: `Reporte: ${companyTitle}`, url: reportUrl });
+        await navigator.share({ files: [file], title: companyTitle });
         return;
       } catch {}
     }
-    try {
-      await navigator.clipboard.writeText(reportUrl);
-      alert("Enlace copiado al portapapeles");
-    } catch {}
+
+    // Fallback: download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
   async function printFromParent() {
