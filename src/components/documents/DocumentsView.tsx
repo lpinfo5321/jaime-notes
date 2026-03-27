@@ -88,29 +88,50 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99999,
+        background: "rgba(0,0,0,0.65)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+      }}
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-zinc-900"
-        style={{ maxHeight: "90dvh" }}
+        style={{
+          width: "100%",
+          maxWidth: "56rem",
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          borderRadius: "16px",
+          background: "white",
+          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4)",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-          <p className="min-w-0 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{doc.name}</p>
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800" style={{ background: "white" }}>
+          <p className="min-w-0 truncate text-sm font-semibold text-zinc-900">{doc.name}</p>
           <div className="ml-3 flex shrink-0 items-center gap-2">
             <a
               href={doc.url ?? "#"}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
             >
               Abrir en pestaña
             </a>
             <button
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100"
             >
               <X className="h-4 w-4" />
             </button>
@@ -118,48 +139,48 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
         </div>
 
         {/* Content */}
-        <div className="min-h-0 flex-1 overflow-auto bg-zinc-50 dark:bg-zinc-950">
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "#f9fafb" }}>
           {isImage && doc.url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={doc.url}
               alt={doc.name}
-              className="max-h-[75dvh] w-full object-contain"
+              style={{ maxHeight: "75vh", width: "100%", objectFit: "contain", display: "block" }}
             />
           ) : isPDF && doc.url ? (
             <iframe
               src={`${doc.url}#toolbar=1`}
               title={doc.name}
-              className="h-[75dvh] w-full border-none"
+              style={{ height: "75vh", width: "100%", border: "none", display: "block" }}
             />
           ) : (
             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
               <div className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${mimeColor(doc.mime_type)}`}>
                 <FileIcon mime={doc.mime_type} className="h-8 w-8 text-white" />
               </div>
-              <p className="font-semibold text-zinc-700 dark:text-zinc-200">{doc.name}</p>
+              <p className="font-semibold text-zinc-700">{doc.name}</p>
               <p className="text-sm text-zinc-400">Vista previa no disponible para este tipo de archivo</p>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3" style={{ background: "white" }}>
           <button
             onClick={handleShare}
-            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
           >
             <Share2 className="h-3.5 w-3.5" /> Compartir
           </button>
           <button
             onClick={handleDownload}
-            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
           >
             <Download className="h-3.5 w-3.5" /> Descargar
           </button>
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+            className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
           >
             <Printer className="h-3.5 w-3.5" /> Imprimir
           </button>
