@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const BUCKET = "attachments";
+const BUCKET = "documents";
 
 export async function DELETE(
   _request: NextRequest,

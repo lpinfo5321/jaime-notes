@@ -19,7 +19,7 @@ interface Doc {
   url: string | null;
 }
 
-const BUCKET = "attachments";
+const BUCKET = "documents";
 
 /* ─────────────────────── helpers ─────────────────────── */
 function prettySize(bytes: number) {
@@ -348,7 +348,7 @@ export default function DocumentsView() {
 
         const ext = file.name.split(".").pop() ?? "";
         const safe = sanitizeName(file.name);
-        const path = `docs/${user.id}/${crypto.randomUUID()}/${safe}`;
+        const path = `${user.id}/${crypto.randomUUID()}/${safe}`;
 
         const { error: upErr } = await supabase.storage
           .from(BUCKET)
@@ -445,16 +445,17 @@ export default function DocumentsView() {
         <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-950/30">
           <p className="mb-2 text-sm font-semibold text-amber-800 dark:text-amber-300">⚠️ Falta un paso de configuración</p>
           <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">La tabla de documentos no existe en Supabase. Ve a <strong>SQL Editor</strong> en tu proyecto y ejecuta:</p>
-          <pre className="overflow-x-auto rounded-xl bg-amber-100 p-3 text-[11px] text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 whitespace-pre-wrap">{`create table if not exists public.documents (
-  id         uuid primary key default gen_random_uuid(),
-  user_id    uuid not null references auth.users(id) on delete cascade,
-  name       text not null,
-  path       text not null,
-  mime_type  text not null default '',
-  size       bigint not null default 0,
+          <pre className="overflow-x-auto rounded-xl bg-amber-100 p-3 text-[11px] text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 whitespace-pre-wrap">{`-- 1. Crear tabla
+create table if not exists public.documents (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  name        text not null,
+  path        text not null,
+  mime_type   text not null default '',
+  size        bigint not null default 0,
   description text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
 );
 alter table public.documents enable row level security;
 create policy "docs select" on public.documents for select using (auth.uid() = user_id);
@@ -462,7 +463,23 @@ create policy "docs insert" on public.documents for insert with check (auth.uid(
 create policy "docs update" on public.documents for update using (auth.uid() = user_id);
 create policy "docs delete" on public.documents for delete using (auth.uid() = user_id);
 create trigger documents_updated_at before update on public.documents
-  for each row execute procedure public.set_updated_at();`}</pre>
+  for each row execute procedure public.set_updated_at();
+
+-- 2. Crear bucket de storage
+insert into storage.buckets (id, name, public)
+values ('documents', 'documents', false)
+on conflict (id) do nothing;
+
+-- 3. Políticas de storage
+create policy "docs storage insert" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'documents');
+create policy "docs storage select" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'documents');
+create policy "docs storage delete" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'documents');`}</pre>
           <button onClick={load} className="mt-3 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
             Reintentar
           </button>

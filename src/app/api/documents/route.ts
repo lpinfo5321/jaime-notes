@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
-const BUCKET = "attachments";
+const BUCKET = "documents";
 const SIGNED_TTL = 60 * 60 * 6; // 6 hours
 
 const createSchema = z.object({
