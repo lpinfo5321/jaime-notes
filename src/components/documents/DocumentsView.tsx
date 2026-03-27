@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import {
   FileText, Image as ImageIcon, File, Upload, Trash2, Download,
@@ -179,10 +180,10 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
 
   function resetZoom() { setZoom(1); setPan({ x: 0, y: 0 }); }
 
-  return (
+  return createPortal(
     <div
       className="animate-fade-in fixed inset-0 flex flex-col overflow-hidden"
-      style={{ background: "rgba(0,0,0,0.97)", zIndex: 9999 }}
+      style={{ background: "rgba(0,0,0,0.97)", zIndex: 99999 }}
     >
       {/* ── Toolbar ── */}
       <div className="flex shrink-0 items-center gap-2 bg-black/60 px-3 py-2 backdrop-blur-sm">
@@ -281,7 +282,8 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
           <span className="text-[11px] text-zinc-500 hidden sm:inline">· Doble toque = zoom · Arrastra para mover</span>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -289,8 +291,8 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
 function DeleteModal({ name, onConfirm, onCancel, busy }: {
   name: string; onConfirm: () => void; onCancel: () => void; busy: boolean;
 }) {
-  return (
-    <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="animate-fade-in fixed inset-0 z-[99998] flex items-center justify-center p-4">
       <div className="pointer-events-none absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="animate-scale-in relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-950">
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 dark:bg-red-950/40">
@@ -309,7 +311,8 @@ function DeleteModal({ name, onConfirm, onCancel, busy }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
