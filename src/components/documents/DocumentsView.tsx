@@ -58,13 +58,17 @@ function mimeColor(mime: string) {
 /* ─────────────────────── Preview Modal ─────────────────────── */
 function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
   const [zoom, setZoom] = useState(1);
-  const imgRef = useRef<HTMLImageElement>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dragging = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+  const lastPinchDist = useRef(0);
+  const startZoomRef = useRef(1);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const isImage = doc.mime_type.startsWith("image/");
   const isPDF = doc.mime_type === "application/pdf";
 
-  // Push history state so the back button closes the modal
+  // Back button + ESC
   useEffect(() => {
     history.pushState({ docPreview: true }, "");
     const onPop = () => onClose();
@@ -77,21 +81,27 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
     };
   }, [onClose]);
 
-  // Pinch-to-zoom via pointer events
+  // Reset pan when zoom resets to 1
+  useEffect(() => { if (zoom <= 1) setPan({ x: 0, y: 0 }); }, [zoom]);
+
+  /* ── Touch: pinch-zoom + pan ── */
   useEffect(() => {
     if (!isImage) return;
     const el = containerRef.current;
     if (!el) return;
-    let lastDist = 0;
-    let startZoom = 1;
+
+    let lastTouchX = 0, lastTouchY = 0;
 
     function onTouchStart(e: TouchEvent) {
       if (e.touches.length === 2) {
-        lastDist = Math.hypot(
+        lastPinchDist.current = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY,
         );
-        startZoom = zoom;
+        startZoomRef.current = zoom;
+      } else if (e.touches.length === 1) {
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
       }
     }
     function onTouchMove(e: TouchEvent) {
@@ -101,8 +111,15 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY,
         );
-        const next = Math.min(5, Math.max(0.5, startZoom * (dist / lastDist)));
+        const next = Math.min(8, Math.max(0.5, startZoomRef.current * (dist / lastPinchDist.current)));
         setZoom(next);
+      } else if (e.touches.length === 1 && zoom > 1) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - lastTouchX;
+        const dy = e.touches[0].clientY - lastTouchY;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+        setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
       }
     }
     el.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -113,10 +130,37 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
     };
   }, [isImage, zoom]);
 
+  /* ── Mouse: drag pan ── */
+  function onMouseDown(e: React.MouseEvent) {
+    if (zoom <= 1) return;
+    dragging.current = true;
+    lastPos.current = { x: e.clientX, y: e.clientY };
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    if (!dragging.current) return;
+    const dx = e.clientX - lastPos.current.x;
+    const dy = e.clientY - lastPos.current.y;
+    lastPos.current = { x: e.clientX, y: e.clientY };
+    setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
+  }
+  function onMouseUp() { dragging.current = false; }
+
+  /* ── Scroll wheel zoom ── */
+  useEffect(() => {
+    if (!isImage) return;
+    const el = containerRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      setZoom((z) => Math.min(8, Math.max(0.25, z - e.deltaY * 0.001)));
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [isImage]);
+
   function handleDownload() {
     if (!doc.url) return;
-    const a = document.createElement("a");
-    a.href = doc.url; a.download = doc.name; a.click();
+    const a = document.createElement("a"); a.href = doc.url; a.download = doc.name; a.click();
   }
   function handleShare() {
     if (!doc.url) return;
@@ -125,82 +169,92 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
   }
   function handlePrint() {
     if (!doc.url) return;
-    const win = window.open(doc.url, "_blank");
-    win?.addEventListener("load", () => win.print());
+    const isImg = doc.mime_type.startsWith("image/");
+    const html = `<!DOCTYPE html><html><head><style>body{margin:0;}img{max-width:100%;height:auto;display:block;}iframe{width:100vw;height:100vh;border:none;}</style></head><body>${isImg ? `<img src="${doc.url}"/>` : `<iframe src="${doc.url}"></iframe>`}</body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html); w.document.close();
+    w.addEventListener("load", () => { w.focus(); w.print(); });
   }
 
+  function resetZoom() { setZoom(1); setPan({ x: 0, y: 0 }); }
+
   return (
-    <div className="animate-fade-in fixed inset-0 z-50 flex flex-col overflow-hidden" style={{ background: "rgba(0,0,0,0.96)" }}>
-      {/* toolbar */}
-      <div className="flex shrink-0 items-center justify-between bg-black/40 px-4 py-3 backdrop-blur-sm">
-        <button
-          onClick={onClose}
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white"
-          title="Cerrar"
-        >
+    <div
+      className="animate-fade-in fixed inset-0 flex flex-col overflow-hidden"
+      style={{ background: "rgba(0,0,0,0.97)", zIndex: 9999 }}
+    >
+      {/* ── Toolbar ── */}
+      <div className="flex shrink-0 items-center gap-2 bg-black/60 px-3 py-2 backdrop-blur-sm">
+        <button onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white">
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <p className="flex-1 truncate px-3 text-center text-sm font-semibold text-white">{doc.name}</p>
-        <div className="flex items-center gap-1">
-          <button onClick={handlePrint} className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Imprimir">
-            <Printer className="h-4 w-4" />
-          </button>
-          <button onClick={handleDownload} className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Descargar">
-            <Download className="h-4 w-4" />
-          </button>
-          <button onClick={handleShare} className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Compartir">
-            <Share2 className="h-4 w-4" />
-          </button>
-          <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Cerrar">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{doc.name}</p>
+        <button onClick={handlePrint} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Imprimir">
+          <Printer className="h-4 w-4" />
+        </button>
+        <button onClick={handleDownload} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Descargar">
+          <Download className="h-4 w-4" />
+        </button>
+        <button onClick={handleShare} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Compartir">
+          <Share2 className="h-4 w-4" />
+        </button>
+        <button onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20">
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
-      {/* content */}
+      {/* ── Content ── */}
       <div
         ref={containerRef}
-        className="relative flex-1 overflow-auto"
-        style={{ minHeight: 0 }}
-        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        className="relative flex-1 select-none overflow-hidden"
+        style={{
+          minHeight: 0,
+          cursor: zoom > 1 ? (dragging.current ? "grabbing" : "grab") : "default",
+          touchAction: isImage ? "none" : "auto",
+        }}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        onDoubleClick={() => { if (isImage) zoom > 1 ? resetZoom() : setZoom(2.5); }}
       >
         {isImage && doc.url ? (
-          <div className="flex min-h-full items-center justify-center p-2">
+          <div
+            className="flex h-full w-full items-center justify-center"
+            style={{ pointerEvents: "none" }}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              ref={imgRef}
               src={doc.url}
               alt={doc.name}
-              onDoubleClick={() => setZoom((z) => z > 1 ? 1 : 2.5)}
+              draggable={false}
               style={{
-                transform: `scale(${zoom})`,
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                 transformOrigin: "center center",
-                transition: zoom === 1 ? "transform 0.25s ease" : "none",
-                cursor: zoom > 1 ? "grab" : "zoom-in",
-                display: "block",
-                maxWidth: zoom <= 1 ? "100%" : "none",
-                maxHeight: zoom <= 1 ? "calc(100vh - 120px)" : "none",
-                width: "auto",
-                height: "auto",
+                transition: dragging.current ? "none" : "transform 0.15s ease",
+                maxWidth: "100%",
+                maxHeight: "100%",
                 objectFit: "contain",
-                touchAction: "pinch-zoom",
+                display: "block",
                 userSelect: "none",
+                pointerEvents: "none",
               }}
             />
           </div>
         ) : isPDF && doc.url ? (
           <iframe
-            src={`${doc.url}#toolbar=1&view=FitH`}
+            src={`${doc.url}#toolbar=1`}
             title={doc.name}
             style={{ width: "100%", height: "100%", border: "none", background: "white", display: "block" }}
           />
         ) : (
-          <div className="flex min-h-full flex-col items-center justify-center gap-4 p-8 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
             <div className={`flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br ${mimeColor(doc.mime_type)}`}>
               <FileIcon mime={doc.mime_type} className="h-10 w-10 text-white" />
             </div>
             <p className="text-lg font-semibold text-white">{doc.name}</p>
-            <p className="text-sm text-zinc-400">Vista previa no disponible</p>
+            <p className="text-sm text-zinc-400">Vista previa no disponible para este tipo de archivo</p>
             <button onClick={handleDownload} className="flex items-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-100">
               <Download className="h-4 w-4" /> Descargar
             </button>
@@ -208,18 +262,23 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
         )}
       </div>
 
-      {/* zoom controls (solo imágenes) */}
+      {/* ── Zoom controls (imágenes) ── */}
       {isImage && (
-        <div className="flex shrink-0 items-center justify-center gap-2 bg-black/50 py-2.5 backdrop-blur-sm">
+        <div className="flex shrink-0 items-center justify-center gap-2 bg-black/60 py-2 backdrop-blur-sm">
           <button onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))}
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-xl font-light">−</button>
-          <span className="min-w-[52px] text-center text-xs font-semibold text-zinc-300">
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-xl">−</button>
+          <button onClick={resetZoom}
+            className="min-w-[64px] rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20">
             {Math.round(zoom * 100)}%
-          </span>
-          <button onClick={() => setZoom((z) => Math.min(6, +(z + 0.25).toFixed(2)))}
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-xl font-light">+</button>
-          <button onClick={() => setZoom(1)}
-            className="ml-1 rounded-xl bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/20">Reset</button>
+          </button>
+          <button onClick={() => setZoom((z) => Math.min(8, +(z + 0.25).toFixed(2)))}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-xl">+</button>
+          {zoom !== 1 && (
+            <button onClick={resetZoom} className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/20">
+              Reset
+            </button>
+          )}
+          <span className="text-[11px] text-zinc-500 hidden sm:inline">· Doble toque = zoom · Arrastra para mover</span>
         </div>
       )}
     </div>
