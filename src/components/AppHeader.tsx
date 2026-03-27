@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Home, MoreHorizontal, Plus, Search, Users } from "lucide-react";
+import { FolderOpen, Home, MoreHorizontal, Plus, Search, Users } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
 
@@ -258,6 +258,18 @@ export default function AppHeader() {
                     className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
                     onClick={() => {
                       setMobileActionsOpen(false);
+                      try { window.dispatchEvent(new CustomEvent("rc:showDocuments")); } catch {}
+                      router.replace("/app");
+                    }}
+                  >
+                    <span>Documentos</span>
+                    <FolderOpen className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                    onClick={() => {
+                      setMobileActionsOpen(false);
                       try {
                         window.dispatchEvent(new CustomEvent("rc:toggleSelectMode"));
                       } catch {}
@@ -278,6 +290,18 @@ export default function AppHeader() {
             </div>
 
             <div className="hidden items-center justify-end gap-2 md:flex">
+              <button
+                type="button"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45"
+                onClick={() => {
+                  try { window.dispatchEvent(new CustomEvent("rc:showDocuments")); } catch {}
+                  router.replace("/app");
+                }}
+                title="Documentos"
+              >
+                <FolderOpen className="h-4 w-4" />
+                Docs
+              </button>
               <button
                 type="button"
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45"
