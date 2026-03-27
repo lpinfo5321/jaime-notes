@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Home, MoreHorizontal, Plus, Search } from "lucide-react";
+import { Home, MoreHorizontal, Plus, Search, Users } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
 
@@ -102,6 +102,15 @@ export default function AppHeader() {
           </Link>
 
           <div className="flex items-center gap-2">
+            <Link
+              href="/app/contacts"
+              className="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-200 dark:hover:bg-zinc-900/60"
+              title="Contactos"
+            >
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Contactos</span>
+            </Link>
+
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-200 dark:hover:bg-zinc-900/60"
