@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import {
   FileText, Image as ImageIcon, File, Upload, Trash2, Download,
-  Share2, Printer, Search, X, FolderOpen, Plus, Eye, ChevronLeft,
+  Share2, Printer, Search, X, FolderOpen, Plus, Eye,
   Pencil, Check, CheckSquare, Square,
 } from "lucide-react";
 
@@ -58,100 +58,14 @@ function mimeColor(mime: string) {
 
 /* ─────────────────────── Preview Modal ─────────────────────── */
 function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const dragging = useRef(false);
-  const lastPos = useRef({ x: 0, y: 0 });
-  const lastPinchDist = useRef(0);
-  const startZoomRef = useRef(1);
-  const containerRef = useRef<HTMLDivElement>(null);
-
   const isImage = doc.mime_type.startsWith("image/");
   const isPDF = doc.mime_type === "application/pdf";
 
-  // ESC to close
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  // Reset pan when zoom resets to 1
-  useEffect(() => { if (zoom <= 1) setPan({ x: 0, y: 0 }); }, [zoom]);
-
-  /* ── Touch: pinch-zoom + pan ── */
-  useEffect(() => {
-    if (!isImage) return;
-    const el = containerRef.current;
-    if (!el) return;
-
-    let lastTouchX = 0, lastTouchY = 0;
-
-    function onTouchStart(e: TouchEvent) {
-      if (e.touches.length === 2) {
-        lastPinchDist.current = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY,
-        );
-        startZoomRef.current = zoom;
-      } else if (e.touches.length === 1) {
-        lastTouchX = e.touches[0].clientX;
-        lastTouchY = e.touches[0].clientY;
-      }
-    }
-    function onTouchMove(e: TouchEvent) {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const dist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY,
-        );
-        const next = Math.min(8, Math.max(0.5, startZoomRef.current * (dist / lastPinchDist.current)));
-        setZoom(next);
-      } else if (e.touches.length === 1 && zoom > 1) {
-        e.preventDefault();
-        const dx = e.touches[0].clientX - lastTouchX;
-        const dy = e.touches[0].clientY - lastTouchY;
-        lastTouchX = e.touches[0].clientX;
-        lastTouchY = e.touches[0].clientY;
-        setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
-      }
-    }
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-    };
-  }, [isImage, zoom]);
-
-  /* ── Mouse: drag pan ── */
-  function onMouseDown(e: React.MouseEvent) {
-    if (zoom <= 1) return;
-    dragging.current = true;
-    lastPos.current = { x: e.clientX, y: e.clientY };
-  }
-  function onMouseMove(e: React.MouseEvent) {
-    if (!dragging.current) return;
-    const dx = e.clientX - lastPos.current.x;
-    const dy = e.clientY - lastPos.current.y;
-    lastPos.current = { x: e.clientX, y: e.clientY };
-    setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
-  }
-  function onMouseUp() { dragging.current = false; }
-
-  /* ── Scroll wheel zoom ── */
-  useEffect(() => {
-    if (!isImage) return;
-    const el = containerRef.current;
-    if (!el) return;
-    function onWheel(e: WheelEvent) {
-      e.preventDefault();
-      setZoom((z) => Math.min(8, Math.max(0.25, z - e.deltaY * 0.001)));
-    }
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [isImage]);
 
   function handleDownload() {
     if (!doc.url) return;
@@ -172,110 +86,85 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
     w.addEventListener("load", () => { w.focus(); w.print(); });
   }
 
-  function resetZoom() { setZoom(1); setPan({ x: 0, y: 0 }); }
-
   return createPortal(
     <div
-      className="animate-fade-in fixed inset-0 flex flex-col overflow-hidden"
-      style={{ background: "rgba(0,0,0,0.97)", zIndex: 99999 }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
     >
-      {/* ── Toolbar ── */}
-      <div className="flex shrink-0 items-center gap-2 bg-black/60 px-3 py-2 backdrop-blur-sm">
-        <button onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{doc.name}</p>
-        <button onClick={handlePrint} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Imprimir">
-          <Printer className="h-4 w-4" />
-        </button>
-        <button onClick={handleDownload} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Descargar">
-          <Download className="h-4 w-4" />
-        </button>
-        <button onClick={handleShare} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Compartir">
-          <Share2 className="h-4 w-4" />
-        </button>
-        <button onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* ── Content ── */}
       <div
-        ref={containerRef}
-        className="relative flex-1 select-none overflow-hidden"
-        style={{
-          minHeight: 0,
-          cursor: zoom > 1 ? (dragging.current ? "grabbing" : "grab") : "default",
-          touchAction: isImage ? "none" : "auto",
-        }}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-        onDoubleClick={() => { if (isImage) zoom > 1 ? resetZoom() : setZoom(2.5); }}
+        className="flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-zinc-900"
+        style={{ maxHeight: "90dvh" }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {isImage && doc.url ? (
-          <div
-            className="flex h-full w-full items-center justify-center"
-            style={{ pointerEvents: "none" }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <p className="min-w-0 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{doc.name}</p>
+          <div className="ml-3 flex shrink-0 items-center gap-2">
+            <a
+              href={doc.url ?? "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Abrir en pestaña
+            </a>
+            <button
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="min-h-0 flex-1 overflow-auto bg-zinc-50 dark:bg-zinc-950">
+          {isImage && doc.url ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={doc.url}
               alt={doc.name}
-              draggable={false}
-              style={{
-                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                transformOrigin: "center center",
-                transition: dragging.current ? "none" : "transform 0.15s ease",
-                maxWidth: "100%",
-                maxHeight: "100%",
-                objectFit: "contain",
-                display: "block",
-                userSelect: "none",
-                pointerEvents: "none",
-              }}
+              className="max-h-[75dvh] w-full object-contain"
             />
-          </div>
-        ) : isPDF && doc.url ? (
-          <iframe
-            src={`${doc.url}#toolbar=1`}
-            title={doc.name}
-            style={{ width: "100%", height: "100%", border: "none", background: "white", display: "block" }}
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-            <div className={`flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br ${mimeColor(doc.mime_type)}`}>
-              <FileIcon mime={doc.mime_type} className="h-10 w-10 text-white" />
+          ) : isPDF && doc.url ? (
+            <iframe
+              src={`${doc.url}#toolbar=1`}
+              title={doc.name}
+              className="h-[75dvh] w-full border-none"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+              <div className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${mimeColor(doc.mime_type)}`}>
+                <FileIcon mime={doc.mime_type} className="h-8 w-8 text-white" />
+              </div>
+              <p className="font-semibold text-zinc-700 dark:text-zinc-200">{doc.name}</p>
+              <p className="text-sm text-zinc-400">Vista previa no disponible para este tipo de archivo</p>
             </div>
-            <p className="text-lg font-semibold text-white">{doc.name}</p>
-            <p className="text-sm text-zinc-400">Vista previa no disponible para este tipo de archivo</p>
-            <button onClick={handleDownload} className="flex items-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-100">
-              <Download className="h-4 w-4" /> Descargar
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Zoom controls (imágenes) ── */}
-      {isImage && (
-        <div className="flex shrink-0 items-center justify-center gap-2 bg-black/60 py-2 backdrop-blur-sm">
-          <button onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-xl">−</button>
-          <button onClick={resetZoom}
-            className="min-w-[64px] rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20">
-            {Math.round(zoom * 100)}%
-          </button>
-          <button onClick={() => setZoom((z) => Math.min(8, +(z + 0.25).toFixed(2)))}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-xl">+</button>
-          {zoom !== 1 && (
-            <button onClick={resetZoom} className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/20">
-              Reset
-            </button>
           )}
-          <span className="text-[11px] text-zinc-500 hidden sm:inline">· Doble toque = zoom · Arrastra para mover</span>
         </div>
-      )}
+
+        {/* Footer */}
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            <Share2 className="h-3.5 w-3.5" /> Compartir
+          </button>
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            <Download className="h-3.5 w-3.5" /> Descargar
+          </button>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+          >
+            <Printer className="h-3.5 w-3.5" /> Imprimir
+          </button>
+        </div>
+      </div>
     </div>,
     document.body,
   );
