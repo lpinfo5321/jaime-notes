@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   FileText, Image as ImageIcon, File, Upload, Trash2, Download,
   Share2, Printer, Search, X, FolderOpen, Plus, Eye, ChevronLeft,
+  Pencil, Check, CheckSquare, Square,
 } from "lucide-react";
 
 /* ─────────────────────── types ─────────────────────── */
@@ -255,8 +256,9 @@ function DeleteModal({ name, onConfirm, onCancel, busy }: {
 }
 
 /* ─────────────────────── Doc Card ─────────────────────── */
-function DocCard({ doc, onPreview, onDelete }: {
-  doc: Doc; onPreview: () => void; onDelete: () => void;
+function DocCard({ doc, onPreview, onDelete, onRename, selectMode, selected, onSelect }: {
+  doc: Doc; onPreview: () => void; onDelete: () => void; onRename: () => void;
+  selectMode: boolean; selected: boolean; onSelect: () => void;
 }) {
   const isImage = doc.mime_type.startsWith("image/");
   const color = mimeColor(doc.mime_type);
@@ -272,32 +274,53 @@ function DocCard({ doc, onPreview, onDelete }: {
     if (navigator.share) navigator.share({ title: doc.name, url: doc.url }).catch(() => {});
     else navigator.clipboard.writeText(doc.url).catch(() => {});
   }
+  function handlePrintSingle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!doc.url) return;
+    const isImg = doc.mime_type.startsWith("image/");
+    const html = `<!DOCTYPE html><html><head><style>body{margin:0;}img{max-width:100%;max-height:100vh;object-fit:contain;display:block;}iframe{width:100vw;height:100vh;border:none;}</style></head><body>${isImg ? `<img src="${doc.url}"/>` : `<iframe src="${doc.url}"></iframe>`}</body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html); w.document.close();
+    w.addEventListener("load", () => { w.focus(); w.print(); });
+  }
 
   return (
     <div
-      className="animate-card-in group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-zinc-200/60 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900"
+      className={`animate-card-in group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:bg-zinc-900 ${
+        selected ? "border-indigo-400 ring-2 ring-indigo-300 dark:border-indigo-500 dark:ring-indigo-600" : "border-zinc-200/60 dark:border-zinc-800/50"
+      }`}
       onClick={onPreview}
     >
+      {/* select checkbox */}
+      {selectMode && (
+        <div
+          className="absolute left-2 top-2 z-10"
+          onClick={(e) => { e.stopPropagation(); onSelect(); }}
+        >
+          <div className={`flex h-6 w-6 items-center justify-center rounded-lg shadow ${selected ? "bg-indigo-600 text-white" : "bg-white/90 text-zinc-400 dark:bg-zinc-800"}`}>
+            {selected ? <Check className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+          </div>
+        </div>
+      )}
+
       {/* thumbnail or icon */}
       <div className="relative flex h-36 items-center justify-center overflow-hidden bg-zinc-100 dark:bg-zinc-800">
         {isImage && doc.url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={doc.url}
-            alt={doc.name}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
+          <img src={doc.url} alt={doc.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
         ) : (
           <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${color} shadow`}>
             <FileIcon mime={doc.mime_type} className="h-7 w-7 text-white" />
           </div>
         )}
-        {/* overlay on hover */}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/25 group-hover:opacity-100">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 text-zinc-800 shadow">
-            <Eye className="h-4 w-4" />
+        {!selectMode && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/25 group-hover:opacity-100">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 text-zinc-800 shadow">
+              <Eye className="h-4 w-4" />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* info */}
@@ -307,16 +330,73 @@ function DocCard({ doc, onPreview, onDelete }: {
       </div>
 
       {/* actions */}
-      <div className="flex items-center gap-1 border-t border-zinc-100 px-2 py-1.5 dark:border-zinc-800/60">
-        <button onClick={handleDownload} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Descargar">
-          <Download className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={handleShare} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Compartir">
-          <Share2 className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-400" title="Eliminar">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+      {!selectMode && (
+        <div className="flex items-center gap-1 border-t border-zinc-100 px-2 py-1.5 dark:border-zinc-800/60">
+          <button onClick={handlePrintSingle} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Imprimir">
+            <Printer className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={handleDownload} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Descargar">
+            <Download className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={handleShare} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Compartir">
+            <Share2 className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onRename(); }} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Renombrar">
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-400" title="Eliminar">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Rename Modal ─────────────────────── */
+function RenameModal({ doc, onSave, onClose }: {
+  doc: Doc; onSave: (name: string) => Promise<void>; onClose: () => void;
+}) {
+  const [name, setName] = useState(doc.name);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  async function handleSave() {
+    if (!name.trim()) return;
+    setBusy(true);
+    await onSave(name.trim());
+    setBusy(false);
+  }
+
+  return (
+    <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="pointer-events-none absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} style={{ pointerEvents: "auto" }} />
+      <div className="animate-scale-in relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-950">
+        <h3 className="mb-4 text-base font-semibold text-zinc-900 dark:text-zinc-50">Renombrar documento</h3>
+        <input
+          ref={inputRef}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm outline-none ring-blue-400 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+          placeholder="Nombre del documento"
+        />
+        <div className="mt-4 flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300">
+            Cancelar
+          </button>
+          <button onClick={handleSave} disabled={busy || !name.trim()} className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900">
+            {busy ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -336,6 +416,9 @@ export default function DocumentsView() {
   const [deleteTarget, setDeleteTarget] = useState<Doc | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<Doc | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -427,9 +510,53 @@ export default function DocumentsView() {
     try {
       await fetch(`/api/documents/${deleteTarget.id}`, { method: "DELETE" });
       setDocs((prev) => prev.filter((d) => d.id !== deleteTarget.id));
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(deleteTarget.id); return n; });
       setDeleteTarget(null);
     } catch {}
     setDeleteBusy(false);
+  }
+
+  async function handleRename(doc: Doc, newName: string) {
+    await fetch(`/api/documents/${doc.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName }),
+    });
+    setDocs((prev) => prev.map((d) => d.id === doc.id ? { ...d, name: newName } : d));
+    setRenameTarget(null);
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+
+  function printSelected() {
+    const selected = docs.filter((d) => selectedIds.has(d.id) && d.url);
+    if (!selected.length) return;
+    const html = `<!DOCTYPE html><html><head><style>
+      body{margin:0;padding:0;}
+      .page{page-break-after:always;display:flex;align-items:center;justify-content:center;width:100vw;height:100vh;}
+      .page:last-child{page-break-after:auto;}
+      img{max-width:100%;max-height:100%;object-fit:contain;}
+      iframe{width:100%;height:100%;border:none;}
+      h3{font-family:sans-serif;font-size:12px;color:#666;margin:0 0 4px;}
+    </style></head><body>
+    ${selected.map((d) => `<div class="page">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;padding:16px;box-sizing:border-box;">
+        <h3>${d.name}</h3>
+        ${d.mime_type.startsWith("image/") ? `<img src="${d.url}" />` : `<iframe src="${d.url}"></iframe>`}
+      </div>
+    </div>`).join("")}
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.addEventListener("load", () => { w.focus(); w.print(); });
   }
 
   function onDrop(e: React.DragEvent) {
@@ -441,30 +568,60 @@ export default function DocumentsView() {
   return (
     <div className="min-h-[60vh] pb-20">
       {/* ── Top bar ── */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm">
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm">
             <FolderOpen className="h-5 w-5 text-white" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Documentos</h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {docs.length} {docs.length === 1 ? "archivo" : "archivos"}
+              {selectMode && selectedIds.size > 0 && ` · ${selectedIds.size} seleccionado${selectedIds.size > 1 ? "s" : ""}`}
             </p>
           </div>
         </div>
 
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-        >
-          {uploading ? (
-            <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900" /> Subiendo…</>
-          ) : (
-            <><Plus className="h-4 w-4" /> Subir archivo</>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Print selected */}
+          {selectMode && selectedIds.size > 0 && (
+            <button
+              onClick={printSelected}
+              className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir {selectedIds.size > 1 ? `(${selectedIds.size})` : ""}
+            </button>
           )}
-        </button>
+
+          {/* Select mode toggle */}
+          {docs.length > 0 && (
+            <button
+              onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
+              className={`flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
+                selectMode
+                  ? "border-zinc-300 bg-zinc-100 text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                  : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
+              }`}
+            >
+              {selectMode ? <><X className="h-4 w-4" /> Cancelar</> : <><CheckSquare className="h-4 w-4" /> Seleccionar</>}
+            </button>
+          )}
+
+          {/* Upload */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 rounded-2xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+          >
+            {uploading ? (
+              <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900" /></>
+            ) : (
+              <><Plus className="h-4 w-4" /> Subir</>
+            )}
+          </button>
+        </div>
+
         <input
           ref={fileInputRef}
           type="file"
@@ -591,8 +748,12 @@ create policy "docs storage delete" on storage.objects
             <DocCard
               key={doc.id}
               doc={doc}
-              onPreview={() => setPreview(doc)}
+              selectMode={selectMode}
+              selected={selectedIds.has(doc.id)}
+              onSelect={() => toggleSelect(doc.id)}
+              onPreview={() => selectMode ? toggleSelect(doc.id) : setPreview(doc)}
               onDelete={() => setDeleteTarget(doc)}
+              onRename={() => setRenameTarget(doc)}
             />
           ))}
         </div>
@@ -608,6 +769,15 @@ create policy "docs storage delete" on storage.objects
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
           busy={deleteBusy}
+        />
+      )}
+
+      {/* ── Rename modal ── */}
+      {renameTarget && (
+        <RenameModal
+          doc={renameTarget}
+          onSave={(name) => handleRename(renameTarget, name)}
+          onClose={() => setRenameTarget(null)}
         />
       )}
     </div>
