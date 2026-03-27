@@ -3326,58 +3326,61 @@ function ReportModal({
         className="flex h-[calc(100dvh-16px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900 sm:h-[92dvh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-col gap-2 border-b border-zinc-200 px-3 py-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+        {/* ── Modal header: single compact row ── */}
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200 px-3 py-2.5 dark:border-zinc-800 sm:px-4">
+          {/* Title */}
           <div className="min-w-0 flex-1">
-            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-              Reporte
-            </div>
-            <div className="mt-0.5 truncate text-sm font-semibold">{companyTitle}</div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Reporte</p>
+            <p className="truncate text-sm font-bold leading-tight text-zinc-900 dark:text-zinc-50">{companyTitle}</p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-3">
+
+          {/* Actions */}
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Compartir */}
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              onClick={(e) => {
-                e.stopPropagation();
-                void shareReport();
-              }}
-              title="Compartir reporte"
+              onClick={(e) => { e.stopPropagation(); void shareReport(); }}
+              title="Compartir PDF"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-              Compartir
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
             </button>
+
+            {/* Imprimir */}
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              onClick={(e) => {
-                e.stopPropagation();
-                void printFromParent();
-              }}
-              title="Imprimir reporte"
+              onClick={(e) => { e.stopPropagation(); void printFromParent(); }}
+              title="Imprimir"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
-              Imprimir
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             </button>
+
+            {/* Abrir en pestaña */}
             <a
               href={`/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}&v=${encodeURIComponent(APPREPORTE_V)}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={(e) => e.stopPropagation()}
-              title="Abrir en una pestaña nueva"
+              title="Abrir en pestaña"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
-              Abrir en pestaña
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             </a>
+
+            {/* Divider */}
+            <div className="mx-1 h-6 w-px bg-zinc-200 dark:bg-zinc-700" />
+
+            {/* Cerrar */}
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              onClick={(e) => {
-                e.stopPropagation();
-                void flushAndClose();
-              }}
+              onClick={(e) => { e.stopPropagation(); void flushAndClose(); }}
               disabled={closing}
+              title="Cerrar"
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               <X className="h-4 w-4" />
-              Cerrar
+              <span className="hidden sm:inline">Cerrar</span>
             </button>
           </div>
         </div>
