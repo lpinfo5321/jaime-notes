@@ -58,11 +58,8 @@ function mimeColor(mime: string) {
 
 /* ─────────────────────── Preview Modal ─────────────────────── */
 function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
-  const [mounted, setMounted] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-
-  useEffect(() => { setMounted(true); }, []);
   const dragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const lastPinchDist = useRef(0);
@@ -72,17 +69,11 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
   const isImage = doc.mime_type.startsWith("image/");
   const isPDF = doc.mime_type === "application/pdf";
 
-  // Back button + ESC
+  // ESC to close
   useEffect(() => {
-    history.pushState({ docPreview: true }, "");
-    const onPop = () => onClose();
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("popstate", onPop);
     window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("popstate", onPop);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   // Reset pan when zoom resets to 1
@@ -182,8 +173,6 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
   }
 
   function resetZoom() { setZoom(1); setPan({ x: 0, y: 0 }); }
-
-  if (!mounted) return null;
 
   return createPortal(
     <div
@@ -296,9 +285,6 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
 function DeleteModal({ name, onConfirm, onCancel, busy }: {
   name: string; onConfirm: () => void; onCancel: () => void; busy: boolean;
 }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-  if (!mounted) return null;
   return createPortal(
     <div className="animate-fade-in fixed inset-0 z-[99998] flex items-center justify-center p-4">
       <div className="pointer-events-none absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -426,11 +412,9 @@ function DocCard({ doc, onPreview, onDelete, onRename, selectMode, selected, onS
 function RenameModal({ doc, onSave, onClose }: {
   doc: Doc; onSave: (name: string) => Promise<void>; onClose: () => void;
 }) {
-  const [mounted, setMounted] = useState(false);
   const [name, setName] = useState(doc.name);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -447,7 +431,6 @@ function RenameModal({ doc, onSave, onClose }: {
     setBusy(false);
   }
 
-  if (!mounted) return null;
   return createPortal(
     <div className="animate-fade-in fixed inset-0 z-[99998] flex items-center justify-center p-4">
       <div className="pointer-events-none absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} style={{ pointerEvents: "auto" }} />
@@ -478,6 +461,7 @@ function RenameModal({ doc, onSave, onClose }: {
 /* ─────────────────────── Main View ─────────────────────── */
 export default function DocumentsView() {
   const supabase = useMemo(() => createClient(), []);
+  const [isBrowser, setIsBrowser] = useState(false);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -516,6 +500,7 @@ export default function DocumentsView() {
     setLoading(false);
   }, []);
 
+  useEffect(() => { setIsBrowser(true); }, []);
   useEffect(() => { load(); }, [load]);
 
   const visible = useMemo(() => {
@@ -832,11 +817,9 @@ create policy "docs storage delete" on storage.objects
         </div>
       ) : null}
 
-      {/* ── Preview modal ── */}
-      {preview && <PreviewModal doc={preview} onClose={() => setPreview(null)} />}
-
-      {/* ── Delete modal ── */}
-      {deleteTarget && (
+      {/* ── Modals (only client-side to avoid SSR issues with createPortal) ── */}
+      {isBrowser && preview && <PreviewModal doc={preview} onClose={() => setPreview(null)} />}
+      {isBrowser && deleteTarget && (
         <DeleteModal
           name={deleteTarget.name}
           onConfirm={handleDelete}
@@ -844,9 +827,7 @@ create policy "docs storage delete" on storage.objects
           busy={deleteBusy}
         />
       )}
-
-      {/* ── Rename modal ── */}
-      {renameTarget && (
+      {isBrowser && renameTarget && (
         <RenameModal
           doc={renameTarget}
           onSave={(name) => handleRename(renameTarget, name)}
