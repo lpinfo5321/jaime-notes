@@ -1002,8 +1002,8 @@
       ].filter(Boolean);
 
       const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
+      const pageW = doc.internal.pageSize.getWidth();  // 612pt
+      const pageH = doc.internal.pageSize.getHeight(); // 792pt
 
       for (let i = 0; i < pages.length; i++) {
         const elPage = pages[i];
@@ -1014,22 +1014,43 @@
           scale: 2,
           backgroundColor: "#ffffff",
           useCORS: true,
+          // Force full 860px paper width regardless of mobile viewport
+          windowWidth: 900,
           onclone: (clonedDoc) => {
             try {
               clonedDoc.body.classList.add("rc-export");
+              // Force paper element to full letter-size width
+              const paperEl = clonedDoc.getElementById("paper") || clonedDoc.querySelector(".paper");
+              if (paperEl) {
+                paperEl.style.width = "860px";
+                paperEl.style.minWidth = "860px";
+                paperEl.style.maxWidth = "860px";
+              }
+              // Ensure wrapper/shell is wide enough
+              const shellEl = clonedDoc.querySelector(".shell");
+              if (shellEl) {
+                shellEl.style.minWidth = "900px";
+                shellEl.style.padding = "14px";
+              }
+              // Force imagePaper elements to full width too
+              clonedDoc.querySelectorAll(".imagePaper").forEach((el) => {
+                el.style.width = "860px";
+                el.style.minWidth = "860px";
+              });
             } catch {}
           },
         });
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.92);
+        const imgData = canvas.toDataURL("image/jpeg", 0.93);
         const imgW = canvas.width;
         const imgH = canvas.height;
-        const scale = Math.min(pageW / imgW, pageH / imgH);
-        const drawW = imgW * scale;
+        // Scale to fill full page width; let height flow naturally
+        const scale = pageW / imgW;
+        const drawW = pageW;
         const drawH = imgH * scale;
-        const x = (pageW - drawW) / 2;
-        const y = (pageH - drawH) / 2;
-        doc.addImage(imgData, "JPEG", x, y, drawW, drawH);
+        // Center vertically if shorter than page, otherwise start at top
+        const y = drawH < pageH ? (pageH - drawH) / 2 : 0;
+        doc.addImage(imgData, "JPEG", 0, y, drawW, drawH);
       }
 
       return doc.output("blob");
