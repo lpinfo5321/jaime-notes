@@ -1001,58 +1001,80 @@
         ...Array.from(document.querySelectorAll("#imagePages .imagePaper")),
       ].filter(Boolean);
 
-      const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
-      const pageW = doc.internal.pageSize.getWidth();  // 612pt
-      const pageH = doc.internal.pageSize.getHeight(); // 792pt
+      // Letter size in points (72pt = 1in)
+      const LETTER_W = 612;
+      const LETTER_H = 792;
+
+      // Shared onclone handler: forces full 860px render width and white background
+      const onclone = (clonedDoc) => {
+        try {
+          // White background — eliminates gradient/color tints
+          clonedDoc.documentElement.style.background = "#fff";
+          clonedDoc.body.style.background = "#fff";
+          clonedDoc.body.classList.add("rc-export");
+
+          // Hide topbar so it never bleeds into the capture
+          const topbar = clonedDoc.querySelector(".topbar");
+          if (topbar) topbar.style.display = "none";
+
+          // Force all paper elements to full 860px width
+          clonedDoc.querySelectorAll(".paper, .imagePaper").forEach((el) => {
+            el.style.width = "860px";
+            el.style.minWidth = "860px";
+            el.style.maxWidth = "860px";
+            el.style.background = "#ffffff";
+          });
+
+          // Ensure shell/wrapper is wide enough
+          const shellEl = clonedDoc.querySelector(".shell");
+          if (shellEl) {
+            shellEl.style.minWidth = "900px";
+            shellEl.style.padding = "14px";
+            shellEl.style.background = "#fff";
+          }
+        } catch {}
+      };
+
+      // Build PDF — first page sets dimensions, subsequent pages added
+      let doc = null;
 
       for (let i = 0; i < pages.length; i++) {
         const elPage = pages[i];
         if (!elPage) continue;
-        if (i > 0) doc.addPage();
 
         const canvas = await html2canvas(elPage, {
           scale: 2,
           backgroundColor: "#ffffff",
           useCORS: true,
-          // Force full 860px paper width regardless of mobile viewport
-          windowWidth: 900,
-          onclone: (clonedDoc) => {
-            try {
-              clonedDoc.body.classList.add("rc-export");
-              // Force paper element to full letter-size width
-              const paperEl = clonedDoc.getElementById("paper") || clonedDoc.querySelector(".paper");
-              if (paperEl) {
-                paperEl.style.width = "860px";
-                paperEl.style.minWidth = "860px";
-                paperEl.style.maxWidth = "860px";
-              }
-              // Ensure wrapper/shell is wide enough
-              const shellEl = clonedDoc.querySelector(".shell");
-              if (shellEl) {
-                shellEl.style.minWidth = "900px";
-                shellEl.style.padding = "14px";
-              }
-              // Force imagePaper elements to full width too
-              clonedDoc.querySelectorAll(".imagePaper").forEach((el) => {
-                el.style.width = "860px";
-                el.style.minWidth = "860px";
-              });
-            } catch {}
-          },
+          allowTaint: false,
+          windowWidth: 900,  // simulate desktop width
+          onclone,
         });
 
         const imgData = canvas.toDataURL("image/jpeg", 0.93);
         const imgW = canvas.width;
         const imgH = canvas.height;
-        // Scale to fill full page width; let height flow naturally
-        const scale = pageW / imgW;
-        const drawW = pageW;
-        const drawH = imgH * scale;
-        // Center vertically if shorter than page, otherwise start at top
-        const y = drawH < pageH ? (pageH - drawH) / 2 : 0;
+
+        // Scale to fill full letter width
+        const scaleToW = LETTER_W / imgW;
+        const drawW = LETTER_W;
+        const drawH = imgH * scaleToW;
+
+        // Choose page height: use letter if content fits, else match content exactly
+        const pageH = drawH <= LETTER_H ? LETTER_H : drawH;
+
+        if (i === 0) {
+          doc = new jsPDF({ orientation: "portrait", unit: "pt", format: [LETTER_W, pageH] });
+        } else {
+          doc.addPage([LETTER_W, pageH]);
+        }
+
+        // Vertically center content only when page is taller than content
+        const y = pageH > drawH ? (pageH - drawH) / 2 : 0;
         doc.addImage(imgData, "JPEG", 0, y, drawW, drawH);
       }
 
+      if (!doc) throw new Error("No hay páginas para exportar");
       return doc.output("blob");
     };
 

@@ -406,12 +406,28 @@
     }
 
     /* Export helpers (PDF) */
+    body.rc-export,
+    body.rc-export html {
+      background: #fff !important;
+    }
+    body.rc-export .topbar{
+      display:none !important;
+    }
     body.rc-export .miniBtn,
     body.rc-export .imageTop{
       display:none !important;
     }
     body.rc-export .imagePaper{
       padding: 0 !important;
+      background: #fff !important;
+      box-shadow: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+    }
+    body.rc-export .paper{
+      box-shadow: none !important;
+      border: none !important;
+      border-radius: 0 !important;
     }
 
     /* Modal */
