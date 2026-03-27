@@ -475,13 +475,22 @@ export default function DocumentsView() {
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleteBusy(true);
+    setError(null);
     try {
-      await fetch(`/api/documents/${deleteTarget.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/documents/${deleteTarget.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(`Error al eliminar: ${json.error ?? res.statusText}`);
+        return;
+      }
       setDocs((prev) => prev.filter((d) => d.id !== deleteTarget.id));
       setSelectedIds((prev) => { const n = new Set(prev); n.delete(deleteTarget.id); return n; });
       setDeleteTarget(null);
-    } catch {}
-    setDeleteBusy(false);
+    } catch (e: any) {
+      setError(`Error de red: ${e?.message ?? "desconocido"}`);
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   async function handleRename(doc: Doc, newName: string) {

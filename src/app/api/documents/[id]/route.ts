@@ -41,18 +41,29 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Get path before deleting
-  const { data: doc } = await supabase
+  // Get path before deleting (verify ownership at the same time)
+  const { data: doc, error: fetchErr } = await supabase
     .from("documents")
     .select("path")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
 
-  if (doc?.path) {
-    await supabase.storage.from(BUCKET).remove([doc.path]);
+  if (fetchErr && fetchErr.code !== "PGRST116") {
+    // PGRST116 = row not found — treat as already deleted
+    return NextResponse.json({ error: fetchErr.message }, { status: 400 });
   }
 
+  // Try to remove the file from storage (non-fatal if it fails)
+  if (doc?.path) {
+    try {
+      await supabase.storage.from(BUCKET).remove([doc.path]);
+    } catch {
+      // ignore storage errors — proceed with DB delete
+    }
+  }
+
+  // Delete the DB record
   const { error } = await supabase
     .from("documents")
     .delete()
