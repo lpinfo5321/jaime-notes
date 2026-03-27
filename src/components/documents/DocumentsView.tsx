@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   FileText, Image as ImageIcon, File, Upload, Trash2, Download,
-  Share2, Printer, Search, X, FolderOpen, Plus, Eye,
+  Share2, Printer, Search, X, FolderOpen, Plus, Eye, ChevronLeft,
 } from "lucide-react";
 
 /* ─────────────────────── types ─────────────────────── */
@@ -56,110 +56,172 @@ function mimeColor(mime: string) {
 
 /* ─────────────────────── Preview Modal ─────────────────────── */
 function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
-  useEffect(() => {
-    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", fn);
-    return () => window.removeEventListener("keydown", fn);
-  }, [onClose]);
+  const [zoom, setZoom] = useState(1);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const isImage = doc.mime_type.startsWith("image/");
   const isPDF = doc.mime_type === "application/pdf";
 
+  // Push history state so the back button closes the modal
+  useEffect(() => {
+    history.pushState({ docPreview: true }, "");
+    const onPop = () => onClose();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  // Pinch-to-zoom via pointer events
+  useEffect(() => {
+    if (!isImage) return;
+    const el = containerRef.current;
+    if (!el) return;
+    let lastDist = 0;
+    let startZoom = 1;
+
+    function onTouchStart(e: TouchEvent) {
+      if (e.touches.length === 2) {
+        lastDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY,
+        );
+        startZoom = zoom;
+      }
+    }
+    function onTouchMove(e: TouchEvent) {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY,
+        );
+        const next = Math.min(5, Math.max(0.5, startZoom * (dist / lastDist)));
+        setZoom(next);
+      }
+    }
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+    };
+  }, [isImage, zoom]);
+
+  function handleDownload() {
+    if (!doc.url) return;
+    const a = document.createElement("a");
+    a.href = doc.url; a.download = doc.name; a.click();
+  }
+  function handleShare() {
+    if (!doc.url) return;
+    if (navigator.share) navigator.share({ title: doc.name, url: doc.url }).catch(() => {});
+    else navigator.clipboard.writeText(doc.url).catch(() => {});
+  }
   function handlePrint() {
     if (!doc.url) return;
     const win = window.open(doc.url, "_blank");
     win?.addEventListener("load", () => win.print());
   }
 
-  function handleDownload() {
-    if (!doc.url) return;
-    const a = document.createElement("a");
-    a.href = doc.url;
-    a.download = doc.name;
-    a.click();
-  }
-
-  function handleShare() {
-    if (!doc.url) return;
-    if (navigator.share) {
-      navigator.share({ title: doc.name, url: doc.url }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(doc.url).catch(() => {});
-      alert("Enlace copiado al portapapeles");
-    }
-  }
-
   return (
-    <div
-      className="animate-fade-in fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
+    <div className="animate-fade-in fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(0,0,0,0.96)" }}>
       {/* toolbar */}
-      <div className="flex shrink-0 items-center justify-between px-4 py-3">
-        <p className="truncate text-sm font-semibold text-white max-w-[60vw]">{doc.name}</p>
+      <div className="flex shrink-0 items-center justify-between bg-black/40 px-4 py-3 backdrop-blur-sm">
+        <button
+          onClick={onClose}
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white"
+          title="Cerrar"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <p className="flex-1 truncate px-3 text-center text-sm font-semibold text-white">{doc.name}</p>
         <div className="flex items-center gap-1">
-          <button
-            onClick={handlePrint}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white"
-            title="Imprimir"
-          >
+          <button onClick={handlePrint} className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Imprimir">
             <Printer className="h-4 w-4" />
           </button>
-          <button
-            onClick={handleDownload}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white"
-            title="Descargar"
-          >
+          <button onClick={handleDownload} className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Descargar">
             <Download className="h-4 w-4" />
           </button>
-          <button
-            onClick={handleShare}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white"
-            title="Compartir"
-          >
+          <button onClick={handleShare} className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Compartir">
             <Share2 className="h-4 w-4" />
           </button>
-          <button
-            onClick={onClose}
-            className="ml-2 flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20"
-            title="Cerrar"
-          >
+          <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 hover:bg-white/10 hover:text-white" title="Cerrar">
             <X className="h-4 w-4" />
           </button>
         </div>
       </div>
 
       {/* content */}
-      <div className="flex flex-1 items-center justify-center overflow-hidden p-2">
+      <div
+        ref={containerRef}
+        className="relative flex flex-1 items-center justify-center overflow-auto"
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
         {isImage && doc.url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
+            ref={imgRef}
             src={doc.url}
             alt={doc.name}
-            className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl"
+            onDoubleClick={() => setZoom((z) => z > 1 ? 1 : 2.5)}
+            style={{
+              transform: `scale(${zoom})`,
+              transformOrigin: "center center",
+              transition: zoom === 1 ? "transform 0.2s ease" : "none",
+              cursor: zoom > 1 ? "grab" : "zoom-in",
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+              touchAction: "pinch-zoom",
+              userSelect: "none",
+            }}
           />
         ) : isPDF && doc.url ? (
           <iframe
-            src={doc.url}
+            src={`${doc.url}#toolbar=1&view=FitH`}
             title={doc.name}
-            className="h-full w-full max-w-4xl rounded-2xl bg-white shadow-2xl"
+            className="h-full w-full bg-white"
+            style={{ border: "none" }}
           />
         ) : (
-          <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex flex-col items-center gap-4 text-center p-8">
             <div className={`flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br ${mimeColor(doc.mime_type)}`}>
               <FileIcon mime={doc.mime_type} className="h-10 w-10 text-white" />
             </div>
             <p className="text-lg font-semibold text-white">{doc.name}</p>
-            <p className="text-sm text-zinc-400">Vista previa no disponible para este tipo de archivo</p>
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-100"
-            >
+            <p className="text-sm text-zinc-400">Vista previa no disponible</p>
+            <button onClick={handleDownload} className="flex items-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-100">
               <Download className="h-4 w-4" /> Descargar
             </button>
           </div>
         )}
       </div>
+
+      {/* zoom controls (solo imágenes) */}
+      {isImage && (
+        <div className="flex shrink-0 items-center justify-center gap-3 bg-black/40 py-3 backdrop-blur-sm">
+          <button
+            onClick={() => setZoom((z) => Math.max(0.5, z - 0.5))}
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-lg font-bold"
+          >−</button>
+          <span className="min-w-[48px] text-center text-xs font-semibold text-zinc-300">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={() => setZoom((z) => Math.min(5, z + 0.5))}
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-lg font-bold"
+          >+</button>
+          <button
+            onClick={() => setZoom(1)}
+            className="ml-1 rounded-xl bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/20"
+          >Reset</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -202,32 +264,22 @@ function DocCard({ doc, onPreview, onDelete }: {
   function handleDownload(e: React.MouseEvent) {
     e.stopPropagation();
     if (!doc.url) return;
-    const a = document.createElement("a");
-    a.href = doc.url;
-    a.download = doc.name;
-    a.click();
+    const a = document.createElement("a"); a.href = doc.url; a.download = doc.name; a.click();
   }
-
   function handleShare(e: React.MouseEvent) {
     e.stopPropagation();
     if (!doc.url) return;
-    if (navigator.share) {
-      navigator.share({ title: doc.name, url: doc.url }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(doc.url).catch(() => {});
-    }
+    if (navigator.share) navigator.share({ title: doc.name, url: doc.url }).catch(() => {});
+    else navigator.clipboard.writeText(doc.url).catch(() => {});
   }
 
   return (
     <div
-      className="animate-card-in group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-zinc-200/60 bg-white/70 shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900/60 dark:hover:border-zinc-700/60"
+      className="animate-card-in group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-zinc-200/60 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900"
       onClick={onPreview}
     >
-      {/* accent bar */}
-      <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${color}`} />
-
       {/* thumbnail or icon */}
-      <div className="relative flex h-40 items-center justify-center overflow-hidden bg-zinc-50 dark:bg-zinc-800/40">
+      <div className="relative flex h-36 items-center justify-center overflow-hidden bg-zinc-100 dark:bg-zinc-800">
         {isImage && doc.url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -236,50 +288,33 @@ function DocCard({ doc, onPreview, onDelete }: {
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${color} shadow-md`}>
-            <FileIcon mime={doc.mime_type} className="h-8 w-8 text-white" />
+          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${color} shadow`}>
+            <FileIcon mime={doc.mime_type} className="h-7 w-7 text-white" />
           </div>
         )}
-
-        {/* hover overlay */}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/30 group-hover:opacity-100">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/90 text-zinc-800 shadow">
-            <Eye className="h-5 w-5" />
+        {/* overlay on hover */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/25 group-hover:opacity-100">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 text-zinc-800 shadow">
+            <Eye className="h-4 w-4" />
           </div>
         </div>
       </div>
 
       {/* info */}
-      <div className="flex flex-1 flex-col gap-1 p-3">
+      <div className="flex flex-1 flex-col gap-0.5 px-3 py-2">
         <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{doc.name}</p>
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <span>{prettySize(doc.size)}</span>
-          <span>·</span>
-          <span>{prettyDate(doc.created_at)}</span>
-        </div>
+        <p className="text-xs text-zinc-400">{prettySize(doc.size)} · {prettyDate(doc.created_at)}</p>
       </div>
 
       {/* actions */}
-      <div className="flex items-center gap-1 border-t border-zinc-100 px-3 py-2 dark:border-zinc-800">
-        <button
-          onClick={handleDownload}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-          title="Descargar"
-        >
+      <div className="flex items-center gap-1 border-t border-zinc-100 px-2 py-1.5 dark:border-zinc-800/60">
+        <button onClick={handleDownload} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Descargar">
           <Download className="h-3.5 w-3.5" />
         </button>
-        <button
-          onClick={handleShare}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-          title="Compartir"
-        >
+        <button onClick={handleShare} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Compartir">
           <Share2 className="h-3.5 w-3.5" />
         </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-          title="Eliminar"
-        >
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-400" title="Eliminar">
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -512,28 +547,32 @@ create policy "docs storage delete" on storage.objects
         {q && <button onClick={() => setQ("")} className="text-zinc-400 hover:text-zinc-600"><X className="h-4 w-4" /></button>}
       </div>
 
-      {/* ── Drop zone (when no files or always visible) ── */}
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        onClick={() => !docs.length && fileInputRef.current?.click()}
-        className={`mb-6 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-colors ${
-          dragOver
-            ? "border-indigo-400 bg-indigo-50/50 dark:border-indigo-500 dark:bg-indigo-950/20"
-            : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
-        } ${docs.length ? "py-5" : "py-12"}`}
-      >
-        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl transition-colors ${dragOver ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400" : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800"}`}>
-          <Upload className="h-6 w-6" />
-        </div>
-        <div>
-          <p className={`text-sm font-semibold ${dragOver ? "text-indigo-700 dark:text-indigo-300" : "text-zinc-600 dark:text-zinc-300"}`}>
-            {dragOver ? "Suelta aquí para subir" : "Arrastra archivos aquí"}
+      {/* ── Drop zone (sutil, solo activo al arrastrar o sin archivos) ── */}
+      {(dragOver || docs.length === 0) && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`mb-5 flex cursor-pointer items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition-all ${
+            dragOver
+              ? "border-indigo-400 bg-indigo-50/60 dark:border-indigo-500 dark:bg-indigo-950/20"
+              : "border-zinc-200 bg-zinc-50/50 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/30"
+          }`}
+        >
+          <Upload className={`h-5 w-5 shrink-0 ${dragOver ? "text-indigo-500" : "text-zinc-400"}`} />
+          <p className={`text-sm font-medium ${dragOver ? "text-indigo-700 dark:text-indigo-300" : "text-zinc-500 dark:text-zinc-400"}`}>
+            {dragOver ? "Suelta para subir" : "Arrastra archivos aquí o usa el botón ↑"}
           </p>
-          <p className="mt-0.5 text-xs text-zinc-400">o haz clic en "Subir archivo" — Imágenes, PDF, Word, Excel…</p>
         </div>
-      </div>
+      )}
+      {/* drop target invisible cuando ya hay archivos */}
+      {docs.length > 0 && !dragOver && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          className="fixed inset-0 z-0 pointer-events-none"
+        />
+      )}
 
       {/* ── Content ── */}
       {loading ? (

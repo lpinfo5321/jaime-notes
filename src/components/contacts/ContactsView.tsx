@@ -56,9 +56,8 @@ function ContactCard({
 }) {
   const color = avatarColor(contact.name);
   return (
-    <div className="animate-card-in group relative flex flex-col gap-3 rounded-2xl border border-zinc-200/60 bg-white/70 p-4 shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-zinc-800/50 dark:bg-zinc-900/60 dark:hover:border-zinc-700/60 dark:hover:shadow-zinc-950/50">
-      {/* accent bar */}
-      <div className={`absolute inset-x-0 top-0 h-[3px] rounded-t-2xl bg-gradient-to-r ${color}`} />
+    <div className="animate-card-in group relative flex flex-col gap-3 rounded-2xl border border-zinc-200/60 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900">
+      {/* avatar color strip — solo en el avatar, no en la card */}
 
       <div className="flex items-start gap-3 pt-1">
         {/* avatar */}
