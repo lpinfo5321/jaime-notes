@@ -3189,6 +3189,20 @@ function ReportModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyTitle]);
 
+  async function shareReport() {
+    const reportUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/appreporte/index.html?noteId=${encodeURIComponent(noteId)}&companyName=${encodeURIComponent(companyTitle)}&v=${encodeURIComponent(APPREPORTE_V)}`;
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title: companyTitle, text: `Reporte: ${companyTitle}`, url: reportUrl });
+        return;
+      } catch {}
+    }
+    try {
+      await navigator.clipboard.writeText(reportUrl);
+      alert("Enlace copiado al portapapeles");
+    } catch {}
+  }
+
   async function printFromParent() {
     const w = iframeRef.current?.contentWindow ?? null;
     const doc = iframeRef.current?.contentDocument ?? null;
@@ -3267,6 +3281,18 @@ function ReportModal({
             <div className="mt-0.5 truncate text-sm font-semibold">{companyTitle}</div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-3">
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={(e) => {
+                e.stopPropagation();
+                void shareReport();
+              }}
+              title="Compartir reporte"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              Compartir
+            </button>
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
