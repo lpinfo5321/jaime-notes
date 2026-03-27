@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Return Checks",
-  description: "Gestión de cheques devueltos con reportes, notas y adjuntos.",
+  description: "Notas/expedientes con plantillas y adjuntos (tipo Keep) para tu negocio.",
 };
 
 export default function RootLayout({

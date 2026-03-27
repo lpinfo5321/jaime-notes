@@ -72,7 +72,7 @@ export default function LoginClient({ nextUrl }: { nextUrl: string }) {
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight">Jaime Notes</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Return Checks</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
           Notas/expedientes con plantillas y adjuntos, sincronizado en la nube.
         </p>

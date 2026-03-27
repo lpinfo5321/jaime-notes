@@ -167,7 +167,7 @@ export default function NotePDF({ note, attachments }: Props) {
         ) : null}
 
         <View style={styles.footer}>
-          <Text>Generado por Jaime Notes — {new Date().toLocaleString()}</Text>
+          <Text>Generado por Return Checks — {new Date().toLocaleString()}</Text>
         </View>
       </Page>
     </Document>
