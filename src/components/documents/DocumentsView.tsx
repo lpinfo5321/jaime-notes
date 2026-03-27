@@ -130,7 +130,7 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
   }
 
   return (
-    <div className="animate-fade-in fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(0,0,0,0.96)" }}>
+    <div className="animate-fade-in fixed inset-0 z-50 flex flex-col overflow-hidden" style={{ background: "rgba(0,0,0,0.96)" }}>
       {/* toolbar */}
       <div className="flex shrink-0 items-center justify-between bg-black/40 px-4 py-3 backdrop-blur-sm">
         <button
@@ -160,37 +160,42 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
       {/* content */}
       <div
         ref={containerRef}
-        className="relative flex flex-1 items-center justify-center overflow-auto"
+        className="relative flex-1 overflow-auto"
+        style={{ minHeight: 0 }}
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
         {isImage && doc.url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            ref={imgRef}
-            src={doc.url}
-            alt={doc.name}
-            onDoubleClick={() => setZoom((z) => z > 1 ? 1 : 2.5)}
-            style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: "center center",
-              transition: zoom === 1 ? "transform 0.2s ease" : "none",
-              cursor: zoom > 1 ? "grab" : "zoom-in",
-              maxWidth: "100%",
-              maxHeight: "100%",
-              objectFit: "contain",
-              touchAction: "pinch-zoom",
-              userSelect: "none",
-            }}
-          />
+          <div className="flex min-h-full items-center justify-center p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              ref={imgRef}
+              src={doc.url}
+              alt={doc.name}
+              onDoubleClick={() => setZoom((z) => z > 1 ? 1 : 2.5)}
+              style={{
+                transform: `scale(${zoom})`,
+                transformOrigin: "center center",
+                transition: zoom === 1 ? "transform 0.25s ease" : "none",
+                cursor: zoom > 1 ? "grab" : "zoom-in",
+                display: "block",
+                maxWidth: zoom <= 1 ? "100%" : "none",
+                maxHeight: zoom <= 1 ? "calc(100vh - 120px)" : "none",
+                width: "auto",
+                height: "auto",
+                objectFit: "contain",
+                touchAction: "pinch-zoom",
+                userSelect: "none",
+              }}
+            />
+          </div>
         ) : isPDF && doc.url ? (
           <iframe
             src={`${doc.url}#toolbar=1&view=FitH`}
             title={doc.name}
-            className="h-full w-full bg-white"
-            style={{ border: "none" }}
+            style={{ width: "100%", height: "100%", border: "none", background: "white", display: "block" }}
           />
         ) : (
-          <div className="flex flex-col items-center gap-4 text-center p-8">
+          <div className="flex min-h-full flex-col items-center justify-center gap-4 p-8 text-center">
             <div className={`flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br ${mimeColor(doc.mime_type)}`}>
               <FileIcon mime={doc.mime_type} className="h-10 w-10 text-white" />
             </div>
@@ -205,22 +210,16 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
 
       {/* zoom controls (solo imágenes) */}
       {isImage && (
-        <div className="flex shrink-0 items-center justify-center gap-3 bg-black/40 py-3 backdrop-blur-sm">
-          <button
-            onClick={() => setZoom((z) => Math.max(0.5, z - 0.5))}
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-lg font-bold"
-          >−</button>
-          <span className="min-w-[48px] text-center text-xs font-semibold text-zinc-300">
+        <div className="flex shrink-0 items-center justify-center gap-2 bg-black/50 py-2.5 backdrop-blur-sm">
+          <button onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))}
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-xl font-light">−</button>
+          <span className="min-w-[52px] text-center text-xs font-semibold text-zinc-300">
             {Math.round(zoom * 100)}%
           </span>
-          <button
-            onClick={() => setZoom((z) => Math.min(5, z + 0.5))}
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-lg font-bold"
-          >+</button>
-          <button
-            onClick={() => setZoom(1)}
-            className="ml-1 rounded-xl bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/20"
-          >Reset</button>
+          <button onClick={() => setZoom((z) => Math.min(6, +(z + 0.25).toFixed(2)))}
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 text-xl font-light">+</button>
+          <button onClick={() => setZoom(1)}
+            className="ml-1 rounded-xl bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/20">Reset</button>
         </div>
       )}
     </div>
