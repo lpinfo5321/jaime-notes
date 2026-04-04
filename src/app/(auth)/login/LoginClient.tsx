@@ -2,175 +2,254 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 
 export default function LoginClient({ nextUrl }: { nextUrl: string }) {
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
+  const [mode,     setMode]     = useState<"login" | "signup">("login");
+  const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [showPass, setShowPass] = useState(false);
+  const [busy,     setBusy]     = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+  const [info,     setInfo]     = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     setInfo(null);
-
     try {
       const supabase = createClient();
       if (mode === "login") {
-        const { error: err } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) throw err;
       } else {
-        const { error: err } = await supabase.auth.signUp({
-          email,
-          password,
-        });
+        const { error: err } = await supabase.auth.signUp({ email, password });
         if (err) throw err;
       }
-
       window.location.href = nextUrl;
     } catch (e2) {
-      const msg = e2 instanceof Error ? e2.message : "Error al iniciar sesión";
-      setError(msg);
+      setError(e2 instanceof Error ? e2.message : "Error al iniciar sesión");
     } finally {
       setBusy(false);
     }
   }
 
   async function resendConfirmation() {
-    if (!email.trim()) {
-      setError("Escribe tu email para reenviar la confirmación.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setInfo(null);
+    if (!email.trim()) { setError("Escribe tu email para reenviar la confirmación."); return; }
+    setBusy(true); setError(null); setInfo(null);
     try {
       const supabase = createClient();
-      const { error: err } = await supabase.auth.resend({
-        type: "signup",
-        email: email.trim(),
-      });
+      const { error: err } = await supabase.auth.resend({ type: "signup", email: email.trim() });
       if (err) throw err;
-      setInfo(
-        "Listo. Te envié un correo para confirmar tu email. Revisa Inbox/Spam y abre el link, luego vuelve e intenta entrar.",
-      );
+      setInfo("Listo. Te envié un correo para confirmar tu email. Revisa Inbox/Spam y abre el link, luego vuelve e intenta entrar.");
     } catch (e2) {
-      const msg =
-        e2 instanceof Error ? e2.message : "No se pudo reenviar el correo";
-      setError(msg);
+      setError(e2 instanceof Error ? e2.message : "No se pudo reenviar el correo");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight">Return Checks</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-          Notas/expedientes con plantillas y adjuntos, sincronizado en la nube.
+    <div
+      style={{
+        width: "100%",
+        maxWidth: "400px",
+        background: "rgba(255,255,255,0.97)",
+        borderRadius: "28px",
+        padding: "36px 32px 32px",
+        boxShadow: "0 32px 80px rgba(0,0,0,0.45), 0 4px 20px rgba(0,0,0,0.2)",
+        backdropFilter: "blur(20px)",
+      }}
+    >
+      {/* ── Brand ── */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: "28px" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.png"
+          alt="Return Checks"
+          style={{
+            width: "72px", height: "72px",
+            borderRadius: "20px",
+            objectFit: "contain",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+            marginBottom: "14px",
+          }}
+        />
+        <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>
+          Return Checks
+        </h1>
+        <p style={{ margin: "5px 0 0", fontSize: "13px", color: "#94a3b8" }}>
+          Gestión de cheques retornados
         </p>
       </div>
 
-      <div className="mb-5 flex gap-2 rounded-xl bg-zinc-100 p-1 text-sm dark:bg-zinc-950">
-        <button
-          type="button"
-          onClick={() => setMode("login")}
-          className={[
-            "flex-1 rounded-lg px-3 py-2 font-medium transition",
-            mode === "login"
-              ? "bg-white shadow-sm dark:bg-zinc-900"
-              : "text-zinc-600 dark:text-zinc-300",
-          ].join(" ")}
-        >
-          Entrar
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("signup")}
-          className={[
-            "flex-1 rounded-lg px-3 py-2 font-medium transition",
-            mode === "signup"
-              ? "bg-white shadow-sm dark:bg-zinc-900"
-              : "text-zinc-600 dark:text-zinc-300",
-          ].join(" ")}
-        >
-          Crear cuenta
-        </button>
+      {/* ── Tab switcher ── */}
+      <div style={{
+        display: "flex", gap: "4px",
+        background: "#f1f5f9", borderRadius: "14px", padding: "4px",
+        marginBottom: "22px",
+      }}>
+        {(["login", "signup"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => { setMode(m); setError(null); setInfo(null); }}
+            style={{
+              flex: 1, padding: "9px",
+              borderRadius: "10px", border: "none",
+              fontSize: "13px", fontWeight: 700,
+              cursor: "pointer",
+              transition: "all .15s",
+              background: mode === m ? "white" : "transparent",
+              color: mode === m ? "#0f172a" : "#64748b",
+              boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
+            }}
+          >
+            {m === "login" ? "Entrar" : "Crear cuenta"}
+          </button>
+        ))}
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-3">
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium">Email</span>
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            type="email"
-            autoComplete="email"
-            required
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
-            placeholder="tu@correo.com"
-          />
-        </label>
+      {/* ── Form ── */}
+      <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
 
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium">Contraseña</span>
-          <input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            autoComplete={
-              mode === "login" ? "current-password" : "new-password"
-            }
-            required
-            minLength={6}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-zinc-700"
-            placeholder="••••••••"
-          />
-        </label>
+        {/* Email */}
+        <div>
+          <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Email
+          </label>
+          <div style={{ position: "relative" }}>
+            <span style={{ position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }}>
+              <Mail size={15} />
+            </span>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              autoComplete="email"
+              required
+              placeholder="tu@correo.com"
+              style={{
+                width: "100%", boxSizing: "border-box",
+                paddingLeft: "38px", paddingRight: "14px",
+                paddingTop: "11px", paddingBottom: "11px",
+                borderRadius: "12px",
+                border: "1.5px solid #e2e8f0",
+                background: "#f8fafc",
+                fontSize: "14px", color: "#0f172a",
+                outline: "none", transition: "border .15s",
+              }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "#6366f1")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "#e2e8f0")}
+            />
+          </div>
+        </div>
 
-        {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+        {/* Password */}
+        <div>
+          <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Contraseña
+          </label>
+          <div style={{ position: "relative" }}>
+            <span style={{ position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }}>
+              <Lock size={15} />
+            </span>
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type={showPass ? "text" : "password"}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              required
+              minLength={6}
+              placeholder="••••••••"
+              style={{
+                width: "100%", boxSizing: "border-box",
+                paddingLeft: "38px", paddingRight: "42px",
+                paddingTop: "11px", paddingBottom: "11px",
+                borderRadius: "12px",
+                border: "1.5px solid #e2e8f0",
+                background: "#f8fafc",
+                fontSize: "14px", color: "#0f172a",
+                outline: "none", transition: "border .15s",
+              }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "#6366f1")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "#e2e8f0")}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((v) => !v)}
+              style={{
+                position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", cursor: "pointer",
+                color: "#94a3b8", padding: "2px", lineHeight: 0,
+              }}
+              title={showPass ? "Ocultar" : "Mostrar"}
+            >
+              {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", padding: "10px 12px", fontSize: "13px", color: "#dc2626" }}>
             {error}
           </div>
-        ) : null}
+        )}
 
-        {info ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
+        {/* Info */}
+        {info && (
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "10px 12px", fontSize: "13px", color: "#16a34a" }}>
             {info}
           </div>
-        ) : null}
+        )}
 
-        {error?.toLowerCase().includes("email not confirmed") ? (
+        {/* Resend confirmation */}
+        {error?.toLowerCase().includes("email not confirmed") && (
           <button
             type="button"
             disabled={busy}
             onClick={resendConfirmation}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            style={{
+              width: "100%", padding: "11px",
+              borderRadius: "12px", border: "1.5px solid #e2e8f0",
+              background: "white", fontSize: "13px", fontWeight: 600,
+              color: "#475569", cursor: "pointer",
+            }}
           >
             Reenviar correo de confirmación
           </button>
-        ) : null}
+        )}
 
+        {/* Submit */}
         <button
           disabled={busy}
-          className="mt-2 w-full rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+          style={{
+            marginTop: "4px", width: "100%",
+            padding: "13px",
+            borderRadius: "14px", border: "none",
+            background: busy
+              ? "#94a3b8"
+              : "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+            color: "white",
+            fontSize: "15px", fontWeight: 800,
+            cursor: busy ? "not-allowed" : "pointer",
+            boxShadow: busy ? "none" : "0 4px 20px rgba(15,23,42,0.35)",
+            transition: "all .15s",
+            letterSpacing: "0.2px",
+          }}
+          onMouseEnter={(e) => { if (!busy) e.currentTarget.style.transform = "translateY(-1px)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; }}
         >
-          {busy ? "Procesando…" : mode === "login" ? "Entrar" : "Crear cuenta"}
+          {busy ? "Procesando…" : mode === "login" ? "Entrar →" : "Crear cuenta →"}
         </button>
       </form>
 
-      <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-        Tip: en Supabase puedes crear solo tu cuenta admin y desactivar registros
-        públicos si lo prefieres.
+      {/* Footer */}
+      <p style={{ marginTop: "20px", textAlign: "center", fontSize: "11px", color: "#cbd5e1" }}>
+        Acceso seguro · Return Checks v1.0
       </p>
     </div>
   );
 }
-
