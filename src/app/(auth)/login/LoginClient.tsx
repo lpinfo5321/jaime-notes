@@ -55,11 +55,10 @@ export default function LoginClient({ nextUrl }: { nextUrl: string }) {
       style={{
         width: "100%",
         maxWidth: "400px",
-        background: "rgba(255,255,255,0.97)",
-        borderRadius: "28px",
+        background: "#ffffff",
+        borderRadius: "24px",
         padding: "36px 32px 32px",
-        boxShadow: "0 32px 80px rgba(0,0,0,0.45), 0 4px 20px rgba(0,0,0,0.2)",
-        backdropFilter: "blur(20px)",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.10), 0 2px 10px rgba(0,0,0,0.06)",
       }}
     >
       {/* ── Brand ── */}
@@ -247,7 +246,7 @@ export default function LoginClient({ nextUrl }: { nextUrl: string }) {
       </form>
 
       {/* Footer */}
-      <p style={{ marginTop: "20px", textAlign: "center", fontSize: "11px", color: "#cbd5e1" }}>
+      <p style={{ marginTop: "20px", textAlign: "center", fontSize: "11px", color: "#94a3b8" }}>
         Acceso seguro · Return Checks v1.0
       </p>
     </div>
