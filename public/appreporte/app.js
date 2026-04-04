@@ -2151,6 +2151,7 @@ function initDatePickers() {
         /* Init flatpickr — attached to the text input */
         const fp = window.flatpickr(input, {
           allowInput: true,
+          clickOpens: false,         /* only open via the calendar button */
           disableMobile: true,
           appendTo: document.body,   /* render calendar in body, avoids overflow:hidden clipping */
           dateFormat: "m/d/y",

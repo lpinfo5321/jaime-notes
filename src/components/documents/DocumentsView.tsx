@@ -554,58 +554,66 @@ export default function DocumentsView() {
 
   return (
     <div className="min-h-[60vh] pb-20">
-      {/* ── Top bar ── */}
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm">
-            <FolderOpen className="h-5 w-5 text-white" />
+      {/* ── Sticky compact header ── */}
+      <div className="sticky top-0 z-10 mb-4 flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/90">
+        {/* Icon + title */}
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm">
+            <FolderOpen className="h-4 w-4 text-white" />
           </div>
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Documentos</h1>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {docs.length} {docs.length === 1 ? "archivo" : "archivos"}
-              {selectMode && selectedIds.size > 0 && ` · ${selectedIds.size} seleccionado${selectedIds.size > 1 ? "s" : ""}`}
-            </p>
+          <div className="hidden sm:block leading-tight">
+            <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Documentos</span>
+            <span className="ml-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+              {docs.length}
+              {selectMode && selectedIds.size > 0 && ` · ${selectedIds.size} sel.`}
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Search */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar documento…"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-400"
+          />
+          {q && <button onClick={() => setQ("")} className="text-zinc-400 hover:text-zinc-600"><X className="h-3.5 w-3.5" /></button>}
+        </div>
+
+        {/* Actions */}
+        <div className="flex shrink-0 items-center gap-1.5">
           {/* Print selected */}
           {selectMode && selectedIds.size > 0 && (
-            <button
-              onClick={printSelected}
-              className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
-            >
-              <Printer className="h-4 w-4" />
-              Imprimir {selectedIds.size > 1 ? `(${selectedIds.size})` : ""}
+            <button onClick={printSelected} className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
+              <Printer className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Imprimir ({selectedIds.size})</span>
             </button>
           )}
-
-          {/* Select mode toggle */}
+          {/* Select toggle */}
           {docs.length > 0 && (
             <button
               onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
-              className={`flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
+              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
                 selectMode
                   ? "border-zinc-300 bg-zinc-100 text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
                   : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
               }`}
             >
-              {selectMode ? <><X className="h-4 w-4" /> Cancelar</> : <><CheckSquare className="h-4 w-4" /> Seleccionar</>}
+              {selectMode ? <><X className="h-3.5 w-3.5" /><span className="hidden sm:inline">Cancelar</span></> : <><CheckSquare className="h-3.5 w-3.5" /><span className="hidden sm:inline">Seleccionar</span></>}
             </button>
           )}
-
           {/* Upload */}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-2 rounded-2xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+            className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
           >
-            {uploading ? (
-              <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900" /></>
-            ) : (
-              <><Plus className="h-4 w-4" /> Subir</>
-            )}
+            {uploading
+              ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900" />
+              : <><Plus className="h-3.5 w-3.5" /><span className="hidden sm:inline">Subir</span></>
+            }
           </button>
         </div>
 
@@ -678,18 +686,6 @@ create policy "docs storage delete" on storage.objects
           <p className="text-sm text-blue-700 dark:text-blue-300">{uploadProgress}</p>
         </div>
       )}
-
-      {/* ── Search ── */}
-      <div className="mb-6 flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 px-3 py-2 shadow-sm backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-900/50">
-        <Search className="h-4 w-4 shrink-0 text-zinc-400" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar documentos…"
-          className="w-full bg-transparent py-1 text-sm outline-none placeholder:text-zinc-400"
-        />
-        {q && <button onClick={() => setQ("")} className="text-zinc-400 hover:text-zinc-600"><X className="h-4 w-4" /></button>}
-      </div>
 
       {/* ── Drop zone (sutil, solo activo al arrastrar o sin archivos) ── */}
       {(dragOver || docs.length === 0) && (

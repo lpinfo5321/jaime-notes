@@ -59,72 +59,41 @@ function ContactCard({
   const firstPhone = phones[0];
 
   return (
-    <div className="animate-card-in group relative flex overflow-hidden rounded-2xl border border-zinc-200/60 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900
-      /* mobile: horizontal row */
-      flex-row items-center gap-3 p-3
-      /* desktop: vertical card */
-      md:flex-col md:items-stretch md:gap-0 md:p-0
-    ">
-
-      {/* ── Desktop: avatar banner ── */}
-      <div className={`hidden md:flex h-32 items-center justify-center bg-gradient-to-br ${color} bg-opacity-10 relative`}>
-        <div className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${color} text-xl font-bold text-white shadow-lg`}>
+    <div className="animate-card-in group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200/60 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900">
+      {/* Avatar banner */}
+      <div className={`relative flex h-20 sm:h-28 items-center justify-center bg-gradient-to-br ${color}`}>
+        <div className="flex h-11 w-11 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-white/20 text-base sm:text-xl font-bold text-white shadow-lg backdrop-blur-sm">
           {initials(contact.name)}
         </div>
-        {/* desktop action buttons (top-right hover) */}
-        <div className="absolute right-2 top-2 hidden items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
-          <button onClick={() => onEdit(contact)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/80 text-zinc-500 hover:bg-white hover:text-zinc-800 shadow-sm" title="Editar">
-            <Pencil className="h-3.5 w-3.5" />
+        {/* Hover edit/delete on banner */}
+        <div className="absolute right-1.5 top-1.5 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button onClick={() => onEdit(contact)} className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/80 text-zinc-600 hover:bg-white shadow-sm" title="Editar">
+            <Pencil className="h-3 w-3" />
           </button>
-          <button onClick={() => onDelete(contact)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/80 text-zinc-500 hover:bg-red-50 hover:text-red-600 shadow-sm" title="Eliminar">
-            <Trash2 className="h-3.5 w-3.5" />
+          <button onClick={() => onDelete(contact)} className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/80 text-zinc-600 hover:bg-red-50 hover:text-red-600 shadow-sm" title="Eliminar">
+            <Trash2 className="h-3 w-3" />
           </button>
         </div>
       </div>
 
-      {/* ── Mobile: avatar circle (left) ── */}
-      <div className={`md:hidden flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${color} text-sm font-bold text-white shadow-sm`}>
-        {initials(contact.name)}
-      </div>
-
-      {/* ── Info ── */}
-      <div className="min-w-0 flex-1 md:px-3 md:py-2.5">
-        <p className="truncate font-semibold text-zinc-900 dark:text-zinc-50 md:text-center md:text-sm">
+      {/* Info */}
+      <div className="flex-1 px-2.5 py-2 text-center">
+        <p className="truncate text-xs font-bold text-zinc-900 dark:text-zinc-50 sm:text-sm">
           {contact.name}
         </p>
         {contact.company && (
-          <p className="flex items-center gap-1 truncate text-xs text-zinc-500 dark:text-zinc-400 md:justify-center">
-            <Building2 className="h-3 w-3 shrink-0" />
+          <p className="mt-0.5 flex items-center justify-center gap-1 truncate text-[10px] text-zinc-500 dark:text-zinc-400 sm:text-xs">
+            <Building2 className="h-2.5 w-2.5 shrink-0" />
             {contact.company}
           </p>
         )}
-        {/* desktop: phone preview */}
         {firstPhone && (
-          <p className="mt-1 hidden truncate text-center text-xs text-zinc-400 md:block">
-            {firstPhone}
-          </p>
+          <p className="mt-1 truncate text-[10px] text-zinc-400 sm:text-xs">{firstPhone}</p>
         )}
       </div>
 
-      {/* ── Mobile: inline actions ── */}
-      <div className="flex shrink-0 items-center gap-1 md:hidden">
-        {firstPhone && (
-          <a href={`tel:${firstPhone.replace(/\s/g, "")}`}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/30 dark:hover:text-blue-400"
-            title="Llamar">
-            <Phone className="h-4 w-4" />
-          </a>
-        )}
-        <button onClick={() => onEdit(contact)} className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800" title="Editar">
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => onDelete(contact)} className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40" title="Eliminar">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {/* ── Desktop: action row at bottom ── */}
-      <div className="hidden border-t border-zinc-100 dark:border-zinc-800/60 md:flex items-center gap-1 px-2 py-1.5">
+      {/* Action row */}
+      <div className="flex items-center gap-0.5 border-t border-zinc-100 px-1.5 py-1 dark:border-zinc-800/60">
         {firstPhone && (
           <a href={`tel:${firstPhone.replace(/\s/g, "")}`}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-blue-600 dark:hover:bg-zinc-800"
@@ -469,44 +438,44 @@ export default function ContactsView() {
 
   return (
     <div className="min-h-[60vh] pb-20">
-      {/* ── Top bar ── */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
-            <Users className="h-5 w-5 text-white" />
+      {/* ── Sticky compact header ── */}
+      <div className="sticky top-0 z-10 mb-4 flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/90">
+        {/* Icon + title */}
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
+            <Users className="h-4 w-4 text-white" />
           </div>
-          <div>
-            <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Contactos</h1>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {contacts.length} {contacts.length === 1 ? "contacto" : "contactos"}
-            </p>
+          <div className="hidden sm:block leading-tight">
+            <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Contactos</span>
+            <span className="ml-1.5 text-xs text-zinc-400 dark:text-zinc-500">{contacts.length}</span>
           </div>
         </div>
 
+        {/* Search */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+          <input
+            ref={searchRef}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar contacto…"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-400"
+          />
+          {q && (
+            <button onClick={() => setQ("")} className="text-zinc-400 hover:text-zinc-600">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* New contact button */}
         <button
           onClick={() => { setEditTarget(null); setMode("new"); }}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 sm:w-auto"
+          className="flex shrink-0 items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
         >
-          <UserPlus className="h-4 w-4" />
-          Nuevo contacto
+          <UserPlus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Nuevo</span>
         </button>
-      </div>
-
-      {/* ── Search ── */}
-      <div className="mb-6 flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 px-3 py-2 shadow-sm backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-900/50">
-        <Search className="h-4 w-4 shrink-0 text-zinc-400" />
-        <input
-          ref={searchRef}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre, compañía, teléfono o email…"
-          className="w-full bg-transparent py-1 text-sm outline-none placeholder:text-zinc-400"
-        />
-        {q && (
-          <button onClick={() => setQ("")} className="text-zinc-400 hover:text-zinc-600">
-            <X className="h-4 w-4" />
-          </button>
-        )}
       </div>
 
       {/* ── Content ── */}
@@ -538,43 +507,17 @@ export default function ContactsView() {
           )}
         </div>
       ) : (
-        <>
-          {/* ── Desktop: flat grid, no grouping ── */}
-          <div className="hidden md:grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {visible.map((c) => (
-              <ContactCard
-                key={c.id}
-                contact={c}
-                onEdit={(c) => { setEditTarget(c); setMode("edit"); }}
-                onDelete={setDeleteTarget}
-              />
-            ))}
-          </div>
-
-          {/* ── Mobile: grouped list ── */}
-          <div className="flex flex-col gap-6 md:hidden">
-            {grouped.map(([letter, items]) => (
-              <section key={letter}>
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                    {letter}
-                  </span>
-                  <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  {items.map((c) => (
-                    <ContactCard
-                      key={c.id}
-                      contact={c}
-                      onEdit={(c) => { setEditTarget(c); setMode("edit"); }}
-                      onDelete={setDeleteTarget}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        </>
+        /* Single flat grid for all devices */
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+          {visible.map((c) => (
+            <ContactCard
+              key={c.id}
+              contact={c}
+              onEdit={(c) => { setEditTarget(c); setMode("edit"); }}
+              onDelete={setDeleteTarget}
+            />
+          ))}
+        </div>
       )}
 
       {/* ── Modals ── */}
