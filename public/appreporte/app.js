@@ -2152,19 +2152,17 @@ function initDatePickers() {
         const fp = window.flatpickr(input, {
           allowInput: true,
           disableMobile: true,
-          dateFormat: "m/d/y",   /* matches MM/DD/YY but without zero-padding */
-          parseDate: (s) => parseDisplay(s) || null,
+          appendTo: document.body,   /* render calendar in body, avoids overflow:hidden clipping */
+          dateFormat: "m/d/y",
+          parseDate: (s) => parseDisplay(s) || undefined,
           formatDate: (date) => fmtDisplay(date),
           onChange(selectedDates) {
             if (!selectedDates.length) return;
-            /* Override with zero-padded MM/DD/YY */
             const formatted = fmtDisplay(selectedDates[0]);
-            /* Use _input to avoid infinite loop with allowInput */
             if (fp._input.value !== formatted) fp._input.value = formatted;
             input.dispatchEvent(new Event("input", { bubbles: true }));
           },
           onReady() {
-            /* Sync initial value */
             if (input.value) {
               const d = parseDisplay(input.value);
               if (d) fp.setDate(d, false);
@@ -2176,9 +2174,9 @@ function initDatePickers() {
 
         /* Calendar button opens the picker */
         btn.addEventListener("click", (e) => {
+          e.preventDefault();
           e.stopPropagation();
-          /* If already open, close; otherwise open */
-          if (fp.isOpen) { fp.close(); } else { fp.open(); }
+          fp.open();
         });
 
         /* Prevent flatpickr from overwriting typed value on blur if invalid */
