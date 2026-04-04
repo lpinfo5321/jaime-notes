@@ -2144,9 +2144,10 @@ function initDatePickers() {
         ${DAYS.map(d=>`<div style="text-align:center;font-size:10px;font-weight:900;color:rgba(15,23,42,.38);padding:3px 0;">${d}</div>`).join("")}
       </div>
       <div id="cp-days" style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">${cells}</div>
-      <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid rgba(15,23,42,.08);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid rgba(15,23,42,.08);gap:6px;">
         <button id="cp-clear" style="font-size:12px;font-weight:700;color:rgba(15,23,42,.45);border:none;background:none;cursor:pointer;padding:4px 8px;border-radius:8px;">Clear</button>
         <button id="cp-today" style="font-size:12px;font-weight:700;color:#d11b2a;border:none;background:none;cursor:pointer;padding:4px 8px;border-radius:8px;">Today</button>
+        <button id="cp-done" style="font-size:12px;font-weight:800;color:#fff;background:#0f172a;border:none;cursor:pointer;padding:5px 14px;border-radius:10px;margin-left:auto;">Listo</button>
       </div>`;
 
     /* hover effect on day cells */
@@ -2169,6 +2170,7 @@ function initDatePickers() {
       _targetInput.dispatchEvent(new Event("input",{bubbles:true})); closePopup();
     });
     popup.querySelector("#cp-clear").addEventListener("click", () => { _targetInput.value=""; _targetInput.dispatchEvent(new Event("input",{bubbles:true})); closePopup(); });
+    popup.querySelector("#cp-done").addEventListener("click", () => closePopup());
 
     /* nav hover */
     ["cp-prev","cp-next"].forEach(id => {
@@ -2201,9 +2203,9 @@ function initDatePickers() {
     popup.style.top  = top  + "px";
   }
 
-  /* Close on outside click */
+  /* Close on outside click (use closest so SVG children inside calBtn are handled) */
   document.addEventListener("click", (e) => {
-    if (!popup.contains(e.target) && !e.target.classList.contains("calBtn")) closePopup();
+    if (!popup.contains(e.target) && !e.target.closest(".calBtn")) closePopup();
   }, true);
   document.addEventListener("keydown", (e) => { if (e.key==="Escape") closePopup(); });
 
