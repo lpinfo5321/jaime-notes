@@ -439,7 +439,7 @@ export default function ContactsView() {
   return (
     <div className="min-h-[60vh] pb-20">
       {/* ── Sticky compact header ── */}
-      <div className="sticky top-0 z-10 mb-4 flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/90">
+      <div className="sticky top-[116px] z-10 mb-4 flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/90" style={{boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
         {/* Icon + title */}
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
