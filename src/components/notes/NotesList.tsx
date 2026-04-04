@@ -1467,17 +1467,7 @@ export default function NotesList({
   if (showContacts) {
     return (
       <div className="animate-fade-in mx-auto w-full max-w-7xl pb-24">
-        <div className="mb-5">
-          <button
-            type="button"
-            onClick={() => setShowContacts(false)}
-            className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-            Dashboard
-          </button>
-        </div>
-        <ContactsView />
+        <ContactsView onBack={() => setShowContacts(false)} />
       </div>
     );
   }
@@ -1486,17 +1476,7 @@ export default function NotesList({
   if (showDocuments) {
     return (
       <div className="animate-fade-in mx-auto w-full max-w-7xl pb-24">
-        <div className="mb-5">
-          <button
-            type="button"
-            onClick={() => setShowDocuments(false)}
-            className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-            Dashboard
-          </button>
-        </div>
-        <DocumentsView />
+        <DocumentsView onBack={() => setShowDocuments(false)} />
       </div>
     );
   }

@@ -330,7 +330,7 @@ function DeleteModal({ name, onConfirm, onCancel, busy }: {
 }
 
 /* ─────────────────────────── Main View ─────────────────────── */
-export default function ContactsView() {
+export default function ContactsView({ onBack }: { onBack?: () => void } = {}) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -440,6 +440,17 @@ export default function ContactsView() {
     <div className="min-h-[60vh] pb-20">
       {/* ── Sticky compact header ── */}
       <div className="sticky top-[116px] z-10 mb-4 flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/90" style={{boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
+        {/* Back button */}
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex shrink-0 items-center gap-1 rounded-xl border border-zinc-200 bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            title="Volver al Dashboard"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            <span className="hidden sm:inline">Dashboard</span>
+          </button>
+        )}
         {/* Icon + title */}
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
