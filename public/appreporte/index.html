@@ -237,11 +237,69 @@
       border-radius: 12px;
       font-weight: 800;
       letter-spacing: .08px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .valueCell input:focus{
+      border-color: rgba(15,23,42,.35);
+      box-shadow: 0 0 0 3px rgba(15,23,42,.07);
     }
     .valueCell input::placeholder{
       color: rgba(15,23,42,.35);
       font-weight: 800;
       letter-spacing: .1px;
+    }
+
+    /* ── Date field wrapper ── */
+    .dateWrap{
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .dateWrap input[data-field]{
+      flex: 1;
+      min-width: 0;
+      border-radius: 12px 0 0 12px !important;
+      border-right: 0 !important;
+    }
+    .dateWrap input[data-field]:focus{
+      border-color: rgba(15,23,42,.35);
+      box-shadow: 0 0 0 3px rgba(15,23,42,.07);
+      z-index: 1;
+      position: relative;
+    }
+    .calBtn{
+      flex-shrink: 0;
+      width: 38px;
+      height: 100%;
+      min-height: 36px;
+      border: 1px solid var(--fieldBorder);
+      border-left: 0;
+      border-radius: 0 12px 12px 0;
+      background: var(--fieldBg);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(15,23,42,.5);
+      transition: background .15s, color .15s;
+      padding: 0;
+    }
+    .calBtn:hover{
+      background: rgba(15,23,42,.07);
+      color: rgba(15,23,42,.85);
+    }
+    .calBtn:active{ transform: scale(.95); }
+    .hiddenDatePicker{
+      position: absolute;
+      opacity: 0;
+      width: 0 !important;
+      height: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      pointer-events: none;
+      top: 100%;
+      left: 0;
     }
 
     /* Select (dropdown) inside table cells */
@@ -406,6 +464,12 @@
     }
 
     /* Export helpers (PDF) */
+    body.rc-export .calBtn,
+    body.rc-export .hiddenDatePicker { display: none !important; }
+    body.rc-export .dateWrap input[data-field]{
+      border-radius: 12px !important;
+      border-right: 1px solid var(--fieldBorder) !important;
+    }
     body.rc-export,
     body.rc-export html {
       background: #fff !important;
