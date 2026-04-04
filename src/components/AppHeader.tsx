@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FolderOpen, Home, MoreHorizontal, Plus, Search, Users } from "lucide-react";
+import { FolderOpen, Home, LogOut, MoreHorizontal, Plus, Search, Users } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
 
@@ -24,6 +25,8 @@ export default function AppHeader() {
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const logoutFormRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     setQ(sp.get("q") ?? "");
@@ -169,11 +172,16 @@ export default function AppHeader() {
               Inicio
             </button>
             <ThemeToggle />
-            <form action="/auth/logout" method="post">
-              <button className="rounded-xl px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-white/70 dark:text-zinc-200 dark:hover:bg-zinc-900/60">
-                Salir
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={() => setShowLogoutModal(true)}
+              title="Cerrar sesión"
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-red-50 hover:text-red-500 dark:text-zinc-400 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+            {/* Hidden form — only submitted after confirmation */}
+            <form ref={logoutFormRef} action="/auth/logout" method="post" className="hidden" />
           </div>
         </div>
 
@@ -369,6 +377,59 @@ export default function AppHeader() {
           </div>
         </div>
       </div>
+    )}
+
+    {/* ── Logout Confirmation Modal ── */}
+    {showLogoutModal && typeof document !== "undefined" && createPortal(
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-black/25 backdrop-blur-sm"
+          onClick={() => setShowLogoutModal(false)}
+        />
+        {/* Card */}
+        <div className="relative w-full max-w-xs overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900"
+          style={{ animation: "scale-in .2s cubic-bezier(.34,1.56,.64,1) both" }}>
+          {/* Top accent */}
+          <div className="h-1.5 w-full bg-gradient-to-r from-red-400 via-red-500 to-red-400" />
+
+          <div className="flex flex-col items-center px-6 pb-6 pt-5 text-center">
+            {/* Logo */}
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
+              <Image src="/logo.png" alt="Return Checks" width={44} height={44} className="rounded-xl object-contain" />
+            </div>
+
+            {/* Icon */}
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 dark:bg-red-950/50">
+              <LogOut className="h-5 w-5 text-red-500" />
+            </div>
+
+            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50">¿Cerrar sesión?</h2>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Se cerrará tu sesión en este dispositivo.
+            </p>
+
+            {/* Actions */}
+            <div className="mt-5 flex w-full gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 rounded-2xl border border-zinc-200 bg-white py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-750"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => logoutFormRef.current?.submit()}
+                className="flex-1 rounded-2xl bg-red-500 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 active:scale-95"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
     )}
   </>
   );
