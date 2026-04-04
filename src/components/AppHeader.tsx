@@ -22,6 +22,8 @@ export default function AppHeader() {
   const [qBy, setQBy] = useState(sp.get("qBy") ?? "company"); // company | pay | status
   const [status, setStatus] = useState(sp.get("status") ?? "");
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   useEffect(() => {
     setQ(sp.get("q") ?? "");
@@ -44,6 +46,30 @@ export default function AppHeader() {
     window.addEventListener("rc:selectModeChanged" as any, onChanged as any);
     return () => window.removeEventListener("rc:selectModeChanged" as any, onChanged as any);
   }, []);
+
+  // Intercept browser install prompt
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      // Show banner only if not already installed
+      if (!window.matchMedia("(display-mode: standalone)").matches) {
+        setShowInstallBanner(true);
+      }
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  async function handleInstall() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") {
+      setShowInstallBanner(false);
+      setInstallPrompt(null);
+    }
+  }
 
   useEffect(() => {
     if (!isNotesHome) return;
@@ -86,6 +112,7 @@ export default function AppHeader() {
   }
 
   return (
+    <>
     <header className="sticky top-0 z-20 border-b border-zinc-200/70 bg-white/60 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/35">
       <div className="mx-auto max-w-6xl px-4 py-3">
         <div className="flex items-center justify-between gap-2">
@@ -328,6 +355,76 @@ export default function AppHeader() {
         ) : null}
       </div>
     </header>
+
+    {/* ── PWA Install Banner ── */}
+    {showInstallBanner && (
+      <div
+        style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 99999,
+          padding: "12px 16px",
+          background: "rgba(0,0,0,0.6)",
+          backdropFilter: "blur(8px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          style={{
+            width: "100%", maxWidth: "480px",
+            background: "white",
+            borderRadius: "20px",
+            padding: "20px",
+            boxShadow: "0 -4px 40px rgba(0,0,0,0.25)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icon-192.png" alt="Return Checks" style={{ width: "56px", height: "56px", borderRadius: "14px", flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#111827" }}>Return Checks</p>
+              <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#6b7280" }}>Instala la app para acceso rápido</p>
+            </div>
+            <button
+              onClick={() => setShowInstallBanner(false)}
+              style={{ flexShrink: 0, width: "32px", height: "32px", borderRadius: "50%", border: "none", background: "#f3f4f6", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", color: "#6b7280" }}
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Features */}
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {["Sin conexión a internet", "Acceso desde pantalla de inicio", "Más rápida"].map((f) => (
+              <span key={f} style={{ fontSize: "12px", fontWeight: 600, color: "#374151", background: "#f3f4f6", borderRadius: "20px", padding: "4px 10px" }}>
+                ✓ {f}
+              </span>
+            ))}
+          </div>
+
+          {/* Buttons */}
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => setShowInstallBanner(false)}
+              style={{ flex: 1, padding: "12px", borderRadius: "14px", border: "1px solid #e5e7eb", background: "white", fontSize: "14px", fontWeight: 600, color: "#6b7280", cursor: "pointer" }}
+            >
+              Ahora no
+            </button>
+            <button
+              onClick={handleInstall}
+              style={{ flex: 2, padding: "12px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg, #111827, #374151)", fontSize: "14px", fontWeight: 700, color: "white", cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.2)" }}
+            >
+              Instalar app
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 }
 
