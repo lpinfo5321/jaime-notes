@@ -2103,7 +2103,7 @@ function initDatePickers() {
     if (window.flatpickr) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js";
+      s.src = "/appreporte/flatpickr.min.js";
       s.onload = resolve;
       s.onerror = reject;
       document.head.appendChild(s);

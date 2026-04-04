@@ -538,28 +538,43 @@ export default function ContactsView() {
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-6">
-          {grouped.map(([letter, items]) => (
-            <section key={letter}>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                  {letter}
-                </span>
-                <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800" />
-              </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                {items.map((c) => (
-                  <ContactCard
-                    key={c.id}
-                    contact={c}
-                    onEdit={(c) => { setEditTarget(c); setMode("edit"); }}
-                    onDelete={setDeleteTarget}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+        <>
+          {/* ── Desktop: flat grid, no grouping ── */}
+          <div className="hidden md:grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {visible.map((c) => (
+              <ContactCard
+                key={c.id}
+                contact={c}
+                onEdit={(c) => { setEditTarget(c); setMode("edit"); }}
+                onDelete={setDeleteTarget}
+              />
+            ))}
+          </div>
+
+          {/* ── Mobile: grouped list ── */}
+          <div className="flex flex-col gap-6 md:hidden">
+            {grouped.map(([letter, items]) => (
+              <section key={letter}>
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                    {letter}
+                  </span>
+                  <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  {items.map((c) => (
+                    <ContactCard
+                      key={c.id}
+                      contact={c}
+                      onEdit={(c) => { setEditTarget(c); setMode("edit"); }}
+                      onDelete={setDeleteTarget}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </>
       )}
 
       {/* ── Modals ── */}
