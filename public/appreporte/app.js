@@ -2089,106 +2089,143 @@
   }
 })();
 
-/* ── Date picker helper (flatpickr) ─────────────────────────────────────── */
+/* ── Custom date picker (pure JS, no dependencies) ─────────────────────── */
 function initDatePickers() {
   const CAL_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DAYS   = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+  const DATE_FIELDS = ["dateCashed","dateDeposit","dateReturned","dateFeePaid","dateCheckPaid","dateCompleted"];
 
-  const DATE_FIELDS = [
-    "dateCashed", "dateDeposit", "dateReturned",
-    "dateFeePaid", "dateCheckPaid", "dateCompleted",
-  ];
-
-  /* Load flatpickr from CDN if not already present */
-  function ensureFlatpickr() {
-    if (window.flatpickr) return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = "/appreporte/flatpickr.min.js";
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-  }
-
-  /* Parse "MM/DD/YY" or "MM/DD/YYYY" → Date object */
+  /* helpers */
   function parseDisplay(val) {
-    const parts = (val || "").trim().split("/");
-    if (parts.length !== 3) return null;
-    const [m, d, y] = parts.map(Number);
-    if (!m || !d || !y) return null;
-    const year = y < 100 ? 2000 + y : y;
-    return new Date(year, m - 1, d);
+    const p = (val || "").trim().split("/");
+    if (p.length !== 3) return null;
+    const [m,d,y] = p.map(Number);
+    if (!m||!d||!y) return null;
+    return new Date(y < 100 ? 2000+y : y, m-1, d);
   }
-
-  /* Format Date → "MM/DD/YY" */
   function fmtDisplay(date) {
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const dd = String(date.getDate()).padStart(2, "0");
-    const yy = String(date.getFullYear()).slice(-2);
-    return `${mm}/${dd}/${yy}`;
+    return String(date.getMonth()+1).padStart(2,"0")+"/"+String(date.getDate()).padStart(2,"0")+"/"+String(date.getFullYear()).slice(-2);
   }
 
-  ensureFlatpickr()
-    .then(() => {
-      DATE_FIELDS.forEach((fieldName) => {
-        const input = document.querySelector(`[data-field="${fieldName}"]`);
-        if (!input || input._fpInstance || input.closest(".dateWrap")) return;
+  /* ── Build one shared calendar popup ── */
+  const popup = document.createElement("div");
+  popup.style.cssText = "position:fixed;z-index:99999;background:#fff;border-radius:20px;box-shadow:0 24px 64px rgba(0,0,0,.18),0 4px 16px rgba(0,0,0,.08);border:1px solid rgba(15,23,42,.09);padding:14px 12px 10px;width:284px;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;display:none;user-select:none;";
+  document.body.appendChild(popup);
 
-        /* Wrap */
-        const wrap = document.createElement("div");
-        wrap.className = "dateWrap";
-        input.parentNode.insertBefore(wrap, input);
-        wrap.appendChild(input);
+  let _viewYear, _viewMonth, _selected, _targetInput;
 
-        /* Calendar button */
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "calBtn";
-        btn.title = "Abrir calendario";
-        btn.innerHTML = CAL_ICON;
-        wrap.appendChild(btn);
+  function closePopup() { popup.style.display = "none"; }
 
-        /* Init flatpickr — attached to the text input */
-        const fp = window.flatpickr(input, {
-          allowInput: true,
-          clickOpens: false,         /* only open via the calendar button */
-          disableMobile: true,
-          appendTo: document.body,   /* render calendar in body, avoids overflow:hidden clipping */
-          dateFormat: "m/d/y",
-          parseDate: (s) => parseDisplay(s) || undefined,
-          formatDate: (date) => fmtDisplay(date),
-          onChange(selectedDates) {
-            if (!selectedDates.length) return;
-            const formatted = fmtDisplay(selectedDates[0]);
-            if (fp._input.value !== formatted) fp._input.value = formatted;
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-          },
-          onReady() {
-            if (input.value) {
-              const d = parseDisplay(input.value);
-              if (d) fp.setDate(d, false);
-            }
-          },
-        });
+  function renderPopup() {
+    const today = new Date();
+    const first = new Date(_viewYear, _viewMonth, 1).getDay();
+    const days  = new Date(_viewYear, _viewMonth+1, 0).getDate();
 
-        input._fpInstance = fp;
+    let cells = "";
+    for (let i=0; i<first; i++) cells += `<div></div>`;
+    for (let d=1; d<=days; d++) {
+      const isToday    = today.getFullYear()===_viewYear && today.getMonth()===_viewMonth && today.getDate()===d;
+      const isSel      = _selected && _selected.getFullYear()===_viewYear && _selected.getMonth()===_viewMonth && _selected.getDate()===d;
+      const bg         = isSel ? "#d11b2a" : "transparent";
+      const color      = isSel ? "#fff"    : isToday ? "#d11b2a" : "#0f172a";
+      const border     = isToday && !isSel ? "2px solid rgba(209,27,42,.45)" : "2px solid transparent";
+      const fw         = isToday||isSel ? "900" : "700";
+      cells += `<button data-day="${d}" style="width:100%;aspect-ratio:1/1;border:${border};background:${bg};color:${color};font-size:13px;font-weight:${fw};border-radius:10px;cursor:pointer;transition:background .1s;">${d}</button>`;
+    }
 
-        /* Calendar button opens the picker */
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          fp.open();
-        });
+    popup.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <button id="cp-prev" style="width:32px;height:32px;border:none;background:none;cursor:pointer;border-radius:10px;font-size:20px;line-height:1;color:#0f172a;">‹</button>
+        <span style="font-size:14px;font-weight:800;color:#0f172a;">${MONTHS[_viewMonth]} ${_viewYear}</span>
+        <button id="cp-next" style="width:32px;height:32px;border:none;background:none;cursor:pointer;border-radius:10px;font-size:20px;line-height:1;color:#0f172a;">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:6px;">
+        ${DAYS.map(d=>`<div style="text-align:center;font-size:10px;font-weight:900;color:rgba(15,23,42,.38);padding:3px 0;">${d}</div>`).join("")}
+      </div>
+      <div id="cp-days" style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">${cells}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid rgba(15,23,42,.08);">
+        <button id="cp-clear" style="font-size:12px;font-weight:700;color:rgba(15,23,42,.45);border:none;background:none;cursor:pointer;padding:4px 8px;border-radius:8px;">Clear</button>
+        <button id="cp-today" style="font-size:12px;font-weight:700;color:#d11b2a;border:none;background:none;cursor:pointer;padding:4px 8px;border-radius:8px;">Today</button>
+      </div>`;
 
-        /* Prevent flatpickr from overwriting typed value on blur if invalid */
-        input.addEventListener("blur", () => {
-          const d = parseDisplay(input.value);
-          if (d) { fp.setDate(d, false); }
-        });
+    /* hover effect on day cells */
+    popup.querySelectorAll("[data-day]").forEach(btn => {
+      btn.addEventListener("mouseenter", () => { if (btn.style.background !== "rgb(209, 27, 42)") btn.style.background="rgba(15,23,42,.07)"; });
+      btn.addEventListener("mouseleave", () => { if (btn.style.background !== "rgb(209, 27, 42)") btn.style.background="transparent"; });
+      btn.addEventListener("click", () => {
+        const d = parseInt(btn.dataset.day);
+        const date = new Date(_viewYear, _viewMonth, d);
+        _targetInput.value = fmtDisplay(date);
+        _targetInput.dispatchEvent(new Event("input", {bubbles:true}));
+        closePopup();
       });
-    })
-    .catch(() => {
-      /* Flatpickr failed to load — silently fall back (no calendar button) */
     });
+
+    popup.querySelector("#cp-prev").addEventListener("click", () => { _viewMonth--; if(_viewMonth<0){_viewMonth=11;_viewYear--;} renderPopup(); });
+    popup.querySelector("#cp-next").addEventListener("click", () => { _viewMonth++; if(_viewMonth>11){_viewMonth=0;_viewYear++;} renderPopup(); });
+    popup.querySelector("#cp-today").addEventListener("click", () => {
+      const t=new Date(); _targetInput.value=fmtDisplay(t);
+      _targetInput.dispatchEvent(new Event("input",{bubbles:true})); closePopup();
+    });
+    popup.querySelector("#cp-clear").addEventListener("click", () => { _targetInput.value=""; _targetInput.dispatchEvent(new Event("input",{bubbles:true})); closePopup(); });
+
+    /* nav hover */
+    ["cp-prev","cp-next"].forEach(id => {
+      const b=popup.querySelector("#"+id);
+      b.addEventListener("mouseenter",()=>b.style.background="rgba(15,23,42,.07)");
+      b.addEventListener("mouseleave",()=>b.style.background="none");
+    });
+  }
+
+  function openPopup(btn, input) {
+    _targetInput = input;
+    const d = parseDisplay(input.value) || new Date();
+    _selected  = parseDisplay(input.value);
+    _viewYear  = d.getFullYear();
+    _viewMonth = d.getMonth();
+    renderPopup();
+
+    popup.style.display = "block";
+
+    /* Position with fixed coords */
+    const rect = btn.getBoundingClientRect();
+    const pw = 284, ph = 340;
+    let left = rect.left;
+    let top  = rect.bottom + 6;
+    if (left + pw > window.innerWidth - 8)  left = window.innerWidth - pw - 8;
+    if (top  + ph > window.innerHeight - 8) top  = rect.top - ph - 6;
+    if (left < 8) left = 8;
+    if (top  < 8) top  = 8;
+    popup.style.left = left + "px";
+    popup.style.top  = top  + "px";
+  }
+
+  /* Close on outside click */
+  document.addEventListener("click", (e) => {
+    if (!popup.contains(e.target) && !e.target.classList.contains("calBtn")) closePopup();
+  }, true);
+  document.addEventListener("keydown", (e) => { if (e.key==="Escape") closePopup(); });
+
+  /* ── Attach to each date field ── */
+  DATE_FIELDS.forEach(fieldName => {
+    const input = document.querySelector(`[data-field="${fieldName}"]`);
+    if (!input || input.closest(".dateWrap")) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "dateWrap";
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "calBtn"; btn.title = "Abrir calendario"; btn.innerHTML = CAL_ICON;
+    wrap.appendChild(btn);
+
+    btn.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (popup.style.display !== "none" && _targetInput === input) { closePopup(); return; }
+      openPopup(btn, input);
+    });
+  });
 }
 
