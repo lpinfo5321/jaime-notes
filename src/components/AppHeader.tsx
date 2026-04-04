@@ -5,8 +5,8 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FolderOpen, Home, LogOut, MoreHorizontal, Plus, Search, Settings, Users } from "lucide-react";
-import ThemeToggle from "@/components/ThemeToggle";
+import { FolderOpen, Home, LogOut, Moon, MoreHorizontal, Plus, Search, Settings, Sun, Users } from "lucide-react";
+import { useTheme } from "next-themes";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
 
 const SELECT_MODE_KEY = "rc:selectMode:v1";
@@ -28,6 +28,8 @@ export default function AppHeader() {
   const [showLogoutModal,  setShowLogoutModal]  = useState(false);
   const [menuOpen,         setMenuOpen]         = useState(false);
   const [mounted,          setMounted]          = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = mounted && resolvedTheme === "dark";
 
   const logoutFormRef = useRef<HTMLFormElement>(null);
   const menuRef       = useRef<HTMLDivElement>(null);
@@ -191,7 +193,6 @@ export default function AppHeader() {
 
           {/* ── Right actions ── */}
           <div className="flex items-center gap-1">
-            <ThemeToggle />
 
             {/* User menu button */}
             <div ref={menuRef} className="relative">
@@ -229,6 +230,16 @@ export default function AppHeader() {
                   <button type="button" onClick={() => { setMenuOpen(false); try { window.dispatchEvent(new CustomEvent("rc:showDocuments")); } catch {} router.replace("/app"); }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
                     <FolderOpen className="h-4 w-4 text-zinc-400" /> Documentos
+                  </button>
+
+                  <div className="my-1.5 h-px bg-zinc-100 dark:bg-zinc-800" />
+
+                  {/* Theme toggle */}
+                  <button type="button" onClick={() => setTheme(isDark ? "light" : "dark")}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
+                    {isDark
+                      ? <><Sun className="h-4 w-4 text-amber-400" /> Modo claro</>
+                      : <><Moon className="h-4 w-4 text-indigo-400" /> Modo oscuro</>}
                   </button>
 
                   <div className="my-1.5 h-px bg-zinc-100 dark:bg-zinc-800" />
