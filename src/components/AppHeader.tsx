@@ -178,71 +178,46 @@ export default function AppHeader() {
         </div>
 
         {isNotesHome ? (
-          <div className="mt-3 flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-center">
-            <div className="relative flex h-11 w-full max-w-none items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 px-2 shadow-sm backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-900/50 sm:max-w-3xl">
-              {/* Mobile: dropdown para elegir el filtro (más limpio) */}
-              <select
-                value={(qBy as any) || "company"}
-                onChange={(e) => setMode(e.target.value as any)}
-                className="h-9 w-[120px] rounded-xl border border-zinc-200/70 bg-white/70 px-2 text-xs font-black text-zinc-800 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-100 dark:ring-zinc-700 md:hidden"
-                title="Filtro"
-              >
-                <option value="company">Compañía</option>
-                <option value="pay">PAY</option>
-                <option value="status">Status</option>
-              </select>
+          <div className="mt-2.5 flex w-full items-center gap-2">
 
-              {/* Desktop: chips */}
-              <div className="hidden items-center gap-1 sm:flex">
-                <button
-                  type="button"
-                  onClick={() => setMode("company")}
-                  className={`rounded-xl px-2 py-1 text-[11px] font-black ${
-                    (qBy || "company") === "company"
-                      ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  }`}
-                  title="Buscar por compañía"
-                >
-                  Compañía
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("pay")}
-                  className={`rounded-xl px-2 py-1 text-[11px] font-black ${
-                    qBy === "pay"
-                      ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  }`}
-                  title="Buscar por PAY (Maker/Payor o Payee)"
-                >
-                  PAY
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("status")}
-                  className={`rounded-xl px-2 py-1 text-[11px] font-black ${
-                    qBy === "status"
-                      ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  }`}
-                  title="Filtrar por status"
-                >
-                  Status
-                </button>
+            {/* ── Search + filter pill ── */}
+            <div className="relative flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-zinc-200/80 bg-white/80 px-2.5 py-0 shadow-sm backdrop-blur-sm dark:border-zinc-800/60 dark:bg-zinc-900/60" style={{height:"40px"}}>
+
+              {/* Filter chips — all sizes */}
+              <div className="flex shrink-0 items-center gap-0.5">
+                {([
+                  { key: "company", short: "Cía",    full: "Compañía", title: "Buscar por compañía" },
+                  { key: "pay",     short: "PAY",     full: "PAY",      title: "Buscar por Maker/Payee" },
+                  { key: "status",  short: "Status",  full: "Status",   title: "Filtrar por status" },
+                ] as const).map(({ key, short, full, title }) => {
+                  const active = (qBy || "company") === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setMode(key)}
+                      title={title}
+                      className={`rounded-lg px-2 py-0.5 text-[11px] font-black leading-none transition-all ${
+                        active
+                          ? "bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900"
+                          : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                      }`}
+                    >
+                      <span className="sm:hidden">{short}</span>
+                      <span className="hidden sm:inline">{full}</span>
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className="h-5 w-px bg-zinc-200/80 dark:bg-zinc-800/70" />
+              <div className="h-4 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
 
+              {/* Search / Status input */}
               {qBy === "status" ? (
                 <select
                   value={status}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setStatus(v);
-                    setParam("status", v);
-                  }}
-                  className="h-10 w-full rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-sm font-semibold text-zinc-800 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-100 dark:ring-zinc-700"
+                  onChange={(e) => { setStatus(e.target.value); setParam("status", e.target.value); }}
+                  className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-zinc-800 outline-none dark:text-zinc-100"
                   title="Status (Check)"
                 >
                   <option value="">Todos</option>
@@ -253,104 +228,78 @@ export default function AppHeader() {
                 </select>
               ) : (
                 <>
-                  <Search className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+                  <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" />
                   <input
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
-                    placeholder={
-                      qBy === "pay"
-                        ? "Buscar PAY…"
-                        : "Buscar compañía…"
-                    }
-                    className="h-10 w-full bg-transparent pr-2 text-base outline-none sm:text-sm"
+                    placeholder={qBy === "pay" ? "Buscar PAY…" : "Buscar compañía…"}
+                    className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
                   />
+                  {q && (
+                    <button onClick={() => setQ("")} className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  )}
                 </>
               )}
 
-              {/* Mobile: esconder botones y ponerlos en menú */}
+              {/* Mobile "⋯" menu */}
               <button
                 type="button"
-                className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45 md:hidden"
                 onClick={() => setMobileActionsOpen((v) => !v)}
                 title="Acciones"
-                aria-label="Acciones"
+                className={`ml-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl transition md:hidden ${
+                  mobileActionsOpen
+                    ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                    : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                }`}
               >
                 <MoreHorizontal className="h-4 w-4" />
               </button>
 
-              {mobileActionsOpen ? (
-                <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/90 p-2 shadow-xl backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-950/80 md:hidden">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                    onClick={() => {
-                      setMobileActionsOpen(false);
-                      try { window.dispatchEvent(new CustomEvent("rc:showDocuments")); } catch {}
-                      router.replace("/app");
-                    }}
-                  >
-                    <span>Documentos</span>
-                    <FolderOpen className="h-4 w-4" />
+              {/* Mobile dropdown menu */}
+              {mobileActionsOpen && (
+                <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-52 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl backdrop-blur-sm dark:border-zinc-800/60 dark:bg-zinc-950/90 md:hidden">
+                  <button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                    onClick={() => { setMobileActionsOpen(false); try { window.dispatchEvent(new CustomEvent("rc:showDocuments")); } catch {} router.replace("/app"); }}>
+                    <FolderOpen className="h-4 w-4 text-zinc-400" />
+                    Documentos
                   </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                    onClick={() => {
-                      setMobileActionsOpen(false);
-                      try {
-                        window.dispatchEvent(new CustomEvent("rc:toggleSelectMode"));
-                      } catch {}
-                    }}
-                  >
-                    <span>{selectMode ? "Cancelar selección" : "Seleccionar"}</span>
+                  <button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                    onClick={() => { setMobileActionsOpen(false); try { window.dispatchEvent(new CustomEvent("rc:toggleSelectMode")); } catch {}; }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400"><rect x="3" y="3" width="18" height="18" rx="3"/><polyline points="9 11 12 14 22 4"/></svg>
+                    {selectMode ? "Cancelar selección" : "Seleccionar"}
                   </button>
-                  <Link
-                    href="/app/new"
-                    className="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                    onClick={() => setMobileActionsOpen(false)}
-                  >
-                    <span>Nueva</span>
-                    <Plus className="h-4 w-4" />
+                  <div className="my-1 h-px bg-zinc-100 dark:bg-zinc-800" />
+                  <Link href="/app/new" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                    onClick={() => setMobileActionsOpen(false)}>
+                    <Plus className="h-4 w-4 text-zinc-400" />
+                    Nueva nota
                   </Link>
                 </div>
-              ) : null}
+              )}
             </div>
 
-            <div className="hidden items-center justify-end gap-2 md:flex">
-              <button
-                type="button"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45"
-                onClick={() => {
-                  try { window.dispatchEvent(new CustomEvent("rc:showDocuments")); } catch {}
-                  router.replace("/app");
-                }}
-                title="Documentos"
-              >
-                <FolderOpen className="h-4 w-4" />
+            {/* ── Desktop action buttons ── */}
+            <div className="hidden shrink-0 items-center gap-1.5 md:flex">
+              <button type="button" title="Documentos"
+                className="flex h-10 items-center gap-1.5 rounded-2xl border border-zinc-200/80 bg-white/80 px-3 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/60 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                onClick={() => { try { window.dispatchEvent(new CustomEvent("rc:showDocuments")); } catch {} router.replace("/app"); }}>
+                <FolderOpen className="h-3.5 w-3.5" />
                 Docs
               </button>
-              <button
-                type="button"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200/70 bg-white/70 px-3 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-white/90 dark:border-zinc-800/60 dark:bg-zinc-950/35 dark:text-zinc-200 dark:hover:bg-zinc-950/45"
-                onClick={() => {
-                  try {
-                    window.dispatchEvent(new CustomEvent("rc:toggleSelectMode"));
-                  } catch {}
-                }}
-                title="Seleccionar varias"
-              >
+              <button type="button" title="Seleccionar varias"
+                className="flex h-10 items-center gap-1.5 rounded-2xl border border-zinc-200/80 bg-white/80 px-3 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/60 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                onClick={() => { try { window.dispatchEvent(new CustomEvent("rc:toggleSelectMode")); } catch {} }}>
                 {selectMode ? "Cancelar" : "Seleccionar"}
               </button>
-
-              <Link
-                href="/app/new"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-                title="Nueva"
-                aria-label="Nueva"
-              >
+              <Link href="/app/new"
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-sm transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+                title="Nueva nota">
                 <Plus className="h-4 w-4" />
               </Link>
             </div>
+
           </div>
         ) : null}
       </div>
