@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FolderOpen, Home, LogOut, MoreHorizontal, Plus, Search, Users } from "lucide-react";
+import { FolderOpen, Home, LogOut, MoreHorizontal, Plus, Search, Settings, Users } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
 
@@ -202,13 +202,10 @@ export default function AppHeader() {
                 className={`flex h-8 w-8 items-center justify-center rounded-xl transition ${
                   menuOpen
                     ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                    : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                 }`}
               >
-                {/* Avatar initials circle */}
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-[10px] font-bold text-white shadow-sm">
-                  RC
-                </span>
+                <Settings className="h-4 w-4" />
               </button>
 
               {/* Dropdown */}
