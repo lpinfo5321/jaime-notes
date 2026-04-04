@@ -975,16 +975,15 @@ export default function NotesList({
   }
 
   function BucketBar() {
-    const tabs: { id: Bucket; label: string; short: string; icon: React.ReactNode }[] = [
-      { id: "pending",   label: "Pendientes",  short: "Pend.",  icon: <Archive      className="h-4 w-4 shrink-0" /> },
-      { id: "completed", label: "Completados", short: "Comp.",  icon: <CheckCircle2 className="h-4 w-4 shrink-0" /> },
-      { id: "trash",     label: "Papelera",    short: "Trash",  icon: <Trash2       className="h-4 w-4 shrink-0" /> },
+    const tabs: { id: Bucket; label: string; icon: React.ReactNode }[] = [
+      { id: "pending",   label: "Pendientes",  icon: <Archive      className="h-4 w-4 shrink-0" /> },
+      { id: "completed", label: "Completados", icon: <CheckCircle2 className="h-4 w-4 shrink-0" /> },
+      { id: "trash",     label: "Papelera",    icon: <Trash2       className="h-4 w-4 shrink-0" /> },
     ];
     return (
-      /* Floating pill container */
       <div className="fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4 pointer-events-none">
         <div
-          className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 shadow-xl backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/85"
+          className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/85"
           style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)" }}
         >
           {tabs.map((t) => {
@@ -996,26 +995,42 @@ export default function NotesList({
                 type="button"
                 onClick={() => setBucket(t.id)}
                 className={cn(
-                  "relative flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all duration-200",
+                  "relative flex items-center rounded-xl py-2 font-bold text-xs transition-all duration-300 ease-out",
                   active
-                    ? "bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900"
-                    : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200",
+                    ? "bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900 px-3 gap-1.5"
+                    : "text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300 px-2.5 gap-0",
                 )}
+                style={{ overflow: "hidden" }}
               >
                 {t.icon}
-                {/* Full label on md+, short on mobile */}
-                <span className="hidden sm:inline">{t.label}</span>
-                <span className="sm:hidden">{t.short}</span>
 
-                {/* Count badge */}
-                {count > 0 && (
+                {/* Label — only visible when active, slides in */}
+                <span
+                  style={{
+                    maxWidth: active ? "100px" : "0px",
+                    opacity: active ? 1 : 0,
+                    overflow: "hidden",
+                    whiteSpace: "nowrap",
+                    transition: "max-width 0.3s cubic-bezier(0.34,1.2,0.64,1), opacity 0.25s ease",
+                    display: "inline-block",
+                  }}
+                >
+                  {t.label}
+                </span>
+
+                {/* Count badge — only when active and count > 0 */}
+                {active && count > 0 && (
                   <span
-                    className={cn(
-                      "min-w-[18px] rounded-full px-1.5 py-px text-[10px] font-black tabular-nums leading-none",
-                      active
-                        ? "bg-white/20 text-white dark:bg-black/20 dark:text-zinc-900"
-                        : "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300",
-                    )}
+                    style={{
+                      background: "rgba(255,255,255,0.2)",
+                      borderRadius: "999px",
+                      padding: "1px 6px",
+                      fontSize: "10px",
+                      fontWeight: 900,
+                      lineHeight: 1.4,
+                      animation: "scale-in .2s cubic-bezier(.34,1.56,.64,1) both",
+                    }}
+                    className="dark:bg-black/20"
                   >
                     {count}
                   </span>
