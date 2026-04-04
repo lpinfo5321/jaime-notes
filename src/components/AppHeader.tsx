@@ -360,22 +360,19 @@ export default function AppHeader() {
     {showInstallBanner && (
       <div
         style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 99999,
-          padding: "12px 16px",
-          background: "rgba(0,0,0,0.6)",
-          backdropFilter: "blur(8px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          position: "fixed", bottom: "16px", left: "50%", transform: "translateX(-50%)",
+          zIndex: 99999,
+          width: "calc(100% - 32px)",
+          maxWidth: "480px",
         }}
       >
         <div
           style={{
-            width: "100%", maxWidth: "480px",
+            width: "100%",
             background: "white",
             borderRadius: "20px",
             padding: "20px",
-            boxShadow: "0 -4px 40px rgba(0,0,0,0.25)",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)",
             display: "flex",
             flexDirection: "column",
             gap: "16px",
