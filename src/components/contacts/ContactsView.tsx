@@ -55,83 +55,98 @@ function ContactCard({
   onDelete: (c: Contact) => void;
 }) {
   const color = avatarColor(contact.name);
-  return (
-    <div className="animate-card-in group relative flex flex-col gap-3 rounded-2xl border border-zinc-200/60 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900">
-      {/* avatar color strip — solo en el avatar, no en la card */}
+  const phones = contact.phones.filter(Boolean);
+  const firstPhone = phones[0];
 
-      <div className="flex items-start gap-3 pt-1">
-        {/* avatar */}
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${color} text-sm font-bold text-white shadow-sm`}>
+  return (
+    <div className="animate-card-in group relative flex overflow-hidden rounded-2xl border border-zinc-200/60 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900
+      /* mobile: horizontal row */
+      flex-row items-center gap-3 p-3
+      /* desktop: vertical card */
+      md:flex-col md:items-stretch md:gap-0 md:p-0
+    ">
+
+      {/* ── Desktop: avatar banner ── */}
+      <div className={`hidden md:flex h-32 items-center justify-center bg-gradient-to-br ${color} bg-opacity-10 relative`}>
+        <div className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${color} text-xl font-bold text-white shadow-lg`}>
           {initials(contact.name)}
         </div>
-
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold text-zinc-900 dark:text-zinc-50">
-            {contact.name}
-          </p>
-          {contact.company && (
-            <p className="flex items-center gap-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
-              <Building2 className="h-3 w-3 shrink-0" />
-              {contact.company}
-            </p>
-          )}
-        </div>
-
-        {/* actions */}
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            onClick={() => onEdit(contact)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-            title="Editar"
-          >
+        {/* desktop action buttons (top-right hover) */}
+        <div className="absolute right-2 top-2 hidden items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
+          <button onClick={() => onEdit(contact)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/80 text-zinc-500 hover:bg-white hover:text-zinc-800 shadow-sm" title="Editar">
             <Pencil className="h-3.5 w-3.5" />
           </button>
-          <button
-            onClick={() => onDelete(contact)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-            title="Eliminar"
-          >
+          <button onClick={() => onDelete(contact)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/80 text-zinc-500 hover:bg-red-50 hover:text-red-600 shadow-sm" title="Eliminar">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      {/* phones */}
-      {contact.phones.filter(Boolean).length > 0 && (
-        <div className="flex flex-col gap-1">
-          {contact.phones.filter(Boolean).map((p, i) => (
-            <a
-              key={i}
-              href={`tel:${p.replace(/\s/g, "")}`}
-              className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-blue-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60 dark:hover:text-blue-400"
-            >
-              <Phone className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-              {p}
-            </a>
-          ))}
-        </div>
-      )}
+      {/* ── Mobile: avatar circle (left) ── */}
+      <div className={`md:hidden flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${color} text-sm font-bold text-white shadow-sm`}>
+        {initials(contact.name)}
+      </div>
 
-      {/* email */}
-      {contact.email && (
-        <a
-          href={`mailto:${contact.email}`}
-          className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-blue-600 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-blue-400"
-        >
-          <Mail className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{contact.email}</span>
-        </a>
-      )}
+      {/* ── Info ── */}
+      <div className="min-w-0 flex-1 md:px-3 md:py-2.5">
+        <p className="truncate font-semibold text-zinc-900 dark:text-zinc-50 md:text-center md:text-sm">
+          {contact.name}
+        </p>
+        {contact.company && (
+          <p className="flex items-center gap-1 truncate text-xs text-zinc-500 dark:text-zinc-400 md:justify-center">
+            <Building2 className="h-3 w-3 shrink-0" />
+            {contact.company}
+          </p>
+        )}
+        {/* desktop: phone preview */}
+        {firstPhone && (
+          <p className="mt-1 hidden truncate text-center text-xs text-zinc-400 md:block">
+            {firstPhone}
+          </p>
+        )}
+      </div>
 
-      {/* mobile tap-to-call full-row button */}
-      {contact.phones.filter(Boolean).length > 0 && (
-        <a
-          href={`tel:${contact.phones.filter(Boolean)[0].replace(/\s/g, "")}`}
-          className="mt-auto flex items-center justify-center gap-2 rounded-xl bg-zinc-100 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:bg-blue-50 hover:text-blue-700 dark:bg-zinc-800/60 dark:text-zinc-200 dark:hover:bg-blue-950/40 dark:hover:text-blue-300 sm:hidden"
-        >
-          <Phone className="h-4 w-4" /> Llamar
-        </a>
-      )}
+      {/* ── Mobile: inline actions ── */}
+      <div className="flex shrink-0 items-center gap-1 md:hidden">
+        {firstPhone && (
+          <a href={`tel:${firstPhone.replace(/\s/g, "")}`}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/30 dark:hover:text-blue-400"
+            title="Llamar">
+            <Phone className="h-4 w-4" />
+          </a>
+        )}
+        <button onClick={() => onEdit(contact)} className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800" title="Editar">
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button onClick={() => onDelete(contact)} className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40" title="Eliminar">
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* ── Desktop: action row at bottom ── */}
+      <div className="hidden border-t border-zinc-100 dark:border-zinc-800/60 md:flex items-center gap-1 px-2 py-1.5">
+        {firstPhone && (
+          <a href={`tel:${firstPhone.replace(/\s/g, "")}`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-blue-600 dark:hover:bg-zinc-800"
+            title={firstPhone}>
+            <Phone className="h-3.5 w-3.5" />
+          </a>
+        )}
+        {contact.email && (
+          <a href={`mailto:${contact.email}`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-blue-600 dark:hover:bg-zinc-800"
+            title={contact.email}>
+            <Mail className="h-3.5 w-3.5" />
+          </a>
+        )}
+        <div className="flex-1" />
+        <button onClick={() => onEdit(contact)} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800" title="Editar">
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button onClick={() => onDelete(contact)} className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40" title="Eliminar">
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -532,7 +547,7 @@ export default function ContactsView() {
                 </span>
                 <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800" />
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {items.map((c) => (
                   <ContactCard
                     key={c.id}

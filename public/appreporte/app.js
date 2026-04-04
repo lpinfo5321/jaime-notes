@@ -2089,73 +2089,107 @@
   }
 })();
 
-/* ── Date picker helper (runs after DOM ready) ───────────────────────────── */
+/* ── Date picker helper (flatpickr) ─────────────────────────────────────── */
 function initDatePickers() {
-  const CAL_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+  const CAL_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
 
   const DATE_FIELDS = [
     "dateCashed", "dateDeposit", "dateReturned",
-    "dateFeePaid", "dateCheckPaid", "dateCompleted"
+    "dateFeePaid", "dateCheckPaid", "dateCompleted",
   ];
 
-  DATE_FIELDS.forEach((fieldName) => {
-    const input = document.querySelector(`[data-field="${fieldName}"]`);
-    if (!input || input.closest(".dateWrap")) return;
-
-    // Wrap the input
-    const wrap = document.createElement("div");
-    wrap.className = "dateWrap";
-    input.parentNode.insertBefore(wrap, input);
-    wrap.appendChild(input);
-
-    // Hidden native date input (for the calendar popup)
-    const native = document.createElement("input");
-    native.type = "date";
-    native.className = "hiddenDatePicker";
-    wrap.appendChild(native);
-
-    // Calendar button
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "calBtn";
-    btn.title = "Abrir calendario";
-    btn.innerHTML = CAL_ICON;
-    wrap.appendChild(btn);
-
-    // Parse "MM/DD/YY" or "MM/DD/YYYY" → "YYYY-MM-DD" for the native picker
-    function toISO(val) {
-      const parts = (val || "").trim().split("/");
-      if (parts.length !== 3) return "";
-      const mm = parts[0].padStart(2, "0");
-      const dd = parts[1].padStart(2, "0");
-      const yy = parts[2];
-      const year = yy.length === 2 ? "20" + yy : yy;
-      return `${year}-${mm}-${dd}`;
-    }
-
-    // Parse "YYYY-MM-DD" → "MM/DD/YY"
-    function fromISO(iso) {
-      if (!iso) return "";
-      const [y, m, d] = iso.split("-");
-      return `${m}/${d}/${y.slice(-2)}`;
-    }
-
-    // Open calendar on button click
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const iso = toISO(input.value);
-      if (iso) native.value = iso;
-      try { native.showPicker(); } catch { native.click(); }
+  /* Load flatpickr from CDN if not already present */
+  function ensureFlatpickr() {
+    if (window.flatpickr) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js";
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
     });
+  }
 
-    // When date selected from calendar → fill text input
-    native.addEventListener("change", () => {
-      const formatted = fromISO(native.value);
-      if (!formatted) return;
-      input.value = formatted;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.focus();
+  /* Parse "MM/DD/YY" or "MM/DD/YYYY" → Date object */
+  function parseDisplay(val) {
+    const parts = (val || "").trim().split("/");
+    if (parts.length !== 3) return null;
+    const [m, d, y] = parts.map(Number);
+    if (!m || !d || !y) return null;
+    const year = y < 100 ? 2000 + y : y;
+    return new Date(year, m - 1, d);
+  }
+
+  /* Format Date → "MM/DD/YY" */
+  function fmtDisplay(date) {
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${mm}/${dd}/${yy}`;
+  }
+
+  ensureFlatpickr()
+    .then(() => {
+      DATE_FIELDS.forEach((fieldName) => {
+        const input = document.querySelector(`[data-field="${fieldName}"]`);
+        if (!input || input._fpInstance || input.closest(".dateWrap")) return;
+
+        /* Wrap */
+        const wrap = document.createElement("div");
+        wrap.className = "dateWrap";
+        input.parentNode.insertBefore(wrap, input);
+        wrap.appendChild(input);
+
+        /* Calendar button */
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "calBtn";
+        btn.title = "Abrir calendario";
+        btn.innerHTML = CAL_ICON;
+        wrap.appendChild(btn);
+
+        /* Init flatpickr — attached to the text input */
+        const fp = window.flatpickr(input, {
+          allowInput: true,
+          disableMobile: true,
+          dateFormat: "m/d/y",   /* matches MM/DD/YY but without zero-padding */
+          parseDate: (s) => parseDisplay(s) || null,
+          formatDate: (date) => fmtDisplay(date),
+          onChange(selectedDates) {
+            if (!selectedDates.length) return;
+            /* Override with zero-padded MM/DD/YY */
+            const formatted = fmtDisplay(selectedDates[0]);
+            /* Use _input to avoid infinite loop with allowInput */
+            if (fp._input.value !== formatted) fp._input.value = formatted;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+          },
+          onReady() {
+            /* Sync initial value */
+            if (input.value) {
+              const d = parseDisplay(input.value);
+              if (d) fp.setDate(d, false);
+            }
+          },
+        });
+
+        input._fpInstance = fp;
+
+        /* Calendar button opens the picker */
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          /* If already open, close; otherwise open */
+          if (fp.isOpen) { fp.close(); } else { fp.open(); }
+        });
+
+        /* Prevent flatpickr from overwriting typed value on blur if invalid */
+        input.addEventListener("blur", () => {
+          const d = parseDisplay(input.value);
+          if (d) { fp.setDate(d, false); }
+        });
+      });
+    })
+    .catch(() => {
+      /* Flatpickr failed to load — silently fall back (no calendar button) */
     });
-  });
 }
 
