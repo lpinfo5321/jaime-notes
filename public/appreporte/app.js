@@ -716,6 +716,8 @@
       // Dropdowns
       initCustomDropdowns();
       renderPaymentSelects();
+      // Contact autocomplete
+      try { initContactAutocomplete(); } catch {}
     };
 
     const renderPaper = () => {
@@ -2194,6 +2196,198 @@
       renderPaymentSelects();
       renderManageList();
     });
+
+    /* ══════════════════════════════════════════════════════════════
+       CONTACT AUTOCOMPLETE for "Company Contact" field
+    ══════════════════════════════════════════════════════════════ */
+    let allContacts = [];
+
+    // Avatar colors (matches app's ContactsView palette)
+    const AC_COLORS = [
+      "#6366f1","#8b5cf6","#ec4899","#f43f5e","#f97316",
+      "#eab308","#22c55e","#14b8a6","#06b6d4","#3b82f6",
+    ];
+    const acColor = (name) => AC_COLORS[(name || "").charCodeAt(0) % AC_COLORS.length];
+    const acInitials = (name) => (name || "?").split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
+
+    // Fetch contacts from the Next.js API (same domain)
+    async function loadContacts() {
+      try {
+        const res = await fetch("/api/contacts?limit=500", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        allContacts = data.contacts || [];
+      } catch { /* offline or not authenticated, silently ignore */ }
+    }
+
+    // Score a contact against the search query + the report's company name
+    function scoreContact(contact, query, companyName) {
+      const q  = (query       || "").toLowerCase().trim();
+      const cn = (companyName || "").toLowerCase().trim();
+      const cName    = (contact.name    || "").toLowerCase();
+      const cCompany = (contact.company || "").toLowerCase();
+      const cPhones  = (contact.phones  || []).join(" ").toLowerCase();
+
+      let score = 0;
+
+      // Exact/starts-with boosts
+      if (q) {
+        if (cName.startsWith(q))    score += 40;
+        else if (cName.includes(q)) score += 20;
+        if (cCompany.startsWith(q)) score += 30;
+        else if (cCompany.includes(q)) score += 15;
+        if (cPhones.includes(q))    score += 10;
+      }
+
+      // Smart: boost contacts whose company matches the maker/payor
+      if (cn && cCompany && (cCompany.includes(cn) || cn.includes(cCompany))) score += 50;
+      if (cn && cName    && (cName.includes(cn)    || cn.includes(cName)))    score += 25;
+
+      return score;
+    }
+
+    function initContactAutocomplete() {
+      const wrap  = document.getElementById("companyContactWrap");
+      const drop  = document.getElementById("companyContactDrop");
+      if (!wrap || !drop) return;
+
+      const inp = wrap.querySelector('input[data-field="companyContact"]');
+      if (!inp || inp.dataset.acInited) return;
+      inp.dataset.acInited = "1";
+
+      let focusedIdx = -1;
+      let closeTimer = null;
+
+      const hideDrop = () => { drop.style.display = "none"; focusedIdx = -1; };
+      const showDrop = () => { drop.style.display = "block"; };
+
+      function buildSuggestions(query) {
+        const companyName = report?.fields?.companyName || "";
+        let scored = allContacts
+          .map(c => ({ c, s: scoreContact(c, query, companyName) }))
+          .filter(x => x.s > 0 || (!query && x.c))
+          .sort((a, b) => b.s - a.s)
+          .slice(0, 8)
+          .map(x => x.c);
+
+        // If no query and no smart matches, show top 6 by name
+        if (!scored.length && !query) {
+          scored = allContacts.slice(0, 6);
+        }
+
+        drop.innerHTML = "";
+
+        if (!scored.length) {
+          drop.innerHTML = '<div class="acEmpty">No se encontraron contactos</div>';
+          showDrop();
+          return;
+        }
+
+        // Section header
+        const sec = document.createElement("div");
+        sec.className = "acSection";
+        sec.textContent = query ? "Sugerencias" : "Contactos recientes";
+        drop.appendChild(sec);
+
+        scored.forEach((contact, i) => {
+          const phones = (contact.phones || []).filter(Boolean);
+          const firstPhone = phones[0] || "";
+          const item = document.createElement("div");
+          item.className = "acItem";
+          item.dataset.idx = i;
+
+          const avatar = document.createElement("div");
+          avatar.className = "acAvatar";
+          avatar.style.background = acColor(contact.name);
+          avatar.textContent = acInitials(contact.name);
+
+          const info = document.createElement("div");
+          info.className = "acInfo";
+
+          const nameEl = document.createElement("div");
+          nameEl.className = "acName";
+          nameEl.textContent = contact.name;
+
+          const subEl = document.createElement("div");
+          subEl.className = "acSub";
+          subEl.textContent = [contact.company, contact.email].filter(Boolean).join(" · ") || "Sin empresa";
+
+          info.appendChild(nameEl);
+          info.appendChild(subEl);
+
+          const phoneEl = document.createElement("div");
+          phoneEl.className = "acPhone";
+          phoneEl.textContent = firstPhone;
+
+          item.appendChild(avatar);
+          item.appendChild(info);
+          if (firstPhone) item.appendChild(phoneEl);
+
+          item.addEventListener("mousedown", (e) => {
+            e.preventDefault(); // don't blur input
+            // Fill field: "Name Phone"
+            const filled = firstPhone ? `${contact.name} ${firstPhone}` : contact.name;
+            inp.value = filled;
+            // Update report
+            if (report?.fields) {
+              report.fields.companyContact = filled;
+              try { scheduleSave(); } catch {}
+            }
+            hideDrop();
+            inp.focus();
+          });
+
+          drop.appendChild(item);
+        });
+
+        showDrop();
+        focusedIdx = -1;
+      }
+
+      // Input events
+      inp.addEventListener("input", () => buildSuggestions(inp.value.trim()));
+
+      inp.addEventListener("focus", () => {
+        clearTimeout(closeTimer);
+        buildSuggestions(inp.value.trim());
+      });
+
+      inp.addEventListener("blur", () => {
+        closeTimer = setTimeout(hideDrop, 180);
+      });
+
+      // Keyboard navigation
+      inp.addEventListener("keydown", (e) => {
+        const items = drop.querySelectorAll(".acItem");
+        if (!items.length) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          focusedIdx = Math.min(focusedIdx + 1, items.length - 1);
+          items.forEach((el, i) => el.classList.toggle("focused", i === focusedIdx));
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          focusedIdx = Math.max(focusedIdx - 1, 0);
+          items.forEach((el, i) => el.classList.toggle("focused", i === focusedIdx));
+        } else if (e.key === "Enter" && focusedIdx >= 0) {
+          e.preventDefault();
+          items[focusedIdx]?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        } else if (e.key === "Escape") {
+          hideDrop();
+        }
+      });
+
+      // Close on outside click
+      document.addEventListener("click", (e) => {
+        if (!wrap.contains(e.target)) hideDrop();
+      });
+    }
+
+    // Load contacts and init autocomplete after paper renders
+    loadContacts().then(() => {
+      try { initContactAutocomplete(); } catch {}
+    });
+
+    /* ════════════════════════════════════════════════════════════ */
 
     report = load();
     try { applyCompanyAutoFill(); } catch {}

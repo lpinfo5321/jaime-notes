@@ -400,6 +400,38 @@
     .dropItemIcon{ width:16px; height:16px; flex-shrink:0; opacity:.55; }
     .dropDivider{ height:1px; background:#f1f5f9; margin:3px 0; }
 
+    /* ── Contact autocomplete ── */
+    .acWrap{ position:relative; width:100%; }
+    .acDropdown{
+      position:absolute; left:0; top:calc(100% + 6px);
+      width:100%; min-width:220px;
+      background:#fff;
+      border:1px solid rgba(15,23,42,.1);
+      border-radius:16px;
+      box-shadow:0 12px 40px rgba(0,0,0,0.16),0 2px 8px rgba(0,0,0,0.08);
+      z-index:99999;
+      overflow:hidden;
+      padding:5px;
+      animation: dropFadeIn .15s cubic-bezier(.34,1.2,.64,1);
+    }
+    .acItem{
+      display:flex; align-items:center; gap:10px;
+      padding:9px 11px; border-radius:11px;
+      cursor:pointer; transition:background .1s;
+    }
+    .acItem:hover,.acItem.focused{ background:#f1f5f9; }
+    .acAvatar{
+      width:32px; height:32px; border-radius:10px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; font-weight:900; color:#fff; flex-shrink:0;
+    }
+    .acInfo{ flex:1; min-width:0; }
+    .acName{ font-size:13px; font-weight:700; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .acSub{ font-size:11px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+    .acPhone{ font-size:12px; font-weight:700; color:#3b82f6; flex-shrink:0; }
+    .acEmpty{ padding:12px; text-align:center; font-size:12px; color:#94a3b8; }
+    .acSection{ font-size:10px; font-weight:900; color:#94a3b8; padding:6px 11px 3px; letter-spacing:.5px; text-transform:uppercase; }
+
     .selectExtra{
       margin-top: 8px;
     }
@@ -983,7 +1015,15 @@
             </td>
           </tr>
           <tr><td class="labelCell">CUSTOMER CONTACT</td><td class="valueCell"><input data-field="customerContact" inputmode="numeric" placeholder="000-000-0000" /></td></tr>
-          <tr><td class="labelCell">COMPANY CONTACT</td><td class="valueCell"><input data-field="companyContact" placeholder="NAME 000-000-0000" /></td></tr>
+          <tr>
+            <td class="labelCell">COMPANY CONTACT</td>
+            <td class="valueCell">
+              <div class="acWrap" id="companyContactWrap">
+                <input data-field="companyContact" placeholder="NAME 000-000-0000" autocomplete="off" />
+                <div class="acDropdown" id="companyContactDrop" style="display:none;"></div>
+              </div>
+            </td>
+          </tr>
         </table>
 
         <div class="printSpacerA" aria-hidden="true"></div>
