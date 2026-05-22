@@ -83,7 +83,11 @@
     const formatMoney = (n) => {
       const x = Number(n);
       if (!Number.isFinite(x)) return "";
-      return "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const hasCents = x % 1 !== 0;
+      return "$" + x.toLocaleString("en-US", {
+        minimumFractionDigits: hasCents ? 2 : 0,
+        maximumFractionDigits: 2,
+      });
     };
 
     const onlyDigits = (s) => String(s || "").replace(/\D/g, "");
