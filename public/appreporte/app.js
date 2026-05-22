@@ -672,6 +672,9 @@
 
       const openModal = async () => {
         overlay.classList.add('open');
+        // Lock body scroll so background doesn't move on mobile
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
         searchInput.value = '';
         searchInput.focus();
         if (!allContacts.length) {
@@ -684,7 +687,12 @@
         }
         renderGrid(allContacts);
       };
-      const closeModal = () => overlay.classList.remove('open');
+      const closeModal = () => {
+        overlay.classList.remove('open');
+        // Restore body scroll
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+      };
 
       btnOpen.addEventListener('click', openModal);
       btnClose.addEventListener('click', closeModal);
