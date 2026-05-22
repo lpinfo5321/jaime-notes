@@ -2985,11 +2985,6 @@ function ReportModal({
     function onMessage(ev: MessageEvent) {
       const data = ev?.data;
       if (!data || typeof data !== "object") return;
-      if (data.type === "rc:showContacts") {
-        // iframe requests to open contacts view
-        try { window.dispatchEvent(new CustomEvent("rc:showContacts")); } catch {}
-        return;
-      }
       if (data.type === "rc:print") {
         // parent-driven print (works better on mobile)
         void printFromParent();

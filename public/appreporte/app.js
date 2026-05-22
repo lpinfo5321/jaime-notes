@@ -480,205 +480,6 @@
       });
     };
 
-    /* ── Contact Picker Modal ── */
-    const acColors = [
-      'linear-gradient(135deg,#6366f1,#8b5cf6)',
-      'linear-gradient(135deg,#0ea5e9,#6366f1)',
-      'linear-gradient(135deg,#10b981,#0ea5e9)',
-      'linear-gradient(135deg,#f59e0b,#ef4444)',
-      'linear-gradient(135deg,#ec4899,#8b5cf6)',
-      'linear-gradient(135deg,#14b8a6,#06b6d4)',
-      'linear-gradient(135deg,#f97316,#ec4899)',
-    ];
-    const acColor = (name) => acColors[(name || 'A').charCodeAt(0) % acColors.length];
-
-    const buildContactPicker = () => {
-      // Only create once
-      if (document.getElementById('cpCardSingleton')) return;
-
-      const overlay = document.createElement('div');
-      overlay.className = 'cpOverlay';
-      overlay.id = 'cpOverlaySingleton';
-      overlay.style.display = 'none';
-      document.body.appendChild(overlay);
-
-      const card = document.createElement('div');
-      card.className = 'cpCard';
-      card.id = 'cpCardSingleton';
-      card.style.display = 'none';
-      card.innerHTML = `
-        <div class="cpHeader">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <h3>Elegir contacto</h3>
-          <button type="button" class="cpCloseBtn" id="cpCloseBtn">×</button>
-        </div>
-        <div class="cpSearch">
-          <svg class="cpSearchIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="cpSearchInput" type="text" placeholder="Buscar por nombre, empresa, teléfono…" autocomplete="off" />
-        </div>
-        <div class="cpList" id="cpList"></div>
-        <div class="cpFooter">
-          <button type="button" class="cpAddBtn" id="cpAddBtn">+ Abrir módulo de Contactos</button>
-        </div>
-      `;
-      document.body.appendChild(card);
-
-      let allContacts = [];
-      let onSelectCb = null;
-
-      const renderList = (items) => {
-        const list = document.getElementById('cpList');
-        if (!list) return;
-        list.innerHTML = '';
-        if (!items.length) {
-          list.innerHTML = '<div class="cpEmpty">Sin contactos encontrados</div>';
-          return;
-        }
-        items.forEach(c => {
-          const phones = (c.phones || []).filter(Boolean);
-          const phone = phones[0] || '';
-          const item = document.createElement('div');
-          item.className = 'cpItem';
-          item.innerHTML = `
-            <div class="cpAvatar" style="background:${acColor(c.name)}">${c.name.charAt(0).toUpperCase()}</div>
-            <div class="cpItemInfo">
-              <div class="cpItemName">${c.name}</div>
-              ${c.company ? `<div class="cpItemSub">${c.company}</div>` : ''}
-            </div>
-            ${phone ? `<div class="cpItemPhone">${phone}</div>` : ''}
-          `;
-          item.addEventListener('click', () => {
-            if (onSelectCb) onSelectCb(c);
-            closePicker();
-          });
-          list.appendChild(item);
-        });
-      };
-
-      const openPicker = async (cb) => {
-        onSelectCb = cb;
-        overlay.style.display = 'block';
-        card.style.display = 'flex';
-        const si = document.getElementById('cpSearchInput');
-        if (si) { si.value = ''; si.focus(); }
-        try {
-          const res = await fetch('/api/contacts');
-          const data = await res.json();
-          allContacts = data.contacts || [];
-          renderList(allContacts);
-        } catch { renderList([]); }
-      };
-
-      const closePicker = () => {
-        overlay.style.display = 'none';
-        card.style.display = 'none';
-        onSelectCb = null;
-      };
-
-      overlay.addEventListener('click', closePicker);
-      document.getElementById('cpCloseBtn')?.addEventListener('click', closePicker);
-      document.getElementById('cpSearchInput')?.addEventListener('input', (e) => {
-        const q = e.target.value.toLowerCase().trim();
-        if (!q) { renderList(allContacts); return; }
-        renderList(allContacts.filter(c =>
-          c.name.toLowerCase().includes(q) ||
-          (c.company || '').toLowerCase().includes(q) ||
-          (c.phones || []).some(p => p.includes(q))
-        ));
-      });
-      document.getElementById('cpAddBtn')?.addEventListener('click', () => {
-        try { window.parent.postMessage({ type: 'rc:showContacts' }, '*'); } catch {}
-        closePicker();
-      });
-      document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker(); });
-
-      // Expose globally so initContactPicker can use it
-      window._rcOpenContactPicker = openPicker;
-    };
-
-    /* ── Maker/Payor → suggest contact ── */
-    const initMakerPayorSuggestion = () => {
-      ['makerPayor', 'companyName'].forEach(fieldKey => {
-        const inp = activePaper?.querySelector(`input[data-field="${fieldKey}"]`);
-        if (!inp || inp.dataset.makerSuggInit) return;
-        inp.dataset.makerSuggInit = '1';
-
-        let suggEl = null;
-        let debounce = null;
-
-        const removeSugg = () => { if (suggEl) { suggEl.remove(); suggEl = null; } };
-
-        const applySugg = (contact) => {
-          const phones = (contact.phones || []).filter(Boolean);
-          const phone = phones[0] || '';
-          const compInp = activePaper?.querySelector('input[data-field="companyContact"]');
-          if (compInp) {
-            const val = phone ? `${contact.name}  ${phone}` : contact.name;
-            compInp.value = val;
-            compInp.dispatchEvent(new Event('input', { bubbles: true }));
-            compInp.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-          const custInp = activePaper?.querySelector('input[data-field="customerContact"]');
-          if (custInp && !custInp.value.trim() && phone) {
-            custInp.value = phone;
-            custInp.dispatchEvent(new Event('input', { bubbles: true }));
-            custInp.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-          removeSugg();
-        };
-
-        const showFound = (contact) => {
-          removeSugg();
-          const phones = (contact.phones || []).filter(Boolean);
-          const phone = phones[0] || '';
-          suggEl = document.createElement('div');
-          suggEl.className = 'makerSugg';
-          suggEl.innerHTML = `
-            <div style="width:28px;height:28px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:white;background:${acColor(contact.name)}">${contact.name.charAt(0).toUpperCase()}</div>
-            <div class="makerSuggText">${contact.name}${phone ? `<div class="makerSuggSub">${phone}</div>` : ''}</div>
-            <button type="button" class="makerSuggApply">Usar</button>
-            <button type="button" class="makerSuggDismiss">✕</button>
-          `;
-          suggEl.querySelector('.makerSuggApply').addEventListener('click', () => applySugg(contact));
-          suggEl.querySelector('.makerSuggDismiss').addEventListener('click', removeSugg);
-          (inp.closest('td.valueCell') || inp.parentNode).appendChild(suggEl);
-        };
-
-        const showNotFound = (name) => {
-          removeSugg();
-          suggEl = document.createElement('div');
-          suggEl.className = 'makerSugg notFound';
-          suggEl.innerHTML = `
-            <div style="font-size:16px;flex-shrink:0">📇</div>
-            <div class="makerSuggText" style="color:#78350f">"${name}" no está en Contactos<div style="font-size:11px;color:#92400e">¿Deseas agregarlo?</div></div>
-            <button type="button" class="makerSuggApply" style="background:#f59e0b">Agregar</button>
-            <button type="button" class="makerSuggDismiss">✕</button>
-          `;
-          suggEl.querySelector('.makerSuggApply').addEventListener('click', () => {
-            try { window.parent.postMessage({ type: 'rc:showContacts', prefill: name }, '*'); } catch {}
-            removeSugg();
-          });
-          suggEl.querySelector('.makerSuggDismiss').addEventListener('click', removeSugg);
-          (inp.closest('td.valueCell') || inp.parentNode).appendChild(suggEl);
-        };
-
-        inp.addEventListener('blur', () => {
-          const q = inp.value.trim();
-          if (!q || q.length < 2) { removeSugg(); return; }
-          clearTimeout(debounce);
-          debounce = setTimeout(async () => {
-            try {
-              const res = await fetch(`/api/contacts?q=${encodeURIComponent(q)}`);
-              const data = await res.json();
-              const hits = data.contacts || [];
-              if (hits.length) showFound(hits[0]); else showNotFound(q);
-            } catch {}
-          }, 200);
-        });
-        inp.addEventListener('focus', removeSugg);
-      });
-    };
-
     /* ── Company Contact autocomplete ── */
     const initContactAutocomplete = () => {
       const inp = activePaper?.querySelector('input[data-field="companyContact"]');
@@ -788,34 +589,191 @@
       document.addEventListener('click', e => { if (!wrap.contains(e.target) && !list.contains(e.target)) closeList(); });
       window.addEventListener('scroll', positionList, true);
       window.addEventListener('resize', positionList);
+    };
 
-      // ── Picker button ──
-      const pickerBtn = document.createElement('button');
-      pickerBtn.type = 'button';
-      pickerBtn.className = 'contactPickerOpenBtn';
-      pickerBtn.title = 'Elegir de contactos';
-      pickerBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
-      pickerBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        closeList();
-        if (window._rcOpenContactPicker) {
-          window._rcOpenContactPicker((contact) => {
-            const phones = (contact.phones || []).filter(Boolean);
-            const phone = phones[0] || '';
-            const val = phone ? `${contact.name}  ${phone}` : contact.name;
-            inp.value = val;
-            inp.dispatchEvent(new Event('input', { bubbles: true }));
-            inp.dispatchEvent(new Event('change', { bubbles: true }));
-            const custInp = activePaper?.querySelector('input[data-field="customerContact"]');
-            if (custInp && !custInp.value.trim() && phone) {
-              custInp.value = phone;
-              custInp.dispatchEvent(new Event('input', { bubbles: true }));
-              custInp.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-          });
+    /* ─────────────────────────────────────────────────────────────
+       Contact Picker Modal
+    ───────────────────────────────────────────────────────────── */
+    const avatarGradients = [
+      'linear-gradient(135deg,#a855f7,#6366f1)',
+      'linear-gradient(135deg,#06b6d4,#6366f1)',
+      'linear-gradient(135deg,#10b981,#06b6d4)',
+      'linear-gradient(135deg,#f59e0b,#ef4444)',
+      'linear-gradient(135deg,#ec4899,#a855f7)',
+      'linear-gradient(135deg,#22c55e,#10b981)',
+      'linear-gradient(135deg,#f97316,#ef4444)',
+      'linear-gradient(135deg,#3b82f6,#6366f1)',
+    ];
+    const gradientFor = (name) => avatarGradients[(name || '').charCodeAt(0) % avatarGradients.length];
+
+    // Fill contact into companyContact (and optionally customerContact)
+    const applyContact = (contact) => {
+      const phones = (contact.phones || []).filter(Boolean);
+      const phone  = phones[0] || '';
+      const val    = phone ? `${contact.name}  ${phone}` : contact.name;
+      const ccInp  = activePaper?.querySelector('input[data-field="companyContact"]');
+      if (ccInp) {
+        ccInp.value = val;
+        ccInp.dispatchEvent(new Event('input', { bubbles: true }));
+        ccInp.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      const custInp = activePaper?.querySelector('input[data-field="customerContact"]');
+      if (custInp && !custInp.value.trim() && phone) {
+        custInp.value = phone;
+        custInp.dispatchEvent(new Event('input', { bubbles: true }));
+        custInp.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    };
+
+    const initContactPicker = () => {
+      const overlay     = document.getElementById('contactPickerOverlay');
+      const grid        = document.getElementById('cpGrid');
+      const searchInput = document.getElementById('cpSearchInput');
+      const countEl     = document.getElementById('cpCount');
+      const btnOpen     = activePaper?.querySelector('#btnOpenContactPicker');
+      const btnClose    = document.getElementById('cpClose');
+      const btnAddNew   = document.getElementById('cpAddNew');
+      if (!overlay || !btnOpen) return;
+      if (btnOpen.dataset.pickerInit) return;
+      btnOpen.dataset.pickerInit = '1';
+
+      let allContacts = [];
+      let searchDebounce = null;
+
+      const renderGrid = (contacts) => {
+        grid.innerHTML = '';
+        countEl.textContent = `${contacts.length} contacto${contacts.length !== 1 ? 's' : ''}`;
+        if (!contacts.length) {
+          const em = document.createElement('div');
+          em.id = 'cpEmpty';
+          em.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 10px;display:block"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>No se encontraron contactos';
+          grid.appendChild(em);
+          return;
         }
+        contacts.forEach(c => {
+          const phones = (c.phones || []).filter(Boolean);
+          const phone  = phones[0] || '';
+          const card   = document.createElement('div');
+          card.className = 'cpCard';
+          card.innerHTML = `
+            <div class="cpAvatar" style="background:${gradientFor(c.name)}">${(c.name || '?').charAt(0).toUpperCase()}</div>
+            <div class="cpInfo">
+              <div class="cpName">${c.name}</div>
+              ${c.company ? `<div class="cpCompany">🏢 ${c.company}</div>` : ''}
+              ${phone ? `<div class="cpPhone">${phone}</div>` : ''}
+            </div>`;
+          card.addEventListener('click', () => {
+            applyContact(c);
+            closeModal();
+          });
+          grid.appendChild(card);
+        });
+      };
+
+      const openModal = async () => {
+        overlay.classList.add('open');
+        searchInput.value = '';
+        searchInput.focus();
+        if (!allContacts.length) {
+          grid.innerHTML = '<div id="cpEmpty">Cargando contactos…</div>';
+          try {
+            const res  = await fetch('/api/contacts?q=');
+            const data = await res.json();
+            allContacts = data.contacts || [];
+          } catch { allContacts = []; }
+        }
+        renderGrid(allContacts);
+      };
+      const closeModal = () => overlay.classList.remove('open');
+
+      btnOpen.addEventListener('click', openModal);
+      btnClose.addEventListener('click', closeModal);
+      overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(async () => {
+          const q = searchInput.value.trim();
+          if (!q) { renderGrid(allContacts); return; }
+          try {
+            const res  = await fetch(`/api/contacts?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            renderGrid(data.contacts || []);
+          } catch { renderGrid([]); }
+        }, 200);
       });
-      wrap.appendChild(pickerBtn);
+
+      // "Nuevo contacto" opens the app's contacts view in the parent window
+      btnAddNew.addEventListener('click', () => {
+        closeModal();
+        try { window.parent.dispatchEvent(new CustomEvent('rc:showContacts')); } catch {}
+      });
+    };
+
+    /* ─────────────────────────────────────────────────────────────
+       Maker/Payor → auto-suggest matching contact
+    ───────────────────────────────────────────────────────────── */
+    const initMakerPayorSuggestion = () => {
+      const makerInp = activePaper?.querySelector('input[data-field="makerPayor"]');
+      const chipEl   = document.getElementById('contactMatchChip');
+      if (!makerInp || !chipEl) return;
+      if (makerInp.dataset.suggInit) return;
+      makerInp.dataset.suggInit = '1';
+
+      let debounce = null;
+
+      const showChip = (contact) => {
+        const phones = (contact.phones || []).filter(Boolean);
+        const phone  = phones[0] || '';
+        chipEl.innerHTML = '';
+        const chip = document.createElement('div');
+        chip.className = 'matchChip';
+        chip.title = 'Clic para usar este contacto';
+        chip.innerHTML = `
+          <div class="matchChipAvatar" style="background:${gradientFor(contact.name)}">${contact.name.charAt(0).toUpperCase()}</div>
+          <span style="font-weight:700;color:#15803d">${contact.name}</span>
+          ${phone ? `<span style="color:#16a34a;font-weight:600">${phone}</span>` : ''}
+          <span style="font-size:10px;color:#86efac;margin-left:2px">▶ usar</span>`;
+        chip.addEventListener('click', () => {
+          applyContact(contact);
+          chipEl.style.display = 'none';
+        });
+        chipEl.appendChild(chip);
+        chipEl.style.display = 'block';
+      };
+
+      const showAddChip = (query) => {
+        chipEl.innerHTML = '';
+        const chip = document.createElement('div');
+        chip.className = 'matchChip matchChipNew';
+        chip.title = 'Agregar como nuevo contacto';
+        chip.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          <span style="color:#1d4ed8;font-weight:700">Agregar "${query}" como contacto nuevo</span>`;
+        chip.addEventListener('click', () => {
+          chipEl.style.display = 'none';
+          try { window.parent.dispatchEvent(new CustomEvent('rc:showContacts')); } catch {}
+        });
+        chipEl.appendChild(chip);
+        chipEl.style.display = 'block';
+      };
+
+      makerInp.addEventListener('input', () => {
+        const q = makerInp.value.trim();
+        chipEl.style.display = 'none';
+        clearTimeout(debounce);
+        if (q.length < 2) return;
+        debounce = setTimeout(async () => {
+          try {
+            const res  = await fetch(`/api/contacts?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            const hits = data.contacts || [];
+            if (hits.length) showChip(hits[0]);
+            else showAddChip(q);
+          } catch { chipEl.style.display = 'none'; }
+        }, 350);
+      });
     };
 
     const buildSelectOptions = (selectEl, kind, currentLabel) => {
@@ -1051,10 +1009,10 @@
         if (key === "totalDue") inp.setAttribute("readonly", "readonly");
         if (key === "returnedFee") inp.setAttribute("readonly", "readonly");
       });
-      // Dropdowns + autocomplete + contact features
-      buildContactPicker();
+      // Dropdowns + autocomplete + contact picker
       initCustomDropdowns();
       initContactAutocomplete();
+      initContactPicker();
       initMakerPayorSuggestion();
       renderPaymentSelects();
     };
