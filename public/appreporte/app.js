@@ -480,6 +480,117 @@
       });
     };
 
+    /* ── Company Contact autocomplete ── */
+    const initContactAutocomplete = () => {
+      const inp = activePaper?.querySelector('input[data-field="companyContact"]');
+      if (!inp || inp.dataset.acInit) return;
+      inp.dataset.acInit = '1';
+      inp.setAttribute('placeholder', 'Buscar contacto o escribir…');
+      inp.setAttribute('autocomplete', 'off');
+
+      // Wrap input for positioning
+      const wrap = document.createElement('div');
+      wrap.className = 'contactAcWrap';
+      inp.parentNode.insertBefore(wrap, inp);
+      wrap.appendChild(inp);
+
+      // Floating list (appended to body)
+      const list = document.createElement('div');
+      list.className = 'contactAcList';
+      document.body.appendChild(list);
+
+      let debounce = null;
+      let open = false;
+
+      const closeList = () => { list.style.display = 'none'; open = false; };
+      const openList  = () => { list.style.display = 'block'; open = true; };
+
+      const positionList = () => {
+        const r = inp.getBoundingClientRect();
+        list.style.left     = r.left + 'px';
+        list.style.top      = (r.bottom + 4) + 'px';
+        list.style.minWidth = Math.max(r.width, 240) + 'px';
+      };
+
+      const avatarColors = [
+        'linear-gradient(135deg,#6366f1,#8b5cf6)',
+        'linear-gradient(135deg,#0ea5e9,#6366f1)',
+        'linear-gradient(135deg,#10b981,#0ea5e9)',
+        'linear-gradient(135deg,#f59e0b,#ef4444)',
+        'linear-gradient(135deg,#ec4899,#8b5cf6)',
+      ];
+      const colorFor = (name) => avatarColors[name.charCodeAt(0) % avatarColors.length];
+
+      const renderList = (contacts) => {
+        list.innerHTML = '';
+        if (!contacts.length) {
+          const em = document.createElement('div');
+          em.className = 'contactAcEmpty';
+          em.textContent = 'Sin resultados — escribe libremente';
+          list.appendChild(em);
+          positionList(); openList();
+          return;
+        }
+        contacts.slice(0, 8).forEach(c => {
+          const phones = (c.phones || []).filter(Boolean);
+          const phone  = phones[0] || '';
+          const item = document.createElement('div');
+          item.className = 'contactAcItem';
+          item.innerHTML = `
+            <div class="contactAcAvatar" style="background:${colorFor(c.name)}">${c.name.charAt(0).toUpperCase()}</div>
+            <div style="flex:1;min-width:0">
+              <div class="contactAcName">${c.name}</div>
+              ${c.company ? `<div class="contactAcSub">${c.company}</div>` : ''}
+            </div>
+            ${phone ? `<div class="contactAcPhone">${phone}</div>` : ''}
+          `;
+          item.addEventListener('mousedown', e => {
+            e.preventDefault();
+            // Fill company contact: "Name  Phone"
+            const val = phone ? `${c.name}  ${phone}` : c.name;
+            inp.value = val;
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            inp.dispatchEvent(new Event('change', { bubbles: true }));
+            // If customerContact is empty, suggest same phone
+            const custInp = activePaper?.querySelector('input[data-field="customerContact"]');
+            if (custInp && !custInp.value.trim() && phone) {
+              custInp.value = phone;
+              custInp.dispatchEvent(new Event('input', { bubbles: true }));
+              custInp.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            closeList();
+            inp.focus();
+          });
+          list.appendChild(item);
+        });
+        positionList(); openList();
+      };
+
+      inp.addEventListener('input', () => {
+        const q = inp.value.trim();
+        clearTimeout(debounce);
+        if (q.length < 1) { closeList(); return; }
+        debounce = setTimeout(async () => {
+          try {
+            const res = await fetch(`/api/contacts?q=${encodeURIComponent(q)}`);
+            if (!res.ok) { closeList(); return; }
+            const data = await res.json();
+            renderList(data.contacts || []);
+          } catch { closeList(); }
+        }, 200);
+      });
+
+      inp.addEventListener('focus', () => {
+        if (inp.value.trim().length >= 1 && list.children.length) {
+          positionList(); openList();
+        }
+      });
+      inp.addEventListener('blur', () => setTimeout(closeList, 180));
+      document.addEventListener('click', e => { if (!wrap.contains(e.target) && !list.contains(e.target)) closeList(); });
+      window.addEventListener('scroll', positionList, true);
+      window.addEventListener('resize', positionList);
+    };
+
     const buildSelectOptions = (selectEl, kind, currentLabel) => {
       if (!selectEl) return;
       const list = getList(kind);
@@ -713,11 +824,10 @@
         if (key === "totalDue") inp.setAttribute("readonly", "readonly");
         if (key === "returnedFee") inp.setAttribute("readonly", "readonly");
       });
-      // Dropdowns
+      // Dropdowns + autocomplete
       initCustomDropdowns();
+      initContactAutocomplete();
       renderPaymentSelects();
-      // Contact autocomplete
-      try { initContactAutocomplete(); } catch {}
     };
 
     const renderPaper = () => {
@@ -2196,198 +2306,6 @@
       renderPaymentSelects();
       renderManageList();
     });
-
-    /* ══════════════════════════════════════════════════════════════
-       CONTACT AUTOCOMPLETE for "Company Contact" field
-    ══════════════════════════════════════════════════════════════ */
-    let allContacts = [];
-
-    // Avatar colors (matches app's ContactsView palette)
-    const AC_COLORS = [
-      "#6366f1","#8b5cf6","#ec4899","#f43f5e","#f97316",
-      "#eab308","#22c55e","#14b8a6","#06b6d4","#3b82f6",
-    ];
-    const acColor = (name) => AC_COLORS[(name || "").charCodeAt(0) % AC_COLORS.length];
-    const acInitials = (name) => (name || "?").split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
-
-    // Fetch contacts from the Next.js API (same domain)
-    async function loadContacts() {
-      try {
-        const res = await fetch("/api/contacts?limit=500", { credentials: "include" });
-        if (!res.ok) return;
-        const data = await res.json();
-        allContacts = data.contacts || [];
-      } catch { /* offline or not authenticated, silently ignore */ }
-    }
-
-    // Score a contact against the search query + the report's company name
-    function scoreContact(contact, query, companyName) {
-      const q  = (query       || "").toLowerCase().trim();
-      const cn = (companyName || "").toLowerCase().trim();
-      const cName    = (contact.name    || "").toLowerCase();
-      const cCompany = (contact.company || "").toLowerCase();
-      const cPhones  = (contact.phones  || []).join(" ").toLowerCase();
-
-      let score = 0;
-
-      // Exact/starts-with boosts
-      if (q) {
-        if (cName.startsWith(q))    score += 40;
-        else if (cName.includes(q)) score += 20;
-        if (cCompany.startsWith(q)) score += 30;
-        else if (cCompany.includes(q)) score += 15;
-        if (cPhones.includes(q))    score += 10;
-      }
-
-      // Smart: boost contacts whose company matches the maker/payor
-      if (cn && cCompany && (cCompany.includes(cn) || cn.includes(cCompany))) score += 50;
-      if (cn && cName    && (cName.includes(cn)    || cn.includes(cName)))    score += 25;
-
-      return score;
-    }
-
-    function initContactAutocomplete() {
-      const wrap  = document.getElementById("companyContactWrap");
-      const drop  = document.getElementById("companyContactDrop");
-      if (!wrap || !drop) return;
-
-      const inp = wrap.querySelector('input[data-field="companyContact"]');
-      if (!inp || inp.dataset.acInited) return;
-      inp.dataset.acInited = "1";
-
-      let focusedIdx = -1;
-      let closeTimer = null;
-
-      const hideDrop = () => { drop.style.display = "none"; focusedIdx = -1; };
-      const showDrop = () => { drop.style.display = "block"; };
-
-      function buildSuggestions(query) {
-        const companyName = report?.fields?.companyName || "";
-        let scored = allContacts
-          .map(c => ({ c, s: scoreContact(c, query, companyName) }))
-          .filter(x => x.s > 0 || (!query && x.c))
-          .sort((a, b) => b.s - a.s)
-          .slice(0, 8)
-          .map(x => x.c);
-
-        // If no query and no smart matches, show top 6 by name
-        if (!scored.length && !query) {
-          scored = allContacts.slice(0, 6);
-        }
-
-        drop.innerHTML = "";
-
-        if (!scored.length) {
-          drop.innerHTML = '<div class="acEmpty">No se encontraron contactos</div>';
-          showDrop();
-          return;
-        }
-
-        // Section header
-        const sec = document.createElement("div");
-        sec.className = "acSection";
-        sec.textContent = query ? "Sugerencias" : "Contactos recientes";
-        drop.appendChild(sec);
-
-        scored.forEach((contact, i) => {
-          const phones = (contact.phones || []).filter(Boolean);
-          const firstPhone = phones[0] || "";
-          const item = document.createElement("div");
-          item.className = "acItem";
-          item.dataset.idx = i;
-
-          const avatar = document.createElement("div");
-          avatar.className = "acAvatar";
-          avatar.style.background = acColor(contact.name);
-          avatar.textContent = acInitials(contact.name);
-
-          const info = document.createElement("div");
-          info.className = "acInfo";
-
-          const nameEl = document.createElement("div");
-          nameEl.className = "acName";
-          nameEl.textContent = contact.name;
-
-          const subEl = document.createElement("div");
-          subEl.className = "acSub";
-          subEl.textContent = [contact.company, contact.email].filter(Boolean).join(" · ") || "Sin empresa";
-
-          info.appendChild(nameEl);
-          info.appendChild(subEl);
-
-          const phoneEl = document.createElement("div");
-          phoneEl.className = "acPhone";
-          phoneEl.textContent = firstPhone;
-
-          item.appendChild(avatar);
-          item.appendChild(info);
-          if (firstPhone) item.appendChild(phoneEl);
-
-          item.addEventListener("mousedown", (e) => {
-            e.preventDefault(); // don't blur input
-            // Fill field: "Name Phone"
-            const filled = firstPhone ? `${contact.name} ${firstPhone}` : contact.name;
-            inp.value = filled;
-            // Update report
-            if (report?.fields) {
-              report.fields.companyContact = filled;
-              try { scheduleSave(); } catch {}
-            }
-            hideDrop();
-            inp.focus();
-          });
-
-          drop.appendChild(item);
-        });
-
-        showDrop();
-        focusedIdx = -1;
-      }
-
-      // Input events
-      inp.addEventListener("input", () => buildSuggestions(inp.value.trim()));
-
-      inp.addEventListener("focus", () => {
-        clearTimeout(closeTimer);
-        buildSuggestions(inp.value.trim());
-      });
-
-      inp.addEventListener("blur", () => {
-        closeTimer = setTimeout(hideDrop, 180);
-      });
-
-      // Keyboard navigation
-      inp.addEventListener("keydown", (e) => {
-        const items = drop.querySelectorAll(".acItem");
-        if (!items.length) return;
-        if (e.key === "ArrowDown") {
-          e.preventDefault();
-          focusedIdx = Math.min(focusedIdx + 1, items.length - 1);
-          items.forEach((el, i) => el.classList.toggle("focused", i === focusedIdx));
-        } else if (e.key === "ArrowUp") {
-          e.preventDefault();
-          focusedIdx = Math.max(focusedIdx - 1, 0);
-          items.forEach((el, i) => el.classList.toggle("focused", i === focusedIdx));
-        } else if (e.key === "Enter" && focusedIdx >= 0) {
-          e.preventDefault();
-          items[focusedIdx]?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-        } else if (e.key === "Escape") {
-          hideDrop();
-        }
-      });
-
-      // Close on outside click
-      document.addEventListener("click", (e) => {
-        if (!wrap.contains(e.target)) hideDrop();
-      });
-    }
-
-    // Load contacts and init autocomplete after paper renders
-    loadContacts().then(() => {
-      try { initContactAutocomplete(); } catch {}
-    });
-
-    /* ════════════════════════════════════════════════════════════ */
 
     report = load();
     try { applyCompanyAutoFill(); } catch {}
