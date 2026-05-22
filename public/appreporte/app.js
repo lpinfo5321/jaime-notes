@@ -409,7 +409,7 @@
         btn.addEventListener('click', e => {
           e.stopPropagation();
           if (activeDropList) {
-            const wasThis = activeDropList.dataset.forWrap === wrap.dataset.customized + wrap.dataset.field;
+            const wasThis = activeDropList.dataset.forWrap === wrap.dataset.customized + sel.dataset.field;
             closeAllDrops();
             if (wasThis) return;
           }
