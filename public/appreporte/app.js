@@ -265,9 +265,11 @@
         dateFeePaid: "",
         feePaymentMethod: "",
         feePaidNumbers: "",
+        feeCashAmount: "",
         dateCheckPaid: "",
         checkPaymentMethod: "",
         checkPaidNumber: "",
+        checkCashAmount: "",
         dateCompleted: "",
         agentCompleted: "",
       },
@@ -356,6 +358,124 @@
       } catch {}
     };
 
+    /* ── Custom dropdown helpers ── */
+    let activeDropList = null;
+    const closeAllDrops = () => {
+      if (activeDropList) {
+        activeDropList.remove();
+        activeDropList = null;
+      }
+      document.querySelectorAll('.customDropBtn.open').forEach(b => b.classList.remove('open'));
+    };
+    document.addEventListener('click', closeAllDrops);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAllDrops(); });
+
+    const syncCustomDropdown = (sel) => {
+      if (!sel) return;
+      const wrap = sel.closest('.selectWrap');
+      if (!wrap || !wrap.dataset.customized) return;
+      const valSpan = wrap.querySelector('.customDropVal');
+      if (!valSpan) return;
+      const cur = Array.from(sel.options).find(o => o.value === sel.value);
+      const isPlaceholder = !cur || !cur.value || cur.value === '__manage__';
+      valSpan.textContent = isPlaceholder ? 'Select' : cur.text;
+      valSpan.className = 'customDropVal' + (isPlaceholder ? ' placeholder' : '');
+    };
+
+    const initCustomDropdowns = () => {
+      if (!activePaper) return;
+      activePaper.querySelectorAll('.selectWrap select[data-select]').forEach(sel => {
+        const wrap = sel.closest('.selectWrap');
+        if (!wrap || wrap.dataset.customized) return;
+        wrap.dataset.customized = '1';
+
+        // Build trigger button
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'customDropBtn';
+
+        const valSpan = document.createElement('span');
+        valSpan.className = 'customDropVal placeholder';
+        valSpan.textContent = 'Select';
+
+        const chevron = document.createElement('span');
+        chevron.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+        btn.appendChild(valSpan);
+        btn.appendChild(chevron);
+        wrap.appendChild(btn);
+
+        // Open dropdown on click
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          if (activeDropList) {
+            const wasThis = activeDropList.dataset.forWrap === wrap.dataset.customized + wrap.dataset.field;
+            closeAllDrops();
+            if (wasThis) return;
+          }
+
+          btn.classList.add('open');
+
+          // Build list
+          const list = document.createElement('div');
+          list.className = 'customDropList';
+          list.dataset.forWrap = wrap.dataset.customized + sel.dataset.field;
+
+          // Icon map
+          const icons = {
+            'Pending':     '<svg class="dropItemIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+            'Paid Cash':   '<svg class="dropItemIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>',
+            'Paid Check':  '<svg class="dropItemIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+            'Redeposited': '<svg class="dropItemIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.4"/></svg>',
+          };
+
+          Array.from(sel.options).forEach((opt, i) => {
+            if (opt.value === '__manage__') {
+              const div = document.createElement('div');
+              div.className = 'dropDivider';
+              list.appendChild(div);
+              const item = document.createElement('div');
+              item.className = 'customDropItem manage';
+              item.innerHTML = '<svg class="dropItemIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg> Editar lista…';
+              item.addEventListener('click', e => {
+                e.stopPropagation();
+                closeAllDrops();
+                sel.value = '__manage__';
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+              });
+              list.appendChild(item);
+              return;
+            }
+            const item = document.createElement('div');
+            item.className = 'customDropItem' + (opt.value === sel.value ? ' active' : '') + (opt.disabled ? ' disabled' : '');
+            item.innerHTML = (icons[opt.text] || '<svg class="dropItemIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/></svg>') + opt.text;
+            if (!opt.disabled) {
+              item.addEventListener('click', e => {
+                e.stopPropagation();
+                closeAllDrops();
+                sel.value = opt.value;
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                syncCustomDropdown(sel);
+              });
+            }
+            list.appendChild(item);
+          });
+
+          // Position
+          const rect = btn.getBoundingClientRect();
+          list.style.left = rect.left + 'px';
+          list.style.top = (rect.bottom + 5) + 'px';
+          list.style.minWidth = Math.max(rect.width, 200) + 'px';
+
+          document.body.appendChild(list);
+          activeDropList = list;
+        });
+
+        // Sync button text when native select changes
+        sel.addEventListener('change', () => syncCustomDropdown(sel));
+      });
+    };
+
     const buildSelectOptions = (selectEl, kind, currentLabel) => {
       if (!selectEl) return;
       const list = getList(kind);
@@ -416,7 +536,12 @@
       buildSelectOptions(chkSel, "check", report.fields.checkPaymentMethod);
       buildSelectOptions(rejSel, "reject", report.fields.rejectReason);
 
-      // Extra field when Paid Check is selected (check number)
+      // Sync custom dropdown button labels
+      syncCustomDropdown(feeSel);
+      syncCustomDropdown(chkSel);
+      syncCustomDropdown(rejSel);
+
+      // Extra: Paid Check → check number
       const extraCheck = activePaper.querySelector('[data-extra="checkPaidNumber"]');
       const showCheck = eqi(report?.fields?.checkPaymentMethod, "Paid Check");
       if (extraCheck) extraCheck.style.display = showCheck ? "block" : "none";
@@ -425,8 +550,17 @@
       const showFee = eqi(report?.fields?.feePaymentMethod, "Paid Check");
       if (extraFee) extraFee.style.display = showFee ? "block" : "none";
 
+      // Extra: Paid Cash → cash amount field
+      const extraFeeCash = activePaper.querySelector('[data-extra="feeCashAmount"]');
+      const showFeeCash = eqi(report?.fields?.feePaymentMethod, "Paid Cash");
+      if (extraFeeCash) extraFeeCash.style.display = showFeeCash ? "block" : "none";
+
+      const extraCheckCash = activePaper.querySelector('[data-extra="checkCashAmount"]');
+      const showCheckCash = eqi(report?.fields?.checkPaymentMethod, "Paid Cash");
+      if (extraCheckCash) extraCheckCash.style.display = showCheckCash ? "block" : "none";
+
       // If extras are visible, tighten print layout to avoid cutting.
-      const anyExtra = !!(showCheck || showFee);
+      const anyExtra = !!(showCheck || showFee || showFeeCash || showCheckCash);
       try {
         activePaper.classList.toggle("hasExtras", anyExtra);
       } catch {}
@@ -576,6 +710,7 @@
         if (key === "returnedFee") inp.setAttribute("readonly", "readonly");
       });
       // Dropdowns
+      initCustomDropdowns();
       renderPaymentSelects();
     };
 
