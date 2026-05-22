@@ -480,6 +480,205 @@
       });
     };
 
+    /* ── Contact Picker Modal ── */
+    const acColors = [
+      'linear-gradient(135deg,#6366f1,#8b5cf6)',
+      'linear-gradient(135deg,#0ea5e9,#6366f1)',
+      'linear-gradient(135deg,#10b981,#0ea5e9)',
+      'linear-gradient(135deg,#f59e0b,#ef4444)',
+      'linear-gradient(135deg,#ec4899,#8b5cf6)',
+      'linear-gradient(135deg,#14b8a6,#06b6d4)',
+      'linear-gradient(135deg,#f97316,#ec4899)',
+    ];
+    const acColor = (name) => acColors[(name || 'A').charCodeAt(0) % acColors.length];
+
+    const buildContactPicker = () => {
+      // Only create once
+      if (document.getElementById('cpCardSingleton')) return;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'cpOverlay';
+      overlay.id = 'cpOverlaySingleton';
+      overlay.style.display = 'none';
+      document.body.appendChild(overlay);
+
+      const card = document.createElement('div');
+      card.className = 'cpCard';
+      card.id = 'cpCardSingleton';
+      card.style.display = 'none';
+      card.innerHTML = `
+        <div class="cpHeader">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <h3>Elegir contacto</h3>
+          <button type="button" class="cpCloseBtn" id="cpCloseBtn">×</button>
+        </div>
+        <div class="cpSearch">
+          <svg class="cpSearchIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="cpSearchInput" type="text" placeholder="Buscar por nombre, empresa, teléfono…" autocomplete="off" />
+        </div>
+        <div class="cpList" id="cpList"></div>
+        <div class="cpFooter">
+          <button type="button" class="cpAddBtn" id="cpAddBtn">+ Abrir módulo de Contactos</button>
+        </div>
+      `;
+      document.body.appendChild(card);
+
+      let allContacts = [];
+      let onSelectCb = null;
+
+      const renderList = (items) => {
+        const list = document.getElementById('cpList');
+        if (!list) return;
+        list.innerHTML = '';
+        if (!items.length) {
+          list.innerHTML = '<div class="cpEmpty">Sin contactos encontrados</div>';
+          return;
+        }
+        items.forEach(c => {
+          const phones = (c.phones || []).filter(Boolean);
+          const phone = phones[0] || '';
+          const item = document.createElement('div');
+          item.className = 'cpItem';
+          item.innerHTML = `
+            <div class="cpAvatar" style="background:${acColor(c.name)}">${c.name.charAt(0).toUpperCase()}</div>
+            <div class="cpItemInfo">
+              <div class="cpItemName">${c.name}</div>
+              ${c.company ? `<div class="cpItemSub">${c.company}</div>` : ''}
+            </div>
+            ${phone ? `<div class="cpItemPhone">${phone}</div>` : ''}
+          `;
+          item.addEventListener('click', () => {
+            if (onSelectCb) onSelectCb(c);
+            closePicker();
+          });
+          list.appendChild(item);
+        });
+      };
+
+      const openPicker = async (cb) => {
+        onSelectCb = cb;
+        overlay.style.display = 'block';
+        card.style.display = 'flex';
+        const si = document.getElementById('cpSearchInput');
+        if (si) { si.value = ''; si.focus(); }
+        try {
+          const res = await fetch('/api/contacts');
+          const data = await res.json();
+          allContacts = data.contacts || [];
+          renderList(allContacts);
+        } catch { renderList([]); }
+      };
+
+      const closePicker = () => {
+        overlay.style.display = 'none';
+        card.style.display = 'none';
+        onSelectCb = null;
+      };
+
+      overlay.addEventListener('click', closePicker);
+      document.getElementById('cpCloseBtn')?.addEventListener('click', closePicker);
+      document.getElementById('cpSearchInput')?.addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase().trim();
+        if (!q) { renderList(allContacts); return; }
+        renderList(allContacts.filter(c =>
+          c.name.toLowerCase().includes(q) ||
+          (c.company || '').toLowerCase().includes(q) ||
+          (c.phones || []).some(p => p.includes(q))
+        ));
+      });
+      document.getElementById('cpAddBtn')?.addEventListener('click', () => {
+        try { window.parent.postMessage({ type: 'rc:showContacts' }, '*'); } catch {}
+        closePicker();
+      });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker(); });
+
+      // Expose globally so initContactPicker can use it
+      window._rcOpenContactPicker = openPicker;
+    };
+
+    /* ── Maker/Payor → suggest contact ── */
+    const initMakerPayorSuggestion = () => {
+      ['makerPayor', 'companyName'].forEach(fieldKey => {
+        const inp = activePaper?.querySelector(`input[data-field="${fieldKey}"]`);
+        if (!inp || inp.dataset.makerSuggInit) return;
+        inp.dataset.makerSuggInit = '1';
+
+        let suggEl = null;
+        let debounce = null;
+
+        const removeSugg = () => { if (suggEl) { suggEl.remove(); suggEl = null; } };
+
+        const applySugg = (contact) => {
+          const phones = (contact.phones || []).filter(Boolean);
+          const phone = phones[0] || '';
+          const compInp = activePaper?.querySelector('input[data-field="companyContact"]');
+          if (compInp) {
+            const val = phone ? `${contact.name}  ${phone}` : contact.name;
+            compInp.value = val;
+            compInp.dispatchEvent(new Event('input', { bubbles: true }));
+            compInp.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          const custInp = activePaper?.querySelector('input[data-field="customerContact"]');
+          if (custInp && !custInp.value.trim() && phone) {
+            custInp.value = phone;
+            custInp.dispatchEvent(new Event('input', { bubbles: true }));
+            custInp.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          removeSugg();
+        };
+
+        const showFound = (contact) => {
+          removeSugg();
+          const phones = (contact.phones || []).filter(Boolean);
+          const phone = phones[0] || '';
+          suggEl = document.createElement('div');
+          suggEl.className = 'makerSugg';
+          suggEl.innerHTML = `
+            <div style="width:28px;height:28px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:white;background:${acColor(contact.name)}">${contact.name.charAt(0).toUpperCase()}</div>
+            <div class="makerSuggText">${contact.name}${phone ? `<div class="makerSuggSub">${phone}</div>` : ''}</div>
+            <button type="button" class="makerSuggApply">Usar</button>
+            <button type="button" class="makerSuggDismiss">✕</button>
+          `;
+          suggEl.querySelector('.makerSuggApply').addEventListener('click', () => applySugg(contact));
+          suggEl.querySelector('.makerSuggDismiss').addEventListener('click', removeSugg);
+          (inp.closest('td.valueCell') || inp.parentNode).appendChild(suggEl);
+        };
+
+        const showNotFound = (name) => {
+          removeSugg();
+          suggEl = document.createElement('div');
+          suggEl.className = 'makerSugg notFound';
+          suggEl.innerHTML = `
+            <div style="font-size:16px;flex-shrink:0">📇</div>
+            <div class="makerSuggText" style="color:#78350f">"${name}" no está en Contactos<div style="font-size:11px;color:#92400e">¿Deseas agregarlo?</div></div>
+            <button type="button" class="makerSuggApply" style="background:#f59e0b">Agregar</button>
+            <button type="button" class="makerSuggDismiss">✕</button>
+          `;
+          suggEl.querySelector('.makerSuggApply').addEventListener('click', () => {
+            try { window.parent.postMessage({ type: 'rc:showContacts', prefill: name }, '*'); } catch {}
+            removeSugg();
+          });
+          suggEl.querySelector('.makerSuggDismiss').addEventListener('click', removeSugg);
+          (inp.closest('td.valueCell') || inp.parentNode).appendChild(suggEl);
+        };
+
+        inp.addEventListener('blur', () => {
+          const q = inp.value.trim();
+          if (!q || q.length < 2) { removeSugg(); return; }
+          clearTimeout(debounce);
+          debounce = setTimeout(async () => {
+            try {
+              const res = await fetch(`/api/contacts?q=${encodeURIComponent(q)}`);
+              const data = await res.json();
+              const hits = data.contacts || [];
+              if (hits.length) showFound(hits[0]); else showNotFound(q);
+            } catch {}
+          }, 200);
+        });
+        inp.addEventListener('focus', removeSugg);
+      });
+    };
+
     /* ── Company Contact autocomplete ── */
     const initContactAutocomplete = () => {
       const inp = activePaper?.querySelector('input[data-field="companyContact"]');
@@ -589,6 +788,34 @@
       document.addEventListener('click', e => { if (!wrap.contains(e.target) && !list.contains(e.target)) closeList(); });
       window.addEventListener('scroll', positionList, true);
       window.addEventListener('resize', positionList);
+
+      // ── Picker button ──
+      const pickerBtn = document.createElement('button');
+      pickerBtn.type = 'button';
+      pickerBtn.className = 'contactPickerOpenBtn';
+      pickerBtn.title = 'Elegir de contactos';
+      pickerBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+      pickerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeList();
+        if (window._rcOpenContactPicker) {
+          window._rcOpenContactPicker((contact) => {
+            const phones = (contact.phones || []).filter(Boolean);
+            const phone = phones[0] || '';
+            const val = phone ? `${contact.name}  ${phone}` : contact.name;
+            inp.value = val;
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            inp.dispatchEvent(new Event('change', { bubbles: true }));
+            const custInp = activePaper?.querySelector('input[data-field="customerContact"]');
+            if (custInp && !custInp.value.trim() && phone) {
+              custInp.value = phone;
+              custInp.dispatchEvent(new Event('input', { bubbles: true }));
+              custInp.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          });
+        }
+      });
+      wrap.appendChild(pickerBtn);
     };
 
     const buildSelectOptions = (selectEl, kind, currentLabel) => {
@@ -824,9 +1051,11 @@
         if (key === "totalDue") inp.setAttribute("readonly", "readonly");
         if (key === "returnedFee") inp.setAttribute("readonly", "readonly");
       });
-      // Dropdowns + autocomplete
+      // Dropdowns + autocomplete + contact features
+      buildContactPicker();
       initCustomDropdowns();
       initContactAutocomplete();
+      initMakerPayorSuggestion();
       renderPaymentSelects();
     };
 
