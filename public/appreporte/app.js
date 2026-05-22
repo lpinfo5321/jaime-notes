@@ -83,7 +83,7 @@
     const formatMoney = (n) => {
       const x = Number(n);
       if (!Number.isFinite(x)) return "";
-      return "$" + x.toFixed(2);
+      return "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
     const onlyDigits = (s) => String(s || "").replace(/\D/g, "");
@@ -779,6 +779,13 @@
             // Money inputs: only numeric while typing, format on blur
             // Nota: returnedFee ahora se calcula solo (no editable).
             if (key === "returnedFee") return;
+            if (key === "feeCashAmount" || key === "checkCashAmount") {
+              const next = sanitizeMoneyTyping(t.value);
+              if (t.value !== next) t.value = next;
+              report.fields[key] = next;
+              scheduleSave();
+              return;
+            }
             if (key === "checkAmount") {
               const next = sanitizeMoneyTyping(t.value);
               if (t.value !== next) t.value = next;
@@ -902,6 +909,14 @@
               if (key === "returnedFee") {
                 // returnedFee ahora es automático
                 t.value = report.fields.returnedFee || "";
+                return;
+              }
+              if (key === "feeCashAmount" || key === "checkCashAmount") {
+                const n = moneyToNumber(t.value);
+                const pretty = n > 0 ? formatMoney(n) : "";
+                t.value = pretty;
+                report.fields[key] = pretty;
+                scheduleSave();
                 return;
               }
               if (key === "checkAmount") {
