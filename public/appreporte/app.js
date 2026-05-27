@@ -75,8 +75,13 @@
     };
     const moneyToNumber = (v) => {
       if (v == null) return 0;
-      // allow comma as decimal separator too (mobile ES keyboards)
-      const s = String(v).replace(/,/g, ".").replace(/[^0-9.\-]/g, "").trim();
+      // Remove $ and thousands-separator commas, keep decimal dot
+      const s = String(v)
+        .replace(/\$/g, "")
+        .replace(/,(?=\d{3}(\D|$))/g, "")  // remove thousands commas  e.g. 1,500
+        .replace(/,/g, ".")                  // remaining commas = decimal (ES keyboards)
+        .replace(/[^0-9.\-]/g, "")
+        .trim();
       const n = Number(s);
       return Number.isFinite(n) ? n : 0;
     };
