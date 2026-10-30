@@ -2990,11 +2990,6 @@ function CompanyCard({
               />
               {/* Gradient overlay on hover */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/img:opacity-100" />
-              {/* Etiqueta SIEMPRE visible: deja claro que se puede tocar para editar */}
-              <span className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-full bg-zinc-900/90 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg ring-1 ring-white/25 backdrop-blur">
-                <SquarePen className="h-3.5 w-3.5" />
-                Editar
-              </span>
               {/* Attachments badge */}
               {meta?.total ? (
                 <div className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-lg border border-white/20 bg-black/50 px-2 py-1 text-[11px] font-bold text-white backdrop-blur">
