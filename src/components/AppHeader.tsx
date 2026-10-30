@@ -152,16 +152,22 @@ export default function AppHeader() {
         if (q.trim()) params.set("q", q.trim()); else params.delete("q");
       } else { params.delete("q"); }
       if (qBy && qBy !== "company") params.set("qBy", qBy); else params.delete("qBy");
-      router.replace(`${pathname}?${params.toString()}`);
+      setUrlParams(params);
     }, 250);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, qBy, isNotesHome]);
 
+  // Cambia los filtros de la URL SIN pedir de nuevo la pantalla al servidor (los filtros se aplican en el dispositivo).
+  function setUrlParams(params: URLSearchParams) {
+    const qs = params.toString();
+    window.history.replaceState(window.history.state, "", qs ? `${pathname}?${qs}` : pathname);
+  }
+
   function setParam(key: string, value?: string) {
     const params = new URLSearchParams(sp);
     if (!value) params.delete(key); else params.set(key, value);
-    router.replace(`${pathname}?${params.toString()}`);
+    setUrlParams(params);
   }
 
   function setMode(next: "company" | "pay" | "status") {
@@ -169,7 +175,7 @@ export default function AppHeader() {
     const params = new URLSearchParams(sp);
     if (next === "company") params.delete("qBy"); else params.set("qBy", next);
     if (next === "status") { params.delete("q"); } else { params.delete("status"); }
-    router.replace(`${pathname}?${params.toString()}`);
+    setUrlParams(params);
   }
 
   function goHome() {

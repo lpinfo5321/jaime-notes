@@ -18,6 +18,11 @@ export default function NewNotePage() {
   const [busy, setBusy] = useState(false);
   const [companies, setCompanies] = useState<CompanyInfo[] | null>(null);
 
+  // Deja lista la pantalla principal para que "Cancelar"/"Crear" sean instantáneos.
+  useEffect(() => {
+    try { router.prefetch("/app"); } catch {}
+  }, [router]);
+
   // Lista de compañías que ya existen (para avisar si se repite)
   useEffect(() => {
     let alive = true;
@@ -164,7 +169,7 @@ export default function NewNotePage() {
           <button
             type="button"
             className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-            onClick={() => router.replace("/app")}
+            onClick={() => (window.history.length > 1 ? router.back() : router.replace("/app"))}
             disabled={busy}
           >
             Cancelar

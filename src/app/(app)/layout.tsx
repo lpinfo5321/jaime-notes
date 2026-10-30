@@ -11,11 +11,9 @@ export default async function AppLayout({
   if (!tryGetPublicEnv()) redirect("/setup");
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  // Rápido: valida el token localmente (el proxy ya lo verificó/renovó en esta petición).
+  const { data: claimsData } = await supabase.auth.getClaims();
+  if (!claimsData?.claims) redirect("/login");
 
   return (
     <div className="min-h-dvh text-zinc-900 dark:text-zinc-50">

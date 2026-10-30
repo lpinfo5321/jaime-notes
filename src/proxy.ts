@@ -12,9 +12,11 @@ export async function proxy(request: NextRequest) {
 
   const { supabase, response } = updateSession(request);
 
+  // getClaims valida el token localmente (sin ir a la red en cada clic) y lo renueva si hace falta.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: claimsData,
+  } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
 

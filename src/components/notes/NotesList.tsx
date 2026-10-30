@@ -833,6 +833,18 @@ export default function NotesList({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [baseBucket]);
 
+  // Precarga (en segundo plano) los archivos del editor de reportes: al abrir un reporte ya están en el dispositivo.
+  useEffect(() => {
+    const warm = () => {
+      for (const u of [`/appreporte/app.js?v=${encodeURIComponent(APPREPORTE_V)}`, "/appreporte/lp-logo.png"]) {
+        fetch(u).catch(() => {});
+      }
+    };
+    const w = window as any;
+    const id = w.requestIdleCallback ? w.requestIdleCallback(warm, { timeout: 4000 }) : window.setTimeout(warm, 2500);
+    return () => { try { w.cancelIdleCallback ? w.cancelIdleCallback(id) : window.clearTimeout(id); } catch {} };
+  }, []);
+
   // ── Contactos (clientes/teléfonos) ligados a compañías por nombre ──
   const [contacts, setContacts] = useState<CompanyContact[]>([]);
   async function loadContacts() {
@@ -3222,7 +3234,9 @@ function CompanyCard({
               <img
                 alt="Portada"
                 src={coverUrl}
-                className="h-full w-full object-cover transition duration-300 group-hover/img:scale-[1.03]"
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full bg-zinc-100 object-cover transition duration-300 group-hover/img:scale-[1.03] dark:bg-zinc-800"
               />
               {/* Gradient overlay on hover */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/img:opacity-100" />

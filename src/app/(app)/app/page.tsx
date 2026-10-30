@@ -111,38 +111,35 @@ export default async function NotesPage({
     if (path) coverPaths[id] = path;
   }
 
-  await Promise.all(
-    Object.entries(coverPaths)
-      .slice(0, 60)
-      .map(async ([noteId, path]) => {
-        const { data } = await supabase.storage
-          .from("attachments")
-          .createSignedUrl(path, 60 * 15);
-        if (data?.signedUrl) coverUrls[noteId] = data.signedUrl;
-      }),
+  // Una sola petición para TODAS las URLs firmadas (antes era una petición por archivo).
+  const coverEntries = Object.entries(coverPaths).slice(0, 60);
+  const docEntries = Object.entries(firstDocByNoteId).slice(0, 120);
+  const allPaths = Array.from(
+    new Set([...coverEntries.map(([, p]) => p), ...docEntries.map(([, d]) => d.path)]),
   );
+  const signedByPath = new Map<string, string>();
+  if (allPaths.length) {
+    const { data: signed } = await supabase.storage
+      .from("attachments")
+      .createSignedUrls(allPaths, 60 * 15);
+    for (const s of signed ?? []) {
+      if (s?.path && s?.signedUrl) signedByPath.set(s.path, s.signedUrl);
+    }
+  }
+  for (const [noteId, path] of coverEntries) {
+    const url = signedByPath.get(path);
+    if (url) coverUrls[noteId] = url;
+  }
 
   // Primer documento (link directo desde la tarjeta)
   const firstDocUrlsByNoteId: Record<
     string,
     { url: string; filename: string; mime: string }
   > = {};
-  await Promise.all(
-    Object.entries(firstDocByNoteId)
-      .slice(0, 120)
-      .map(async ([noteId, doc]) => {
-        const { data } = await supabase.storage
-          .from("attachments")
-          .createSignedUrl(doc.path, 60 * 10);
-        if (data?.signedUrl) {
-          firstDocUrlsByNoteId[noteId] = {
-            url: data.signedUrl,
-            filename: doc.filename,
-            mime: doc.mime,
-          };
-        }
-      }),
-  );
+  for (const [noteId, doc] of docEntries) {
+    const url = signedByPath.get(doc.path);
+    if (url) firstDocUrlsByNoteId[noteId] = { url, filename: doc.filename, mime: doc.mime };
+  }
 
   return (
     <div className="space-y-4">
