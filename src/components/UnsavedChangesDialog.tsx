@@ -66,7 +66,7 @@ export default function UnsavedChangesDialog({
         if (e.target === e.currentTarget && !saving) onKeepEditing();
       }}
       onMouseDown={(e) => e.stopPropagation()}
-      className="overlay-backdrop animate-fade-in"
+      className="animate-fade-in bg-black/60"
       style={{
         position: "fixed",
         inset: 0,
@@ -81,7 +81,7 @@ export default function UnsavedChangesDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="unsaved-title"
-        className="animate-scale-in w-full max-w-[380px] overflow-hidden rounded-[28px] border border-zinc-200/70 bg-white p-6 text-center shadow-[0_30px_80px_rgba(15,23,42,0.35)] dark:border-white/10 dark:bg-[#0d121c]"
+        className="animate-scale-in w-full max-w-[380px] overflow-hidden rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-zinc-900"
       >
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-500 ring-8 ring-amber-50/60 dark:bg-amber-400/10 dark:ring-amber-400/5">
           <Save className="h-6 w-6" />
@@ -101,7 +101,7 @@ export default function UnsavedChangesDialog({
             type="button"
             onClick={() => void onSave()}
             disabled={!canSave || saving}
-            className="btn-ink flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 py-3 text-sm font-bold text-white transition hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? "Guardando…" : saveLabel}

@@ -21,8 +21,6 @@ import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import ContactsView from "@/components/contacts/ContactsView";
 import DocumentsView from "@/components/documents/DocumentsView";
 import { cn } from "@/lib/utils";
-import { useDesign } from "@/lib/useDesign";
-import { CompanyBento, CompanyRows, DashboardHero } from "@/components/notes/DashboardLayouts";
 import { createClient } from "@/lib/supabase/client";
 import {
   enqueueReport,
@@ -348,15 +346,6 @@ export default function NotesList({
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [showContacts, setShowContacts] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
-  const design = useDesign();
-
-  // Informa al header qué vista está activa (solo para resaltar la navegación).
-  useEffect(() => {
-    try {
-      const view = showContacts ? "contacts" : showDocuments ? "documents" : "home";
-      window.dispatchEvent(new CustomEvent("rc:viewChanged", { detail: { view } }));
-    } catch {}
-  }, [showContacts, showDocuments]);
   const [notesModal, setNotesModal] = useState<{ name: string; notes: NoteListItem[]; startInNew?: boolean } | null>(null);
   const [reportForCompany, setReportForCompany] = useState<{
     id: string;
@@ -656,6 +645,7 @@ export default function NotesList({
           "postgres_changes",
           { event: "DELETE", schema: "public", table: "notes" },
           (payload: any) => {
+            if (Date.now() < suppressRemoteUntilRef.current) return;
             const deletedId =
               typeof payload?.old?.id === "string" ? String(payload.old.id) : null;
             if (!deletedId) return;
@@ -1100,10 +1090,10 @@ export default function NotesList({
       { id: "trash",     label: "Papelera",    icon: <Trash2       className="h-4 w-4 shrink-0" /> },
     ];
     return (
-      <div data-bucketbar className="fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4 pointer-events-none">
+      <div className="fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4 pointer-events-none">
         <div
-          className="pointer-events-auto flex items-center gap-1 rounded-full border border-zinc-200/80 bg-white/85 p-1.5 backdrop-blur-2xl dark:border-white/10 dark:bg-[#0d121c]/85"
-          style={{ boxShadow: "0 12px 40px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.08)" }}
+          className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/85"
+          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)" }}
         >
           {tabs.map((t) => {
             const active = bucket === t.id;
@@ -1114,10 +1104,10 @@ export default function NotesList({
                 type="button"
                 onClick={() => setBucket(t.id)}
                 className={cn(
-                  "relative flex items-center rounded-full py-2.5 font-bold text-xs transition-all duration-300 ease-out",
+                  "relative flex items-center rounded-xl py-2 font-bold text-xs transition-all duration-300 ease-out",
                   active
-                    ? "btn-ink px-4 gap-2"
-                    : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-white/[0.06] dark:hover:text-zinc-200 px-3.5 gap-0",
+                    ? "bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900 px-3 gap-1.5"
+                    : "text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300 px-2.5 gap-0",
                 )}
                 style={{ overflow: "hidden" }}
               >
@@ -1141,14 +1131,15 @@ export default function NotesList({
                 {active && count > 0 && (
                   <span
                     style={{
+                      background: "rgba(255,255,255,0.2)",
                       borderRadius: "999px",
-                      padding: "1px 7px",
+                      padding: "1px 6px",
                       fontSize: "10px",
                       fontWeight: 900,
                       lineHeight: 1.4,
                       animation: "scale-in .2s cubic-bezier(.34,1.56,.64,1) both",
                     }}
-                    className="bg-lime-400 text-lime-950"
+                    className="dark:bg-black/20"
                   >
                     {count}
                   </span>
@@ -1358,7 +1349,7 @@ export default function NotesList({
     const showTrashActions = bucket === "trash";
     return (
       <div className="fixed inset-x-0 bottom-[68px] z-[65] px-3 pb-3">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-2 rounded-3xl border border-zinc-200/70 bg-white/85 p-3 shadow-[0_12px_40px_rgba(15,23,42,0.18)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#0d121c]/85">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 p-2 shadow-lg backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/35">
           <div className="min-w-0">
             <div className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
               Selección: <span className="tabular-nums">{selectedCount}</span>
@@ -1371,7 +1362,7 @@ export default function NotesList({
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={selectAllVisible}
               disabled={bulkBusy || visible.length === 0}
             >
@@ -1379,7 +1370,7 @@ export default function NotesList({
             </button>
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={clearSelection}
               disabled={bulkBusy || selectedCount === 0}
             >
@@ -1390,7 +1381,7 @@ export default function NotesList({
 
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={() => void setManyBucket(selectedInBucket, "pending")}
               disabled={bulkBusy || selectedCount === 0}
             >
@@ -1398,7 +1389,7 @@ export default function NotesList({
             </button>
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={() => void setManyBucket(selectedInBucket, "completed")}
               disabled={bulkBusy || selectedCount === 0}
             >
@@ -1406,7 +1397,7 @@ export default function NotesList({
             </button>
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={() => void setManyBucket(selectedInBucket, "trash")}
               disabled={bulkBusy || selectedCount === 0}
             >
@@ -1415,7 +1406,7 @@ export default function NotesList({
 
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={exportSelectedCsv}
               disabled={bulkBusy || selectedCount === 0}
               title="Exportar seleccionados"
@@ -1426,7 +1417,7 @@ export default function NotesList({
 
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={() => void exportSelectedPdfsZip()}
               disabled={bulkBusy || selectedCount === 0}
               title="Exportar PDFs (ZIP)"
@@ -1460,7 +1451,7 @@ export default function NotesList({
 
             <button
               type="button"
-              className="btn-ink rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-60"
+              className="rounded-xl bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
               onClick={() => {
                 setSelectMode(false);
                 setSelectedIds(new Set());
@@ -1491,11 +1482,11 @@ export default function NotesList({
 
     return (
       <div
-        className="overlay-backdrop animate-fade-in fixed inset-0 z-[90] flex items-end justify-center p-3 sm:items-center"
+        className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3 sm:items-center"
         onClick={onClose}
       >
         <div
-          className="animate-slide-up w-full max-w-md overflow-hidden rounded-[28px] border border-zinc-200/70 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.30)] dark:border-white/10 dark:bg-[#0d121c]"
+          className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
@@ -1513,7 +1504,7 @@ export default function NotesList({
                   void duplicateCompany(id);
                   onClose();
                 }}
-                className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:bg-white/[0.08]"
+                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
               >
                 <span>Duplicar</span>
                 <Copy className="h-4 w-4" />
@@ -1525,7 +1516,7 @@ export default function NotesList({
                   void setNoteBucket(id, "pending");
                   onClose();
                 }}
-                className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:bg-white/[0.08]"
+                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
               >
                 <span>Mover a Pendientes</span>
                 <Archive className="h-4 w-4" />
@@ -1536,7 +1527,7 @@ export default function NotesList({
                   void setNoteBucket(id, "completed");
                   onClose();
                 }}
-                className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:bg-white/[0.08]"
+                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
               >
                 <span>Mover a Completados</span>
                 <CheckCircle2 className="h-4 w-4" />
@@ -1547,7 +1538,7 @@ export default function NotesList({
                   void setNoteBucket(id, "trash");
                   onClose();
                 }}
-                className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:bg-white/[0.08]"
+                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
               >
                 <span>Mover a Papelera</span>
                 <Trash2 className="h-4 w-4" />
@@ -1587,7 +1578,7 @@ export default function NotesList({
             <button
               type="button"
               onClick={onClose}
-              className="btn-ink w-full rounded-2xl px-3 py-3 text-sm font-bold"
+              className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
             >
               Cerrar
             </button>
@@ -1599,11 +1590,8 @@ export default function NotesList({
 
   if (empty) {
     return (
-      <div className="animate-fade-in mx-auto mt-10 max-w-md rounded-[28px] border border-dashed border-zinc-300 bg-white/70 p-10 text-center backdrop-blur dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-lime-100 text-2xl dark:bg-lime-400/10">
-          🧾
-        </div>
-        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">
           No hay compañías todavía. Crea la primera con <b>Nueva</b>.
         </p>
       </div>
@@ -1632,26 +1620,7 @@ export default function NotesList({
     <div className="mx-auto w-full max-w-7xl pb-24">
 
       {/* ── DASHBOARD: tarjetas agrupadas por compañía ── */}
-      {!selectedCompany && design !== "classic" ? (
-        <>
-          <DashboardHero groups={companyGroups} design={design} />
-          {design === "panel" ? (
-            <CompanyRows
-              groups={companyGroups}
-              onOpen={(g) => setSelectedCompany(g.name)}
-              onOpenNotes={(g) => setNotesModal({ name: g.name, notes: g.notes })}
-              onQuickAdd={(g) => setNotesModal({ name: g.name, notes: g.notes, startInNew: true })}
-            />
-          ) : (
-            <CompanyBento
-              groups={companyGroups}
-              onOpen={(g) => setSelectedCompany(g.name)}
-              onOpenNotes={(g) => setNotesModal({ name: g.name, notes: g.notes })}
-              onQuickAdd={(g) => setNotesModal({ name: g.name, notes: g.notes, startInNew: true })}
-            />
-          )}
-        </>
-      ) : !selectedCompany ? (
+      {!selectedCompany ? (
         <div className="stagger-children grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {companyGroups.map((group) => (
             <DashboardCompanyCard
@@ -1679,13 +1648,13 @@ export default function NotesList({
             <button
               type="button"
               onClick={() => setSelectedCompany(null)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:-translate-x-0.5 hover:bg-zinc-50 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
               Dashboard
             </button>
             <CompanyTitleEditor name={selectedCompany} onRename={(n) => renameCompany(selectedCompany, n)} />
-            <span className="ml-auto rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-zinc-600 ring-1 ring-zinc-200 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/10">
+            <span className="ml-auto rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
               {visibleForCompany.length} {visibleForCompany.length === 1 ? "reporte" : "reportes"}
             </span>
           </div>
@@ -2463,14 +2432,14 @@ function CompanyTitleEditor({
           if (e.key === "Escape") { e.preventDefault(); requestLeave(); }
         }}
         onBlur={() => { if (!confirm && !saving) requestLeave(); }}
-        className="min-w-0 flex-1 rounded-xl border border-lime-400/60 bg-white px-3 py-2 text-base font-extrabold uppercase tracking-tight text-zinc-900 outline-none ring-4 ring-lime-400/15 dark:bg-white/[0.04] dark:text-white"
+        className="min-w-0 flex-1 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base font-black uppercase tracking-tight text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
       />
       <button
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => void save()}
         disabled={saving || !draft.trim()}
-        className="btn-ink h-10 shrink-0 rounded-xl px-4 text-xs font-bold disabled:opacity-50"
+        className="h-10 shrink-0 rounded-xl bg-zinc-900 px-4 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
       >
         {saving ? "Guardando…" : "Guardar"}
       </button>
@@ -2546,158 +2515,178 @@ function DashboardCompanyCard({
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       className={cn(
-        "animate-card-in group relative flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-[28px] border text-left",
-        "transition-all duration-300 ease-out",
-        "hover:-translate-y-1 active:translate-y-0 active:scale-[0.992]",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-400/60",
-        "border-zinc-200/70 bg-white shadow-[0_2px_4px_rgba(15,23,42,0.04),0_12px_32px_rgba(15,23,42,0.07)]",
-        "hover:shadow-[0_4px_8px_rgba(15,23,42,0.05),0_24px_56px_rgba(15,23,42,0.14)]",
-        "dark:border-white/[0.07] dark:bg-[#0e131d]",
-        "dark:shadow-[0_2px_4px_rgba(0,0,0,0.3),0_16px_40px_rgba(0,0,0,0.35)]",
+        "animate-card-in group relative flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-3xl border text-left",
+        "transition-[transform,box-shadow] duration-200 ease-out",
+        "hover:scale-[1.018] active:scale-[0.99]",
+        "focus:outline-none focus:ring-2 focus:ring-white/20",
+        "border-zinc-200/80 bg-white shadow-[0_4px_24px_rgba(15,23,42,0.07)]",
+        "hover:shadow-[0_12px_40px_rgba(15,23,42,0.13)]",
+        "dark:border-white/[0.06] dark:bg-[#0f1117]",
         allPaid
-          ? "hover:border-emerald-300/70 dark:hover:border-emerald-400/30"
-          : "hover:border-red-300/70 dark:hover:border-red-400/30",
+          ? "dark:shadow-[0_4px_32px_rgba(16,185,129,0.08)] dark:hover:shadow-[0_12px_48px_rgba(16,185,129,0.14)]"
+          : "dark:shadow-[0_4px_32px_rgba(239,68,68,0.06)] dark:hover:shadow-[0_12px_48px_rgba(239,68,68,0.12)]",
       )}
     >
-      {/* Soft status wash */}
-      <div
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute inset-x-0 top-0 h-40",
-          allPaid
-            ? "bg-[radial-gradient(ellipse_90%_100%_at_50%_-20%,rgba(16,185,129,0.16),transparent_70%)]"
-            : "bg-[radial-gradient(ellipse_90%_100%_at_50%_-20%,rgba(239,68,68,0.14),transparent_70%)]",
-        )}
-      />
+      {/* Colored top accent bar */}
+      <div className={cn(
+        "h-[3px] w-full",
+        allPaid
+          ? "bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 dark:from-emerald-500 dark:via-emerald-400 dark:to-teal-400"
+          : "bg-gradient-to-r from-red-400 via-rose-500 to-orange-400 dark:from-red-500 dark:via-rose-400 dark:to-orange-400",
+      )} />
+
+      {/* Subtle glow overlay (dark only) */}
+      <div className={cn(
+        "pointer-events-none absolute inset-0 opacity-0 dark:opacity-100",
+        allPaid
+          ? "bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(16,185,129,0.07),transparent)]"
+          : "bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(239,68,68,0.06),transparent)]",
+      )} />
 
       <div className="relative flex flex-1 flex-col p-5">
         {/* Top row */}
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            {/* Avatar */}
-            <div className={cn(
-              "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-sm font-extrabold tracking-tight text-white shadow-lg",
-              allPaid
-                ? "bg-gradient-to-br from-emerald-400 to-teal-600 shadow-emerald-500/30"
-                : "bg-gradient-to-br from-slate-700 to-slate-900 shadow-slate-900/25 dark:from-slate-600 dark:to-slate-800",
-            )}>
-              {initials || "?"}
-            </div>
-            <div className="min-w-0">
-              <h3 className="truncate text-[15px] font-extrabold uppercase leading-tight tracking-tight text-zinc-900 dark:text-white sm:text-base">
-                {name}
-              </h3>
-              <p className="mt-0.5 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
-                Actividad · <span className="tabular-nums">{lastDate}</span>
-              </p>
-            </div>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          {/* Avatar */}
+          <div className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sm font-black tracking-tight",
+            allPaid
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-1 dark:ring-emerald-500/20"
+              : "bg-zinc-100 text-zinc-600 dark:bg-white/5 dark:text-zinc-300 dark:ring-1 dark:ring-white/10",
+          )}>
+            {initials || "?"}
           </div>
 
-          <span className={cn(
-            "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ring-1",
-            allPaid
-              ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/25"
-              : "bg-red-50 text-red-600 ring-red-200 dark:bg-red-400/10 dark:text-red-300 dark:ring-red-400/25",
-          )}>
-            {allPaid ? "✓ All Paid" : `${pendingCount} Pending`}
-          </span>
+          {/* Badge + date */}
+          <div className="flex flex-col items-end gap-1.5">
+            <span className={cn(
+              "rounded-full px-2.5 py-0.5 text-[10px] font-black tracking-widest uppercase",
+              allPaid
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-1 dark:ring-emerald-500/25"
+                : "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400 dark:ring-1 dark:ring-red-500/25",
+            )}>
+              {allPaid ? "✓ All Paid" : `${pendingCount} Pending`}
+            </span>
+            <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-600">
+              {lastDate}
+            </span>
+          </div>
         </div>
+
+        {/* Company name */}
+        <h3 className="mb-3 truncate text-base font-black uppercase leading-tight tracking-tight text-zinc-900 dark:text-white sm:text-lg">
+          {name}
+        </h3>
 
         {/* Total Due — hero number */}
         <div className={cn(
-          "mb-4 rounded-3xl px-5 py-4 ring-1",
+          "mb-4 rounded-2xl px-4 py-3",
           allPaid
-            ? "bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-emerald-100 dark:from-emerald-400/[0.10] dark:to-emerald-400/[0.03] dark:ring-emerald-400/15"
-            : "bg-gradient-to-br from-red-50 to-rose-100/50 ring-red-100 dark:from-red-400/[0.10] dark:to-red-400/[0.03] dark:ring-red-400/15",
+            ? "bg-emerald-50 dark:bg-emerald-500/[0.07] dark:ring-1 dark:ring-emerald-500/15"
+            : "bg-red-50 dark:bg-red-500/[0.07] dark:ring-1 dark:ring-red-500/15",
         )}>
           <p className={cn(
-            "mb-1 text-[10px] font-bold uppercase tracking-[0.16em]",
-            allPaid ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400",
+            "mb-0.5 text-[9px] font-black uppercase tracking-[0.15em]",
+            allPaid ? "text-emerald-600 dark:text-emerald-500" : "text-red-500 dark:text-red-500",
           )}>
             Total Due with Fees
           </p>
           <p className={cn(
-            "text-[28px] font-black leading-none tracking-tight tabular-nums sm:text-3xl",
+            "text-2xl font-black tabular-nums leading-none",
             allPaid
               ? "text-emerald-700 dark:text-emerald-300"
               : "text-red-600 dark:text-red-300",
-          )}>
+          )}
+            style={allPaid
+              ? { textShadow: "0 0 24px rgba(16,185,129,0.25)" }
+              : { textShadow: "0 0 24px rgba(239,68,68,0.2)" }
+            }
+          >
             {totalDueText}
           </p>
         </div>
 
         {/* Última Nota */}
         <div className="mb-4">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">
-              Última nota
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
+              Última Nota
             </span>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onQuickAdd(); }}
-              className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-bold text-zinc-600 transition hover:border-lime-400 hover:bg-lime-50 hover:text-lime-800 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:border-lime-400/40 dark:hover:bg-lime-400/10 dark:hover:text-lime-200"
-              title="Agregar nota rápida"
-            >
-              + Nota
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onQuickAdd(); }}
+                className={cn(
+                  "rounded-lg px-2 py-0.5 text-[10px] font-black transition",
+                  "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400 dark:hover:bg-white/10",
+                )}
+                title="Agregar nota rápida"
+              >
+                + Nota
+              </button>
+              <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-600">
+                Ver todas →
+              </span>
+            </div>
           </div>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenNotes(); }}
-            className="group/note w-full rounded-2xl border border-zinc-100 bg-zinc-50/80 px-3.5 py-3 text-left transition hover:border-zinc-200 hover:bg-zinc-100/80 focus:outline-none dark:border-white/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+            className={cn(
+              "w-full rounded-xl px-3 py-2.5 text-left transition",
+              "border border-zinc-100 bg-zinc-50 hover:bg-zinc-100",
+              "dark:border-white/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]",
+              "focus:outline-none",
+            )}
           >
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="tabular-nums text-[10px] font-bold text-zinc-400 dark:text-zinc-500">
                 {entryDateFmt}
               </span>
               {latestEntryAgent && (
-                <span className="min-w-0 truncate rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-zinc-600 ring-1 ring-zinc-200 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/10">
+                <span className="min-w-0 truncate text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
                   {latestEntryAgent}
                 </span>
               )}
             </div>
-            <p className="line-clamp-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+            <p className="text-xs leading-snug text-zinc-600 dark:text-zinc-400">
               {excerpt || <span className="italic text-zinc-400 dark:text-zinc-600">(sin contenido)</span>}
             </p>
-            <span className="mt-1.5 inline-block text-[10px] font-semibold text-zinc-400 transition group-hover/note:text-zinc-700 dark:group-hover/note:text-zinc-200">
-              Ver todas →
-            </span>
           </button>
         </div>
 
         {/* Stats row */}
         <div className="mt-auto grid grid-cols-3 gap-2">
           {/* Checks */}
-          <div className="flex flex-col items-center rounded-2xl bg-zinc-50 py-2.5 ring-1 ring-zinc-100 dark:bg-white/[0.03] dark:ring-white/[0.05]">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Checks</span>
-            <span className="mt-0.5 text-lg font-extrabold tabular-nums text-zinc-800 dark:text-zinc-100">{checkCount}</span>
+          <div className="flex flex-col items-center rounded-xl border border-zinc-100 bg-zinc-50 py-2 dark:border-white/[0.05] dark:bg-white/[0.03]">
+            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Checks</span>
+            <span className="mt-0.5 text-base font-black tabular-nums text-zinc-700 dark:text-zinc-200">{checkCount}</span>
           </div>
           {/* Pending */}
           <div className={cn(
-            "flex flex-col items-center rounded-2xl py-2.5 ring-1",
+            "flex flex-col items-center rounded-xl border py-2",
             pendingCount > 0
-              ? "bg-red-50 ring-red-100 dark:bg-red-400/[0.08] dark:ring-red-400/15"
-              : "bg-zinc-50 ring-zinc-100 dark:bg-white/[0.03] dark:ring-white/[0.05]",
+              ? "border-red-100 bg-red-50 dark:border-red-500/15 dark:bg-red-500/[0.07]"
+              : "border-zinc-100 bg-zinc-50 dark:border-white/[0.05] dark:bg-white/[0.03]",
           )}>
-            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Pending</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Pending</span>
             <span className={cn(
-              "mt-0.5 text-lg font-extrabold tabular-nums",
-              pendingCount > 0 ? "text-red-500 dark:text-red-400" : "text-zinc-800 dark:text-zinc-100",
+              "mt-0.5 text-base font-black tabular-nums",
+              pendingCount > 0 ? "text-red-500 dark:text-red-400" : "text-zinc-700 dark:text-zinc-200",
             )}>
               {pendingCount}
             </span>
           </div>
           {/* Paid */}
           <div className={cn(
-            "flex flex-col items-center rounded-2xl py-2.5 ring-1",
+            "flex flex-col items-center rounded-xl border py-2",
             completedCount > 0
-              ? "bg-emerald-50 ring-emerald-100 dark:bg-emerald-400/[0.08] dark:ring-emerald-400/15"
-              : "bg-zinc-50 ring-zinc-100 dark:bg-white/[0.03] dark:ring-white/[0.05]",
+              ? "border-emerald-100 bg-emerald-50 dark:border-emerald-500/15 dark:bg-emerald-500/[0.07]"
+              : "border-zinc-100 bg-zinc-50 dark:border-white/[0.05] dark:bg-white/[0.03]",
           )}>
-            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Paid</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Paid</span>
             <span className={cn(
-              "mt-0.5 text-lg font-extrabold tabular-nums",
-              completedCount > 0 ? "text-emerald-500 dark:text-emerald-400" : "text-zinc-800 dark:text-zinc-100",
+              "mt-0.5 text-base font-black tabular-nums",
+              completedCount > 0 ? "text-emerald-500 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-200",
             )}>
               {completedCount}
             </span>
@@ -2887,25 +2876,32 @@ function CompanyCard({
   return (
     <div
       className={cn(
-        "animate-card-in group relative flex h-full flex-col overflow-hidden rounded-[28px] border transition-all duration-300 ease-out",
+        "animate-card-in group relative flex h-full flex-col overflow-hidden rounded-3xl border transition-[transform,box-shadow] duration-200 ease-out",
         // light
-        "border-zinc-200/70 bg-white shadow-[0_2px_4px_rgba(15,23,42,0.04),0_12px_32px_rgba(15,23,42,0.07)] hover:shadow-[0_4px_8px_rgba(15,23,42,0.05),0_24px_56px_rgba(15,23,42,0.13)]",
+        "border-zinc-200/80 bg-white shadow-[0_4px_24px_rgba(15,23,42,0.07)] hover:shadow-[0_12px_40px_rgba(15,23,42,0.13)]",
         // dark
-        "dark:border-white/[0.07] dark:bg-[#0e131d] dark:shadow-[0_2px_4px_rgba(0,0,0,0.3),0_16px_40px_rgba(0,0,0,0.35)]",
-        selected && "ring-2 ring-lime-400/70",
+        "dark:border-white/[0.06] dark:bg-[#0f1117]",
+        anyPending
+          ? "dark:shadow-[0_4px_32px_rgba(239,68,68,0.06)]"
+          : "dark:shadow-[0_4px_32px_rgba(16,185,129,0.07)]",
         busy && "pointer-events-none opacity-50",
       )}
     >
-      {/* Soft status wash */}
-      <div
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute inset-x-0 top-0 h-36",
-          anyPending
-            ? "bg-[radial-gradient(ellipse_90%_100%_at_50%_-25%,rgba(239,68,68,0.13),transparent_70%)]"
-            : "bg-[radial-gradient(ellipse_90%_100%_at_50%_-25%,rgba(16,185,129,0.15),transparent_70%)]",
-        )}
-      />
+      {/* Accent top bar */}
+      <div className={cn(
+        "h-[3px] w-full shrink-0",
+        anyPending
+          ? "bg-gradient-to-r from-red-400 via-rose-500 to-orange-400"
+          : "bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400",
+      )} />
+
+      {/* Dark glow overlay */}
+      <div className={cn(
+        "pointer-events-none absolute inset-0 opacity-0 dark:opacity-100",
+        anyPending
+          ? "bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,rgba(239,68,68,0.05),transparent)]"
+          : "bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,rgba(16,185,129,0.05),transparent)]",
+      )} />
 
       <div className="relative flex flex-1 flex-col p-4 sm:p-5">
         {/* Select checkbox */}
@@ -2914,10 +2910,10 @@ function CompanyCard({
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggleSelected(); }}
             className={cn(
-              "absolute left-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-2xl border transition",
+              "absolute left-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-xl border transition",
               selected
-                ? "border-lime-400/60 bg-lime-400/20 text-lime-600 dark:text-lime-300"
-                : "border-zinc-200 bg-white/80 text-zinc-400 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10",
+                ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-400"
+                : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10",
             )}
             aria-pressed={selected}
           >
@@ -2929,10 +2925,10 @@ function CompanyCard({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onActions(); }}
-          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-2xl border border-zinc-200/70 bg-white/80 text-zinc-500 backdrop-blur transition hover:bg-white hover:text-zinc-800 dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-zinc-400 dark:hover:bg-white/[0.10] dark:hover:text-white"
+          className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200/60 bg-white/80 text-zinc-500 transition hover:bg-white dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-zinc-400 dark:hover:bg-white/[0.10]"
           title="Acciones"
         >
-          <MoreHorizontal className="h-4 w-4" />
+          <MoreHorizontal className="h-3.5 w-3.5" />
         </button>
 
         {/* Company name (editable) */}
@@ -2942,31 +2938,35 @@ function CompanyCard({
           onChange={(e) => setCompanyName(e.target.value)}
           placeholder="Nombre de la compañía…"
           className={cn(
-            "mb-3 w-full bg-transparent px-2 text-center text-base font-extrabold uppercase tracking-tight outline-none sm:mb-4 sm:text-lg md:text-xl",
+            "mb-3 w-full bg-transparent px-2 text-center text-base font-black uppercase tracking-tight outline-none sm:mb-4 sm:text-lg md:text-xl",
             "text-zinc-900 placeholder:text-zinc-400 focus:text-zinc-900",
             "dark:text-white dark:placeholder:text-zinc-600 dark:focus:text-white",
-            "rounded-xl border border-transparent transition focus:border-lime-400/50 focus:bg-white/60 dark:focus:bg-white/[0.04]",
+            "rounded-xl border border-transparent transition focus:border-white/10 focus:bg-white/[0.04]",
           )}
         />
 
         {/* Total Due */}
         <div className={cn(
-          "mb-4 flex items-center justify-between gap-3 rounded-3xl px-5 py-3.5 ring-1",
+          "mb-4 flex items-center justify-between rounded-2xl px-4 py-3",
           anyPending
-            ? "bg-gradient-to-br from-red-50 to-rose-100/50 ring-red-100 dark:from-red-400/[0.10] dark:to-red-400/[0.03] dark:ring-red-400/15"
-            : "bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-emerald-100 dark:from-emerald-400/[0.10] dark:to-emerald-400/[0.03] dark:ring-emerald-400/15",
+            ? "bg-red-50 dark:bg-red-500/[0.07] dark:ring-1 dark:ring-red-500/15"
+            : "bg-emerald-50 dark:bg-emerald-500/[0.07] dark:ring-1 dark:ring-emerald-500/15",
         )}>
           <span className={cn(
-            "text-[10px] font-bold uppercase tracking-[0.16em]",
-            anyPending ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400",
+            "text-[9px] font-black uppercase tracking-[0.15em]",
+            anyPending ? "text-red-500" : "text-emerald-600 dark:text-emerald-500",
           )}>
             Total Due with Fees
           </span>
           <span
             className={cn(
-              "text-2xl font-black tracking-tight tabular-nums",
+              "text-xl font-black tabular-nums",
               anyPending ? "text-red-600 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300",
             )}
+            style={anyPending
+              ? { textShadow: "0 0 20px rgba(239,68,68,0.2)" }
+              : { textShadow: "0 0 20px rgba(16,185,129,0.2)" }
+            }
           >
             {totalDueText}
           </span>
@@ -2978,7 +2978,7 @@ function CompanyCard({
             <button
               type="button"
               onClick={onOpenReport}
-              className="group/img relative w-full overflow-hidden rounded-3xl border border-zinc-200/70 bg-zinc-50 shadow-md transition hover:shadow-xl focus:outline-none dark:border-white/[0.06] dark:bg-white/[0.03]"
+              className="group/img relative w-full overflow-hidden rounded-2xl border border-zinc-200/60 bg-zinc-50 shadow-md transition hover:shadow-xl focus:outline-none dark:border-white/[0.06] dark:bg-white/[0.03]"
               style={{ minHeight: "220px" }}
               title="Abrir reporte"
             >
@@ -2986,10 +2986,10 @@ function CompanyCard({
               <img
                 alt="Portada"
                 src={coverUrl}
-                className="h-full w-full object-cover transition duration-500 group-hover/img:scale-[1.04]"
+                className="h-full w-full object-cover transition duration-300 group-hover/img:scale-[1.03]"
               />
               {/* Gradient overlay on hover */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/img:opacity-100" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/img:opacity-100" />
               {/* Etiqueta SIEMPRE visible: deja claro que se puede tocar para editar */}
               <span className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-full bg-zinc-900/90 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg ring-1 ring-white/25 backdrop-blur">
                 <SquarePen className="h-3.5 w-3.5" />
@@ -2997,7 +2997,7 @@ function CompanyCard({
               </span>
               {/* Attachments badge */}
               {meta?.total ? (
-                <div className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+                <div className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-lg border border-white/20 bg-black/50 px-2 py-1 text-[11px] font-bold text-white backdrop-blur">
                   <Paperclip className="h-3 w-3" />
                   {meta.total}
                 </div>
@@ -3007,15 +3007,14 @@ function CompanyCard({
             <button
               type="button"
               onClick={onOpenReport}
-              className="group/report w-full overflow-hidden rounded-3xl border border-dashed border-zinc-300 bg-zinc-50/70 transition hover:border-lime-400 hover:bg-lime-50/50 focus:outline-none dark:border-white/10 dark:bg-white/[0.02] dark:hover:border-lime-400/40 dark:hover:bg-lime-400/[0.04]"
+              className="group/report w-full overflow-hidden rounded-2xl border border-zinc-200/60 bg-zinc-50 transition hover:bg-zinc-100 focus:outline-none dark:border-white/[0.05] dark:bg-white/[0.02] dark:hover:bg-white/[0.05]"
               style={{ minHeight: "220px" }}
               title="Abrir reporte"
             >
-              <div className="flex h-full w-full flex-col items-center justify-center gap-3">
-                <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 transition group-hover/report:scale-105 dark:bg-white/[0.05] dark:ring-white/[0.08]">
-                  <ImageOff className="h-9 w-9 text-zinc-300 dark:text-zinc-600" />
+              <div className="flex h-full w-full items-center justify-center">
+                <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-white/[0.04]">
+                  <ImageOff className="h-10 w-10 text-zinc-300 dark:text-zinc-600" />
                 </div>
-                <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500">Toca para llenar el reporte</span>
               </div>
             </button>
           )}
@@ -3025,7 +3024,7 @@ function CompanyCard({
         <button
           type="button"
           onClick={onOpenReport}
-          className="btn-ink mt-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 py-3 text-sm font-bold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
         >
           <SquarePen className="h-4 w-4" />
           {reportPayload ? "Editar reporte" : "Llenar reporte"}
@@ -3038,16 +3037,16 @@ function CompanyCard({
             { label: "Check Fee",    status: checkFeeStatus    },
           ].map(({ label, status }) => (
             <div key={label} className={cn(
-              "rounded-2xl px-3 py-3 text-center ring-1",
+              "rounded-2xl border px-3 py-2.5 text-center",
               status.tone === "paid"
-                ? "bg-emerald-50 ring-emerald-100 dark:bg-emerald-400/[0.08] dark:ring-emerald-400/15"
-                : "bg-red-50 ring-red-100 dark:bg-red-400/[0.08] dark:ring-red-400/15",
+                ? "border-emerald-100 bg-emerald-50 dark:border-emerald-500/15 dark:bg-emerald-500/[0.07]"
+                : "border-red-100 bg-red-50 dark:border-red-500/15 dark:bg-red-500/[0.07]",
             )}>
-              <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+              <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
                 {label}
               </p>
               <p className={cn(
-                "text-sm font-extrabold",
+                "text-sm font-black",
                 status.tone === "paid"
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-red-500 dark:text-red-400",
@@ -3722,7 +3721,7 @@ function ReportModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 backdrop-blur-sm p-2 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-2 sm:items-center sm:p-4"
       onClick={() => requestClose()}
     >
       {confirmClose ? (
@@ -3740,15 +3739,15 @@ function ReportModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="animate-slide-up flex h-[calc(100dvh-16px)] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-zinc-200/60 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] dark:border-white/10 dark:bg-[#0d121c] sm:h-[92dvh]"
+        className="flex h-[calc(100dvh-16px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900 sm:h-[92dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Modal header: single compact row ── */}
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200/70 bg-white/80 px-3 py-3 backdrop-blur dark:border-white/[0.07] dark:bg-transparent sm:px-5">
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200 px-3 py-2.5 dark:border-zinc-800 sm:px-4">
           {/* Title */}
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-lime-600 dark:text-lime-300">Reporte</p>
-            <p className="truncate text-[15px] font-extrabold leading-tight tracking-tight text-zinc-900 dark:text-zinc-50">{liveTitle ?? companyTitle}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Reporte</p>
+            <p className="truncate text-sm font-bold leading-tight text-zinc-900 dark:text-zinc-50">{liveTitle ?? companyTitle}</p>
           </div>
 
           {/* Actions */}
@@ -3758,7 +3757,7 @@ function ReportModal({
               type="button"
               onClick={(e) => { e.stopPropagation(); void shareReport(); }}
               title="Compartir PDF"
-              className="flex h-10 w-10 items-center justify-center rounded-2xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
             </button>
@@ -3768,7 +3767,7 @@ function ReportModal({
               type="button"
               onClick={(e) => { e.stopPropagation(); void printFromParent(); }}
               title="Imprimir"
-              className="flex h-10 w-10 items-center justify-center rounded-2xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             </button>
@@ -3780,7 +3779,7 @@ function ReportModal({
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
               title="Abrir en pestaña"
-              className="flex h-10 w-10 items-center justify-center rounded-2xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             </a>
@@ -3802,7 +3801,7 @@ function ReportModal({
           </div>
         </div>
 
-        <div className="relative min-h-0 flex-1 bg-zinc-100/80 dark:bg-[#080b12]">
+        <div className="relative min-h-0 flex-1 bg-zinc-100 dark:bg-zinc-950">
           {!iframeShown ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center">
               <div className="rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3 text-sm font-semibold text-zinc-700 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200">
@@ -3868,31 +3867,31 @@ function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 backdrop-blur-sm p-3"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-3"
       onClick={onCancel}
     >
       <div
-        className="animate-scale-in w-full max-w-sm overflow-hidden rounded-[28px] border border-zinc-200/70 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.30)] dark:border-white/10 dark:bg-[#0d121c]"
+        className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 pb-2 pt-6">
-          <div className="text-base font-extrabold tracking-tight">{title}</div>
-          <div className="mt-1.5 text-[13px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <div className="text-sm font-semibold">{title}</div>
+          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
             {message}
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 px-6 pb-6 pt-4">
+        <div className="flex items-center justify-end gap-2 px-4 py-3">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10"
+            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             {cancelText}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-2xl bg-gradient-to-b from-red-500 to-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(239,68,68,0.35)] transition hover:brightness-110"
+            className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500"
           >
             {confirmText}
           </button>
@@ -3924,7 +3923,7 @@ function CompanyListModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 backdrop-blur-sm p-2 sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4"
       onClick={onClose}
     >
       <div
@@ -4252,7 +4251,7 @@ function CompanyModal({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 backdrop-blur-sm p-2 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-2 sm:items-center sm:p-4"
       onClick={requestClose}
     >
       {confirmClose ? (

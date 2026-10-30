@@ -21,7 +21,7 @@ export default async function AppLayout({
     <div className="min-h-dvh text-zinc-900 dark:text-zinc-50">
       <AppHeader />
 
-      <main className="mx-auto max-w-6xl px-3 py-5 sm:px-5 sm:py-6">
+      <main className="mx-auto max-w-6xl px-4 py-4">
         <ResumeGate>{children}</ResumeGate>
       </main>
     </div>
