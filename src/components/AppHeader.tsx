@@ -24,6 +24,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { RefreshCw } from "lucide-react";
 import { useDesign } from "@/lib/useDesign";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
 
@@ -177,6 +178,39 @@ export default function AppHeader() {
     { key: "documents", label: "Docs",      title: "Documentos", icon: <FolderOpen className="h-4 w-4 shrink-0" />, onClick: showDocuments },
   ];
 
+  const [updState, setUpdState] = useState<"idle" | "checking" | "uptodate" | "updating">("idle");
+  const buildId = process.env.NEXT_PUBLIC_BUILD_ID ?? "";
+  const buildLabel = (() => {
+    const d = new Date(buildId);
+    return Number.isNaN(d.getTime())
+      ? "desarrollo"
+      : d.toLocaleString("es", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  })();
+
+  /** Busca versión nueva en el servidor; si la hay limpia cachés y recarga. */
+  async function checkUpdate() {
+    setUpdState("checking");
+    let newer = false;
+    try {
+      const res = await fetch("/api/version?t=" + Date.now(), { cache: "no-store" });
+      const data = await res.json();
+      if (data?.v && data.v !== buildId) newer = true;
+    } catch {}
+    if (!newer) {
+      setUpdState("uptodate");
+      window.setTimeout(() => setUpdState("idle"), 3500);
+      return;
+    }
+    setUpdState("updating");
+    try {
+      const regs = await navigator.serviceWorker?.getRegistrations?.();
+      await Promise.all((regs ?? []).map((r) => r.unregister()));
+      const keys = await caches?.keys?.();
+      await Promise.all((keys ?? []).map((k) => caches.delete(k)));
+    } catch {}
+    window.location.href = window.location.pathname + "?v=" + Date.now();
+  }
+
   const menuItemCls =
     "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/[0.06]";
 
@@ -274,7 +308,7 @@ export default function AppHeader() {
                     <Image src="/logo.png" alt="" width={34} height={34} className="rounded-xl bg-white object-contain p-0.5 shadow-sm" />
                     <div>
                       <p className="text-sm font-extrabold leading-tight text-zinc-900 dark:text-white">Return Checks</p>
-                      <p className="text-[11px] font-medium text-zinc-400">Versión 1.0</p>
+                      <p className="text-[11px] font-medium text-zinc-400">Versión del {buildLabel}</p>
                     </div>
                   </div>
 
@@ -297,6 +331,13 @@ export default function AppHeader() {
                     {isDark
                       ? <><Sun className="h-4 w-4 text-amber-400" /> Modo claro</>
                       : <><Moon className="h-4 w-4 text-indigo-400" /> Modo oscuro</>}
+                  </button>
+
+                  <div className="mx-2 my-1.5 h-px bg-zinc-100 dark:bg-white/[0.07]" />
+
+                  <button type="button" onClick={() => void checkUpdate()} disabled={updState === "checking" || updState === "updating"} className={menuItemCls}>
+                    <RefreshCw className={`h-4 w-4 text-zinc-400 ${updState === "checking" || updState === "updating" ? "animate-spin" : ""}`} />
+                    {updState === "checking" ? "Buscando…" : updState === "updating" ? "Actualizando…" : updState === "uptodate" ? "✓ Ya tienes la última" : "Buscar actualización"}
                   </button>
 
                   <div className="mx-2 my-1.5 h-px bg-zinc-100 dark:bg-white/[0.07]" />
