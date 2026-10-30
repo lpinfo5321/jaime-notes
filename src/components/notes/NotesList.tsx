@@ -11,12 +11,18 @@ import {
   ImageOff,
   MoreHorizontal,
   Paperclip,
+  Pencil,
+  SquarePen,
   Trash2,
   X,
 } from "lucide-react";
+import UnsavedChangesDialog from "@/components/UnsavedChangesDialog";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import ContactsView from "@/components/contacts/ContactsView";
 import DocumentsView from "@/components/documents/DocumentsView";
 import { cn } from "@/lib/utils";
+import { useDesign } from "@/lib/useDesign";
+import { CompanyBento, CompanyRows, DashboardHero } from "@/components/notes/DashboardLayouts";
 import { createClient } from "@/lib/supabase/client";
 import {
   enqueueReport,
@@ -56,7 +62,7 @@ const LAST_APP_LOCATION_KEY = "rc:lastAppLocation:v1";
 const SELECT_MODE_KEY = "rc:selectMode:v1";
 // Cache-buster para `public/appreporte/*` (Vercel a veces cachea el HTML/JS viejo).
 // Sube este string cuando quieras forzar a todos a cargar la versión nueva.
-const APPREPORTE_V = "20260123-3";
+const APPREPORTE_V = "20260930-1";
 
 function readLastAppLocation(): LastAppLocation | null {
   if (typeof window === "undefined") return null;
@@ -342,6 +348,15 @@ export default function NotesList({
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [showContacts, setShowContacts] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
+  const design = useDesign();
+
+  // Informa al header qué vista está activa (solo para resaltar la navegación).
+  useEffect(() => {
+    try {
+      const view = showContacts ? "contacts" : showDocuments ? "documents" : "home";
+      window.dispatchEvent(new CustomEvent("rc:viewChanged", { detail: { view } }));
+    } catch {}
+  }, [showContacts, showDocuments]);
   const [notesModal, setNotesModal] = useState<{ name: string; notes: NoteListItem[]; startInNew?: boolean } | null>(null);
   const [reportForCompany, setReportForCompany] = useState<{
     id: string;
@@ -573,7 +588,40 @@ export default function NotesList({
     suppressRemoteUntilRef.current = Date.now() + 1500;
   };
 
-  // Realtime cross-device updates (Supabase Realtime)
+  // ── Datos siempre al día ───────────────────────────────────────────────
+  // ¿Hay alguna ventana abierta o el usuario está escribiendo? Entonces NO refrescamos
+  // (para no pisar lo que está escribiendo) y lo dejamos pendiente para cuando termine.
+  const anyModalOpen = !!(open || reportForCompany || notesModal || actionsFor);
+  const anyModalOpenRef = useRef(false);
+  anyModalOpenRef.current = anyModalOpen;
+  const pendingRemoteRef = useRef(false);
+  pendingRemoteRef.current = pendingRemote;
+
+  function userIsTyping() {
+    try {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    } catch {
+      return false;
+    }
+  }
+
+  // Pide los datos frescos al servidor (respeta ventanas abiertas / escritura en curso).
+  const requestRefreshRef = useRef<(opts?: { force?: boolean }) => void>(() => {});
+  requestRefreshRef.current = (opts) => {
+    if (!opts?.force && Date.now() < suppressRemoteUntilRef.current) return;
+    if (anyModalOpenRef.current || userIsTyping()) {
+      setPendingRemote(true);
+      return;
+    }
+    router.refresh();
+  };
+
+  // Realtime cross-device updates (Supabase Realtime).
+  // Se suscribe UNA sola vez (antes se re-suscribía cada vez que se abría/cerraba una nota
+  // y podía perder eventos justo en ese momento).
   useEffect(() => {
     let isCancelled = false;
     const supabase = createClient();
@@ -595,15 +643,7 @@ export default function NotesList({
             table: "notes",
             filter: `user_id=eq.${userId}`,
           },
-          () => {
-            if (Date.now() < suppressRemoteUntilRef.current) return;
-            // If a modal is open, defer refresh to avoid disrupting editing UX
-            if (open) {
-              setPendingRemote(true);
-              return;
-            }
-            router.refresh();
-          },
+          () => requestRefreshRef.current(),
         )
         .subscribe();
 
@@ -616,16 +656,11 @@ export default function NotesList({
           "postgres_changes",
           { event: "DELETE", schema: "public", table: "notes" },
           (payload: any) => {
-            if (Date.now() < suppressRemoteUntilRef.current) return;
             const deletedId =
               typeof payload?.old?.id === "string" ? String(payload.old.id) : null;
             if (!deletedId) return;
             if (!idsRef.current.has(deletedId)) return;
-            if (open) {
-              setPendingRemote(true);
-              return;
-            }
-            router.refresh();
+            requestRefreshRef.current();
           },
         )
         .subscribe();
@@ -637,15 +672,37 @@ export default function NotesList({
       if (deleteChannel) supabase.removeChannel(deleteChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, open?.id]);
+  }, [router]);
 
-  // If we deferred a refresh while the modal was open, do it once it closes
+  // Respaldo: al volver a la app (celular/PWA), al recuperar internet y cada 90 s
+  // se vuelven a pedir los datos, por si el tiempo real se cortó mientras estaba en segundo plano.
+  useLiveRefresh(() => requestRefreshRef.current(), { pollMs: 90_000, minGapMs: 3000 });
+
+  // Si había un refresco pendiente (ventana abierta / escribiendo), hazlo al terminar.
   useEffect(() => {
-    if (!open && pendingRemote) {
+    if (!anyModalOpen && pendingRemote && !userIsTyping()) {
       setPendingRemote(false);
       router.refresh();
     }
-  }, [open, pendingRemote, router]);
+  }, [anyModalOpen, pendingRemote, router]);
+  useEffect(() => {
+    const onFocusOut = () => {
+      window.setTimeout(() => {
+        if (pendingRemoteRef.current && !anyModalOpenRef.current && !userIsTyping()) {
+          setPendingRemote(false);
+          router.refresh();
+        }
+      }, 250);
+    };
+    window.addEventListener("focusout", onFocusOut);
+    return () => window.removeEventListener("focusout", onFocusOut);
+  }, [router]);
+
+  // Tras cerrar una ventana de edición, re-sincroniza con el servidor (la fuente de verdad)
+  // para que lo que se ve siempre coincida con lo guardado.
+  function resyncSoon() {
+    window.setTimeout(() => requestRefreshRef.current({ force: true }), 700);
+  }
 
   function patchCompany(noteId: string, patch: Partial<NoteListItem>) {
     setItems((prev) =>
@@ -841,10 +898,72 @@ export default function NotesList({
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Notes visible when drilled into a specific company
+  // Reportes que se renombraron estando dentro de la compañía: se quedan visibles en la pantalla
+  // (antes la tarjeta "desaparecía" a mitad de escribir porque ya no coincidía con el nombre).
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => { setPinnedIds(new Set()); }, [selectedCompany]);
+  const pinNote = (id: string) => setPinnedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+
   const visibleForCompany = useMemo(() => {
     if (!selectedCompany) return visible;
-    return visible.filter((n) => (n.title ?? "").trim() === selectedCompany);
-  }, [visible, selectedCompany]);
+    return visible.filter(
+      (n) => ((n.title ?? "").trim() || "Sin nombre") === selectedCompany || pinnedIds.has(n.id),
+    );
+  }, [visible, selectedCompany, pinnedIds]);
+
+  // Renombra TODA la compañía (todos sus reportes, en cualquier pestaña) de una vez.
+  async function renameCompany(oldName: string, newNameRaw: string) {
+    const newName = newNameRaw.trim();
+    if (!newName || newName === oldName) return;
+    const targets = items.filter((n) => ((n.title ?? "").trim() || "Sin nombre") === oldName);
+    if (!targets.length) return;
+    const ids = new Set(targets.map((t) => t.id));
+    const prevTitles = new Map(targets.map((t) => [t.id, t.title] as const));
+    suppressRemoteUntilRef.current = Date.now() + 4000;
+    setItems((prev) => prev.map((n) => (ids.has(n.id) ? { ...n, title: newName } : n)));
+    setSelectedCompany(newName);
+    const results = await Promise.all(
+      targets.map((t) =>
+        fetch(`/api/notes/${t.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: newName }),
+        })
+          .then((r) => r.ok)
+          .catch(() => false),
+      ),
+    );
+    const failed = targets.filter((_, i) => !results[i]);
+    if (failed.length) {
+      const failedIds = new Set(failed.map((f) => f.id));
+      setItems((prev) => prev.map((n) => (failedIds.has(n.id) ? { ...n, title: prevTitles.get(n.id) ?? n.title } : n)));
+      alert(`No se pudo renombrar ${failed.length} reporte(s). Revisa tu conexión e inténtalo de nuevo.`);
+    }
+    resyncSoon();
+  }
+
+  // Renombra un solo reporte (lo usa el reporte cuando se edita su "Company Name").
+  async function renameSingleNote(noteId: string, newNameRaw: string) {
+    const newName = newNameRaw.trim();
+    if (!newName) return;
+    const note = items.find((n) => n.id === noteId);
+    if (!note) return;
+    if ((note.title ?? "").trim().toLowerCase() === newName.toLowerCase()) return;
+    const prevTitle = note.title;
+    suppressRemoteUntilRef.current = Date.now() + 3000;
+    pinNote(noteId);
+    patchCompany(noteId, { title: newName });
+    try {
+      const res = await fetch(`/api/notes/${noteId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: newName }),
+      });
+      if (!res.ok) throw new Error("rename failed");
+    } catch {
+      patchCompany(noteId, { title: prevTitle });
+    }
+  }
 
   const visibleIdSet = useMemo(() => new Set(visible.map((n) => String(n.id))), [visible]);
   const selectedInBucket = useMemo(() => {
@@ -981,10 +1100,10 @@ export default function NotesList({
       { id: "trash",     label: "Papelera",    icon: <Trash2       className="h-4 w-4 shrink-0" /> },
     ];
     return (
-      <div className="fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4 pointer-events-none">
+      <div data-bucketbar className="fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4 pointer-events-none">
         <div
-          className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/85"
-          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)" }}
+          className="pointer-events-auto flex items-center gap-1 rounded-full border border-zinc-200/80 bg-white/85 p-1.5 backdrop-blur-2xl dark:border-white/10 dark:bg-[#0d121c]/85"
+          style={{ boxShadow: "0 12px 40px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.08)" }}
         >
           {tabs.map((t) => {
             const active = bucket === t.id;
@@ -995,10 +1114,10 @@ export default function NotesList({
                 type="button"
                 onClick={() => setBucket(t.id)}
                 className={cn(
-                  "relative flex items-center rounded-xl py-2 font-bold text-xs transition-all duration-300 ease-out",
+                  "relative flex items-center rounded-full py-2.5 font-bold text-xs transition-all duration-300 ease-out",
                   active
-                    ? "bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900 px-3 gap-1.5"
-                    : "text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300 px-2.5 gap-0",
+                    ? "btn-ink px-4 gap-2"
+                    : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-white/[0.06] dark:hover:text-zinc-200 px-3.5 gap-0",
                 )}
                 style={{ overflow: "hidden" }}
               >
@@ -1022,15 +1141,14 @@ export default function NotesList({
                 {active && count > 0 && (
                   <span
                     style={{
-                      background: "rgba(255,255,255,0.2)",
                       borderRadius: "999px",
-                      padding: "1px 6px",
+                      padding: "1px 7px",
                       fontSize: "10px",
                       fontWeight: 900,
                       lineHeight: 1.4,
                       animation: "scale-in .2s cubic-bezier(.34,1.56,.64,1) both",
                     }}
-                    className="dark:bg-black/20"
+                    className="bg-lime-400 text-lime-950"
                   >
                     {count}
                   </span>
@@ -1240,7 +1358,7 @@ export default function NotesList({
     const showTrashActions = bucket === "trash";
     return (
       <div className="fixed inset-x-0 bottom-[68px] z-[65] px-3 pb-3">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-2 rounded-2xl border border-zinc-200/70 bg-white/70 p-2 shadow-lg backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/35">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-2 rounded-3xl border border-zinc-200/70 bg-white/85 p-3 shadow-[0_12px_40px_rgba(15,23,42,0.18)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#0d121c]/85">
           <div className="min-w-0">
             <div className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
               Selección: <span className="tabular-nums">{selectedCount}</span>
@@ -1253,7 +1371,7 @@ export default function NotesList({
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
               onClick={selectAllVisible}
               disabled={bulkBusy || visible.length === 0}
             >
@@ -1261,7 +1379,7 @@ export default function NotesList({
             </button>
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
               onClick={clearSelection}
               disabled={bulkBusy || selectedCount === 0}
             >
@@ -1272,7 +1390,7 @@ export default function NotesList({
 
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
               onClick={() => void setManyBucket(selectedInBucket, "pending")}
               disabled={bulkBusy || selectedCount === 0}
             >
@@ -1280,7 +1398,7 @@ export default function NotesList({
             </button>
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
               onClick={() => void setManyBucket(selectedInBucket, "completed")}
               disabled={bulkBusy || selectedCount === 0}
             >
@@ -1288,7 +1406,7 @@ export default function NotesList({
             </button>
             <button
               type="button"
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
               onClick={() => void setManyBucket(selectedInBucket, "trash")}
               disabled={bulkBusy || selectedCount === 0}
             >
@@ -1297,7 +1415,7 @@ export default function NotesList({
 
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
               onClick={exportSelectedCsv}
               disabled={bulkBusy || selectedCount === 0}
               title="Exportar seleccionados"
@@ -1308,7 +1426,7 @@ export default function NotesList({
 
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:shadow-sm disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:bg-white/10"
               onClick={() => void exportSelectedPdfsZip()}
               disabled={bulkBusy || selectedCount === 0}
               title="Exportar PDFs (ZIP)"
@@ -1342,7 +1460,7 @@ export default function NotesList({
 
             <button
               type="button"
-              className="rounded-xl bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              className="btn-ink rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-60"
               onClick={() => {
                 setSelectMode(false);
                 setSelectedIds(new Set());
@@ -1373,11 +1491,11 @@ export default function NotesList({
 
     return (
       <div
-        className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3 sm:items-center"
+        className="overlay-backdrop animate-fade-in fixed inset-0 z-[90] flex items-end justify-center p-3 sm:items-center"
         onClick={onClose}
       >
         <div
-          className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+          className="animate-slide-up w-full max-w-md overflow-hidden rounded-[28px] border border-zinc-200/70 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.30)] dark:border-white/10 dark:bg-[#0d121c]"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
@@ -1395,7 +1513,7 @@ export default function NotesList({
                   void duplicateCompany(id);
                   onClose();
                 }}
-                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:bg-white/[0.08]"
               >
                 <span>Duplicar</span>
                 <Copy className="h-4 w-4" />
@@ -1407,7 +1525,7 @@ export default function NotesList({
                   void setNoteBucket(id, "pending");
                   onClose();
                 }}
-                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:bg-white/[0.08]"
               >
                 <span>Mover a Pendientes</span>
                 <Archive className="h-4 w-4" />
@@ -1418,7 +1536,7 @@ export default function NotesList({
                   void setNoteBucket(id, "completed");
                   onClose();
                 }}
-                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:bg-white/[0.08]"
               >
                 <span>Mover a Completados</span>
                 <CheckCircle2 className="h-4 w-4" />
@@ -1429,7 +1547,7 @@ export default function NotesList({
                   void setNoteBucket(id, "trash");
                   onClose();
                 }}
-                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:bg-white/[0.08]"
               >
                 <span>Mover a Papelera</span>
                 <Trash2 className="h-4 w-4" />
@@ -1469,7 +1587,7 @@ export default function NotesList({
             <button
               type="button"
               onClick={onClose}
-              className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              className="btn-ink w-full rounded-2xl px-3 py-3 text-sm font-bold"
             >
               Cerrar
             </button>
@@ -1481,8 +1599,11 @@ export default function NotesList({
 
   if (empty) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">
+      <div className="animate-fade-in mx-auto mt-10 max-w-md rounded-[28px] border border-dashed border-zinc-300 bg-white/70 p-10 text-center backdrop-blur dark:border-white/10 dark:bg-white/[0.03]">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-lime-100 text-2xl dark:bg-lime-400/10">
+          🧾
+        </div>
+        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
           No hay compañías todavía. Crea la primera con <b>Nueva</b>.
         </p>
       </div>
@@ -1511,7 +1632,26 @@ export default function NotesList({
     <div className="mx-auto w-full max-w-7xl pb-24">
 
       {/* ── DASHBOARD: tarjetas agrupadas por compañía ── */}
-      {!selectedCompany ? (
+      {!selectedCompany && design !== "classic" ? (
+        <>
+          <DashboardHero groups={companyGroups} design={design} />
+          {design === "panel" ? (
+            <CompanyRows
+              groups={companyGroups}
+              onOpen={(g) => setSelectedCompany(g.name)}
+              onOpenNotes={(g) => setNotesModal({ name: g.name, notes: g.notes })}
+              onQuickAdd={(g) => setNotesModal({ name: g.name, notes: g.notes, startInNew: true })}
+            />
+          ) : (
+            <CompanyBento
+              groups={companyGroups}
+              onOpen={(g) => setSelectedCompany(g.name)}
+              onOpenNotes={(g) => setNotesModal({ name: g.name, notes: g.notes })}
+              onQuickAdd={(g) => setNotesModal({ name: g.name, notes: g.notes, startInNew: true })}
+            />
+          )}
+        </>
+      ) : !selectedCompany ? (
         <div className="stagger-children grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {companyGroups.map((group) => (
             <DashboardCompanyCard
@@ -1539,15 +1679,13 @@ export default function NotesList({
             <button
               type="button"
               onClick={() => setSelectedCompany(null)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:-translate-x-0.5 hover:bg-zinc-50 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
               Dashboard
             </button>
-            <h2 className="truncate text-lg font-black uppercase tracking-tight text-zinc-900 dark:text-white">
-              {selectedCompany}
-            </h2>
-            <span className="ml-auto rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+            <CompanyTitleEditor name={selectedCompany} onRename={(n) => renameCompany(selectedCompany, n)} />
+            <span className="ml-auto rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-zinc-600 ring-1 ring-zinc-200 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/10">
               {visibleForCompany.length} {visibleForCompany.length === 1 ? "reporte" : "reportes"}
             </span>
           </div>
@@ -1575,7 +1713,10 @@ export default function NotesList({
                     coverUrl: localCoverUrls[note.id] ?? null,
                   })
                 }
-                onPatch={(patch) => patchCompany(note.id, patch)}
+                onPatch={(patch) => {
+                  if (patch.title !== undefined) pinNote(note.id);
+                  patchCompany(note.id, patch);
+                }}
                 onLocalWrite={markLocalWrite}
                 onDelete={() => askDeleteCompany(note.id)}
                 onActions={() =>
@@ -1602,7 +1743,7 @@ export default function NotesList({
             note={openCompany}
             startOnNew={open?.mode === "new"}
             startOnEntryId={open?.mode === "edit" ? (open?.entryId ?? null) : null}
-            onClose={() => setOpen(null)}
+            onClose={() => { setOpen(null); resyncSoon(); }}
             onBusy={(b) => setBusyId(b ? openCompany.id : null)}
             onPatch={(patch) => patchCompany(openCompany.id, patch)}
             onDeleteCompany={() => {
@@ -1646,6 +1787,7 @@ export default function NotesList({
         <ReportModal
           noteId={reportForCompany.id}
           companyTitle={reportForCompany.title}
+          onCompanyNameChange={(name) => void renameSingleNote(reportForCompany.id, name)}
           initialReport={(reportForCompany.values as any)?._report?.payload ?? null}
           onLocalReportUpdate={(payload) => {
             const now = new Date().toISOString();
@@ -1764,6 +1906,7 @@ export default function NotesList({
             if (shouldSuggestMoveToCompleted(noteId, values)) {
               setConfirmMoveComplete({ id: noteId, title });
             }
+            resyncSoon();
           }}
         />
       ) : null}
@@ -1799,7 +1942,7 @@ export default function NotesList({
           startInNew={notesModal.startInNew ?? false}
           onPatchNote={(noteId, patch) => patchCompany(noteId, patch)}
           onLocalWrite={markLocalWrite}
-          onClose={() => setNotesModal(null)}
+          onClose={() => { setNotesModal(null); resyncSoon(); }}
         />
       ) : null}
 
@@ -1881,19 +2024,22 @@ function CompanyNotesModal({
     }
   }, [mode, editEntry]);
 
+  // Salir de la ventana (clic afuera / X / Esc / flecha volver) con cambios sin guardar => preguntar.
+  const [confirmLeave, setConfirmLeave] = useState<null | "close" | "back">(null);
+  const requestLeaveRef = useRef<(kind: "close" | "back") => void>(() => {});
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") requestLeaveRef.current("close"); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   function patchLocalNote(noteId: string, patch: Partial<NoteListItem>) {
     setLocalNotes((prev) => prev.map((n) => (n.id === noteId ? { ...n, ...patch } : n)));
     onPatchNote(noteId, patch);
   }
 
-  async function saveEntry() {
-    if (!targetNote) return;
+  async function saveEntry(): Promise<boolean> {
+    if (!targetNote) return false;
     const noteId = mode === "edit" && editEntry ? editEntry.noteId : targetNote.id;
     const noteObj = localNotes.find((n) => n.id === noteId) ?? targetNote;
     const date = (draftDate || isoToday()).slice(0, 10);
@@ -1934,8 +2080,10 @@ function CompanyNotesModal({
       patchLocalNote(noteId, { body: nextBody, values: nextValues });
       setMode("list");
       setEditEntry(null);
+      return true;
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error guardando");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -1974,9 +2122,53 @@ function CompanyNotesModal({
 
   const isForm = mode === "new" || mode === "edit";
 
+  // ¿Hay algo escrito/cambiado que no se ha guardado?
+  const baseDate = mode === "edit" && editEntry ? (editEntry.date || isoToday()) : isoToday();
+  const baseAgent = mode === "edit" && editEntry ? (editEntry.agent || "") : "";
+  const baseNote = mode === "edit" && editEntry ? (editEntry.note || "") : "";
+  const dirty =
+    isForm &&
+    (draftNote.trim() !== baseNote.trim() ||
+      draftAgent.trim() !== baseAgent.trim() ||
+      (mode === "edit" && draftDate !== baseDate));
+
+  function leave(kind: "close" | "back") {
+    if (kind === "close") onClose();
+    else { setMode("list"); setEditEntry(null); }
+  }
+  requestLeaveRef.current = (kind) => {
+    if (busy) return;
+    if (confirmDelEntry) { setConfirmDelEntry(null); return; }
+    if (confirmLeave) { setConfirmLeave(null); return; } // Esc con el aviso abierto = seguir editando
+    if (dirty) setConfirmLeave(kind);
+    else leave(kind);
+  };
+  const requestLeave = (kind: "close" | "back") => requestLeaveRef.current(kind);
+
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center">
-      <div className="animate-fade-in absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { if (!busy) onClose(); }} />
+      <div className="animate-fade-in absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => requestLeave("close")} />
+
+      {confirmLeave ? (
+        <UnsavedChangesDialog
+          title={mode === "new" ? "¿Guardar esta nota?" : "¿Guardar los cambios?"}
+          message={mode === "new" ? "Escribiste una nota que todavía no se ha guardado." : "Hiciste cambios en esta nota que todavía no se han guardado."}
+          saveLabel={mode === "new" ? "Guardar nota" : "Guardar cambios"}
+          canSave={!!draftNote.trim()}
+          cantSaveHint="Para guardar, escribe el texto de la nota."
+          saving={busy}
+          onSave={async () => {
+            const kind = confirmLeave;
+            const ok = await saveEntry();
+            if (ok) {
+              setConfirmLeave(null);
+              if (kind === "close") onClose();
+            }
+          }}
+          onDiscard={() => { const kind = confirmLeave; setConfirmLeave(null); leave(kind); }}
+          onKeepEditing={() => setConfirmLeave(null)}
+        />
+      ) : null}
 
       {/* Mini-modal confirmar eliminación */}
       {confirmDelEntry ? (
@@ -2041,7 +2233,7 @@ function CompanyNotesModal({
             {mode === "edit" ? (
               <button
                 type="button"
-                onClick={() => { setMode("list"); setEditEntry(null); }}
+                onClick={() => requestLeave("back")}
                 disabled={busy}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 title="Volver a la lista"
@@ -2051,7 +2243,7 @@ function CompanyNotesModal({
             ) : (
               <button
                 type="button"
-                onClick={() => { if (!busy) onClose(); }}
+                onClick={() => requestLeave("close")}
                 disabled={busy}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
@@ -2195,6 +2387,110 @@ function CompanyNotesModal({
   );
 }
 
+/** Título de la compañía (pantalla de detalle) con botón para renombrarla. Pregunta antes de perder cambios. */
+function CompanyTitleEditor({
+  name,
+  onRename,
+}: {
+  name: string;
+  onRename: (next: string) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const [confirm, setConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => { if (!editing) setDraft(name); }, [name, editing]);
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const dirty = editing && draft.trim() !== name.trim();
+
+  async function save() {
+    const v = draft.trim();
+    if (!v) return;
+    setSaving(true);
+    try {
+      await onRename(v);
+    } finally {
+      setSaving(false);
+      setConfirm(false);
+      setEditing(false);
+    }
+  }
+  function leave() {
+    setConfirm(false);
+    setDraft(name);
+    setEditing(false);
+  }
+  function requestLeave() {
+    if (saving) return;
+    if (confirm) { setConfirm(false); inputRef.current?.focus(); return; }
+    if (dirty) setConfirm(true);
+    else leave();
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        <h2 className="truncate text-xl font-extrabold uppercase tracking-tight text-zinc-900 dark:text-white">{name}</h2>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          title="Renombrar compañía (todos sus reportes)"
+          className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-2.5 text-xs font-bold text-zinc-600 shadow-sm transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Renombrar</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); void save(); }
+          if (e.key === "Escape") { e.preventDefault(); requestLeave(); }
+        }}
+        onBlur={() => { if (!confirm && !saving) requestLeave(); }}
+        className="min-w-0 flex-1 rounded-xl border border-lime-400/60 bg-white px-3 py-2 text-base font-extrabold uppercase tracking-tight text-zinc-900 outline-none ring-4 ring-lime-400/15 dark:bg-white/[0.04] dark:text-white"
+      />
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => void save()}
+        disabled={saving || !draft.trim()}
+        className="btn-ink h-10 shrink-0 rounded-xl px-4 text-xs font-bold disabled:opacity-50"
+      >
+        {saving ? "Guardando…" : "Guardar"}
+      </button>
+      {confirm ? (
+        <UnsavedChangesDialog
+          title="¿Guardar el nuevo nombre?"
+          message={`Vas a cambiar "${name}" por "${draft.trim()}" en todos sus reportes.`}
+          saveLabel="Guardar nombre"
+          canSave={!!draft.trim()}
+          cantSaveHint="El nombre no puede quedar vacío."
+          saving={saving}
+          onSave={save}
+          onDiscard={leave}
+          onKeepEditing={() => { setConfirm(false); inputRef.current?.focus(); }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function DashboardCompanyCard({
   name,
   totalDueCents,
@@ -2250,178 +2546,158 @@ function DashboardCompanyCard({
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       className={cn(
-        "animate-card-in group relative flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-3xl border text-left",
-        "transition-[transform,box-shadow] duration-200 ease-out",
-        "hover:scale-[1.018] active:scale-[0.99]",
-        "focus:outline-none focus:ring-2 focus:ring-white/20",
-        "border-zinc-200/80 bg-white shadow-[0_4px_24px_rgba(15,23,42,0.07)]",
-        "hover:shadow-[0_12px_40px_rgba(15,23,42,0.13)]",
-        "dark:border-white/[0.06] dark:bg-[#0f1117]",
+        "animate-card-in group relative flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-[28px] border text-left",
+        "transition-all duration-300 ease-out",
+        "hover:-translate-y-1 active:translate-y-0 active:scale-[0.992]",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-400/60",
+        "border-zinc-200/70 bg-white shadow-[0_2px_4px_rgba(15,23,42,0.04),0_12px_32px_rgba(15,23,42,0.07)]",
+        "hover:shadow-[0_4px_8px_rgba(15,23,42,0.05),0_24px_56px_rgba(15,23,42,0.14)]",
+        "dark:border-white/[0.07] dark:bg-[#0e131d]",
+        "dark:shadow-[0_2px_4px_rgba(0,0,0,0.3),0_16px_40px_rgba(0,0,0,0.35)]",
         allPaid
-          ? "dark:shadow-[0_4px_32px_rgba(16,185,129,0.08)] dark:hover:shadow-[0_12px_48px_rgba(16,185,129,0.14)]"
-          : "dark:shadow-[0_4px_32px_rgba(239,68,68,0.06)] dark:hover:shadow-[0_12px_48px_rgba(239,68,68,0.12)]",
+          ? "hover:border-emerald-300/70 dark:hover:border-emerald-400/30"
+          : "hover:border-red-300/70 dark:hover:border-red-400/30",
       )}
     >
-      {/* Colored top accent bar */}
-      <div className={cn(
-        "h-[3px] w-full",
-        allPaid
-          ? "bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 dark:from-emerald-500 dark:via-emerald-400 dark:to-teal-400"
-          : "bg-gradient-to-r from-red-400 via-rose-500 to-orange-400 dark:from-red-500 dark:via-rose-400 dark:to-orange-400",
-      )} />
-
-      {/* Subtle glow overlay (dark only) */}
-      <div className={cn(
-        "pointer-events-none absolute inset-0 opacity-0 dark:opacity-100",
-        allPaid
-          ? "bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(16,185,129,0.07),transparent)]"
-          : "bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(239,68,68,0.06),transparent)]",
-      )} />
+      {/* Soft status wash */}
+      <div
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-0 h-40",
+          allPaid
+            ? "bg-[radial-gradient(ellipse_90%_100%_at_50%_-20%,rgba(16,185,129,0.16),transparent_70%)]"
+            : "bg-[radial-gradient(ellipse_90%_100%_at_50%_-20%,rgba(239,68,68,0.14),transparent_70%)]",
+        )}
+      />
 
       <div className="relative flex flex-1 flex-col p-5">
         {/* Top row */}
-        <div className="mb-4 flex items-start justify-between gap-3">
-          {/* Avatar */}
-          <div className={cn(
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sm font-black tracking-tight",
-            allPaid
-              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-1 dark:ring-emerald-500/20"
-              : "bg-zinc-100 text-zinc-600 dark:bg-white/5 dark:text-zinc-300 dark:ring-1 dark:ring-white/10",
-          )}>
-            {initials || "?"}
-          </div>
-
-          {/* Badge + date */}
-          <div className="flex flex-col items-end gap-1.5">
-            <span className={cn(
-              "rounded-full px-2.5 py-0.5 text-[10px] font-black tracking-widest uppercase",
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            {/* Avatar */}
+            <div className={cn(
+              "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-sm font-extrabold tracking-tight text-white shadow-lg",
               allPaid
-                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-1 dark:ring-emerald-500/25"
-                : "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400 dark:ring-1 dark:ring-red-500/25",
+                ? "bg-gradient-to-br from-emerald-400 to-teal-600 shadow-emerald-500/30"
+                : "bg-gradient-to-br from-slate-700 to-slate-900 shadow-slate-900/25 dark:from-slate-600 dark:to-slate-800",
             )}>
-              {allPaid ? "✓ All Paid" : `${pendingCount} Pending`}
-            </span>
-            <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-600">
-              {lastDate}
-            </span>
+              {initials || "?"}
+            </div>
+            <div className="min-w-0">
+              <h3 className="truncate text-[15px] font-extrabold uppercase leading-tight tracking-tight text-zinc-900 dark:text-white sm:text-base">
+                {name}
+              </h3>
+              <p className="mt-0.5 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+                Actividad · <span className="tabular-nums">{lastDate}</span>
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Company name */}
-        <h3 className="mb-3 truncate text-base font-black uppercase leading-tight tracking-tight text-zinc-900 dark:text-white sm:text-lg">
-          {name}
-        </h3>
+          <span className={cn(
+            "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ring-1",
+            allPaid
+              ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/25"
+              : "bg-red-50 text-red-600 ring-red-200 dark:bg-red-400/10 dark:text-red-300 dark:ring-red-400/25",
+          )}>
+            {allPaid ? "✓ All Paid" : `${pendingCount} Pending`}
+          </span>
+        </div>
 
         {/* Total Due — hero number */}
         <div className={cn(
-          "mb-4 rounded-2xl px-4 py-3",
+          "mb-4 rounded-3xl px-5 py-4 ring-1",
           allPaid
-            ? "bg-emerald-50 dark:bg-emerald-500/[0.07] dark:ring-1 dark:ring-emerald-500/15"
-            : "bg-red-50 dark:bg-red-500/[0.07] dark:ring-1 dark:ring-red-500/15",
+            ? "bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-emerald-100 dark:from-emerald-400/[0.10] dark:to-emerald-400/[0.03] dark:ring-emerald-400/15"
+            : "bg-gradient-to-br from-red-50 to-rose-100/50 ring-red-100 dark:from-red-400/[0.10] dark:to-red-400/[0.03] dark:ring-red-400/15",
         )}>
           <p className={cn(
-            "mb-0.5 text-[9px] font-black uppercase tracking-[0.15em]",
-            allPaid ? "text-emerald-600 dark:text-emerald-500" : "text-red-500 dark:text-red-500",
+            "mb-1 text-[10px] font-bold uppercase tracking-[0.16em]",
+            allPaid ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400",
           )}>
             Total Due with Fees
           </p>
           <p className={cn(
-            "text-2xl font-black tabular-nums leading-none",
+            "text-[28px] font-black leading-none tracking-tight tabular-nums sm:text-3xl",
             allPaid
               ? "text-emerald-700 dark:text-emerald-300"
               : "text-red-600 dark:text-red-300",
-          )}
-            style={allPaid
-              ? { textShadow: "0 0 24px rgba(16,185,129,0.25)" }
-              : { textShadow: "0 0 24px rgba(239,68,68,0.2)" }
-            }
-          >
+          )}>
             {totalDueText}
           </p>
         </div>
 
         {/* Última Nota */}
         <div className="mb-4">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
-              Última Nota
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">
+              Última nota
             </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onQuickAdd(); }}
-                className={cn(
-                  "rounded-lg px-2 py-0.5 text-[10px] font-black transition",
-                  "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400 dark:hover:bg-white/10",
-                )}
-                title="Agregar nota rápida"
-              >
-                + Nota
-              </button>
-              <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-600">
-                Ver todas →
-              </span>
-            </div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onQuickAdd(); }}
+              className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-bold text-zinc-600 transition hover:border-lime-400 hover:bg-lime-50 hover:text-lime-800 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:border-lime-400/40 dark:hover:bg-lime-400/10 dark:hover:text-lime-200"
+              title="Agregar nota rápida"
+            >
+              + Nota
+            </button>
           </div>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenNotes(); }}
-            className={cn(
-              "w-full rounded-xl px-3 py-2.5 text-left transition",
-              "border border-zinc-100 bg-zinc-50 hover:bg-zinc-100",
-              "dark:border-white/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]",
-              "focus:outline-none",
-            )}
+            className="group/note w-full rounded-2xl border border-zinc-100 bg-zinc-50/80 px-3.5 py-3 text-left transition hover:border-zinc-200 hover:bg-zinc-100/80 focus:outline-none dark:border-white/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
           >
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="tabular-nums text-[10px] font-bold text-zinc-400 dark:text-zinc-500">
                 {entryDateFmt}
               </span>
               {latestEntryAgent && (
-                <span className="min-w-0 truncate text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                <span className="min-w-0 truncate rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-zinc-600 ring-1 ring-zinc-200 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/10">
                   {latestEntryAgent}
                 </span>
               )}
             </div>
-            <p className="text-xs leading-snug text-zinc-600 dark:text-zinc-400">
+            <p className="line-clamp-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
               {excerpt || <span className="italic text-zinc-400 dark:text-zinc-600">(sin contenido)</span>}
             </p>
+            <span className="mt-1.5 inline-block text-[10px] font-semibold text-zinc-400 transition group-hover/note:text-zinc-700 dark:group-hover/note:text-zinc-200">
+              Ver todas →
+            </span>
           </button>
         </div>
 
         {/* Stats row */}
         <div className="mt-auto grid grid-cols-3 gap-2">
           {/* Checks */}
-          <div className="flex flex-col items-center rounded-xl border border-zinc-100 bg-zinc-50 py-2 dark:border-white/[0.05] dark:bg-white/[0.03]">
-            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Checks</span>
-            <span className="mt-0.5 text-base font-black tabular-nums text-zinc-700 dark:text-zinc-200">{checkCount}</span>
+          <div className="flex flex-col items-center rounded-2xl bg-zinc-50 py-2.5 ring-1 ring-zinc-100 dark:bg-white/[0.03] dark:ring-white/[0.05]">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Checks</span>
+            <span className="mt-0.5 text-lg font-extrabold tabular-nums text-zinc-800 dark:text-zinc-100">{checkCount}</span>
           </div>
           {/* Pending */}
           <div className={cn(
-            "flex flex-col items-center rounded-xl border py-2",
+            "flex flex-col items-center rounded-2xl py-2.5 ring-1",
             pendingCount > 0
-              ? "border-red-100 bg-red-50 dark:border-red-500/15 dark:bg-red-500/[0.07]"
-              : "border-zinc-100 bg-zinc-50 dark:border-white/[0.05] dark:bg-white/[0.03]",
+              ? "bg-red-50 ring-red-100 dark:bg-red-400/[0.08] dark:ring-red-400/15"
+              : "bg-zinc-50 ring-zinc-100 dark:bg-white/[0.03] dark:ring-white/[0.05]",
           )}>
-            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Pending</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Pending</span>
             <span className={cn(
-              "mt-0.5 text-base font-black tabular-nums",
-              pendingCount > 0 ? "text-red-500 dark:text-red-400" : "text-zinc-700 dark:text-zinc-200",
+              "mt-0.5 text-lg font-extrabold tabular-nums",
+              pendingCount > 0 ? "text-red-500 dark:text-red-400" : "text-zinc-800 dark:text-zinc-100",
             )}>
               {pendingCount}
             </span>
           </div>
           {/* Paid */}
           <div className={cn(
-            "flex flex-col items-center rounded-xl border py-2",
+            "flex flex-col items-center rounded-2xl py-2.5 ring-1",
             completedCount > 0
-              ? "border-emerald-100 bg-emerald-50 dark:border-emerald-500/15 dark:bg-emerald-500/[0.07]"
-              : "border-zinc-100 bg-zinc-50 dark:border-white/[0.05] dark:bg-white/[0.03]",
+              ? "bg-emerald-50 ring-emerald-100 dark:bg-emerald-400/[0.08] dark:ring-emerald-400/15"
+              : "bg-zinc-50 ring-zinc-100 dark:bg-white/[0.03] dark:ring-white/[0.05]",
           )}>
-            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Paid</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Paid</span>
             <span className={cn(
-              "mt-0.5 text-base font-black tabular-nums",
-              completedCount > 0 ? "text-emerald-500 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-200",
+              "mt-0.5 text-lg font-extrabold tabular-nums",
+              completedCount > 0 ? "text-emerald-500 dark:text-emerald-400" : "text-zinc-800 dark:text-zinc-100",
             )}>
               {completedCount}
             </span>
@@ -2611,32 +2887,25 @@ function CompanyCard({
   return (
     <div
       className={cn(
-        "animate-card-in group relative flex h-full flex-col overflow-hidden rounded-3xl border transition-[transform,box-shadow] duration-200 ease-out",
+        "animate-card-in group relative flex h-full flex-col overflow-hidden rounded-[28px] border transition-all duration-300 ease-out",
         // light
-        "border-zinc-200/80 bg-white shadow-[0_4px_24px_rgba(15,23,42,0.07)] hover:shadow-[0_12px_40px_rgba(15,23,42,0.13)]",
+        "border-zinc-200/70 bg-white shadow-[0_2px_4px_rgba(15,23,42,0.04),0_12px_32px_rgba(15,23,42,0.07)] hover:shadow-[0_4px_8px_rgba(15,23,42,0.05),0_24px_56px_rgba(15,23,42,0.13)]",
         // dark
-        "dark:border-white/[0.06] dark:bg-[#0f1117]",
-        anyPending
-          ? "dark:shadow-[0_4px_32px_rgba(239,68,68,0.06)]"
-          : "dark:shadow-[0_4px_32px_rgba(16,185,129,0.07)]",
+        "dark:border-white/[0.07] dark:bg-[#0e131d] dark:shadow-[0_2px_4px_rgba(0,0,0,0.3),0_16px_40px_rgba(0,0,0,0.35)]",
+        selected && "ring-2 ring-lime-400/70",
         busy && "pointer-events-none opacity-50",
       )}
     >
-      {/* Accent top bar */}
-      <div className={cn(
-        "h-[3px] w-full shrink-0",
-        anyPending
-          ? "bg-gradient-to-r from-red-400 via-rose-500 to-orange-400"
-          : "bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400",
-      )} />
-
-      {/* Dark glow overlay */}
-      <div className={cn(
-        "pointer-events-none absolute inset-0 opacity-0 dark:opacity-100",
-        anyPending
-          ? "bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,rgba(239,68,68,0.05),transparent)]"
-          : "bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,rgba(16,185,129,0.05),transparent)]",
-      )} />
+      {/* Soft status wash */}
+      <div
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-0 h-36",
+          anyPending
+            ? "bg-[radial-gradient(ellipse_90%_100%_at_50%_-25%,rgba(239,68,68,0.13),transparent_70%)]"
+            : "bg-[radial-gradient(ellipse_90%_100%_at_50%_-25%,rgba(16,185,129,0.15),transparent_70%)]",
+        )}
+      />
 
       <div className="relative flex flex-1 flex-col p-4 sm:p-5">
         {/* Select checkbox */}
@@ -2645,10 +2914,10 @@ function CompanyCard({
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggleSelected(); }}
             className={cn(
-              "absolute left-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-xl border transition",
+              "absolute left-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-2xl border transition",
               selected
-                ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-400"
-                : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10",
+                ? "border-lime-400/60 bg-lime-400/20 text-lime-600 dark:text-lime-300"
+                : "border-zinc-200 bg-white/80 text-zinc-400 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10",
             )}
             aria-pressed={selected}
           >
@@ -2660,10 +2929,10 @@ function CompanyCard({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onActions(); }}
-          className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200/60 bg-white/80 text-zinc-500 transition hover:bg-white dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-zinc-400 dark:hover:bg-white/[0.10]"
+          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-2xl border border-zinc-200/70 bg-white/80 text-zinc-500 backdrop-blur transition hover:bg-white hover:text-zinc-800 dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-zinc-400 dark:hover:bg-white/[0.10] dark:hover:text-white"
           title="Acciones"
         >
-          <MoreHorizontal className="h-3.5 w-3.5" />
+          <MoreHorizontal className="h-4 w-4" />
         </button>
 
         {/* Company name (editable) */}
@@ -2673,35 +2942,31 @@ function CompanyCard({
           onChange={(e) => setCompanyName(e.target.value)}
           placeholder="Nombre de la compañía…"
           className={cn(
-            "mb-3 w-full bg-transparent px-2 text-center text-base font-black uppercase tracking-tight outline-none sm:mb-4 sm:text-lg md:text-xl",
+            "mb-3 w-full bg-transparent px-2 text-center text-base font-extrabold uppercase tracking-tight outline-none sm:mb-4 sm:text-lg md:text-xl",
             "text-zinc-900 placeholder:text-zinc-400 focus:text-zinc-900",
             "dark:text-white dark:placeholder:text-zinc-600 dark:focus:text-white",
-            "rounded-xl border border-transparent transition focus:border-white/10 focus:bg-white/[0.04]",
+            "rounded-xl border border-transparent transition focus:border-lime-400/50 focus:bg-white/60 dark:focus:bg-white/[0.04]",
           )}
         />
 
         {/* Total Due */}
         <div className={cn(
-          "mb-4 flex items-center justify-between rounded-2xl px-4 py-3",
+          "mb-4 flex items-center justify-between gap-3 rounded-3xl px-5 py-3.5 ring-1",
           anyPending
-            ? "bg-red-50 dark:bg-red-500/[0.07] dark:ring-1 dark:ring-red-500/15"
-            : "bg-emerald-50 dark:bg-emerald-500/[0.07] dark:ring-1 dark:ring-emerald-500/15",
+            ? "bg-gradient-to-br from-red-50 to-rose-100/50 ring-red-100 dark:from-red-400/[0.10] dark:to-red-400/[0.03] dark:ring-red-400/15"
+            : "bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-emerald-100 dark:from-emerald-400/[0.10] dark:to-emerald-400/[0.03] dark:ring-emerald-400/15",
         )}>
           <span className={cn(
-            "text-[9px] font-black uppercase tracking-[0.15em]",
-            anyPending ? "text-red-500" : "text-emerald-600 dark:text-emerald-500",
+            "text-[10px] font-bold uppercase tracking-[0.16em]",
+            anyPending ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400",
           )}>
             Total Due with Fees
           </span>
           <span
             className={cn(
-              "text-xl font-black tabular-nums",
+              "text-2xl font-black tracking-tight tabular-nums",
               anyPending ? "text-red-600 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300",
             )}
-            style={anyPending
-              ? { textShadow: "0 0 20px rgba(239,68,68,0.2)" }
-              : { textShadow: "0 0 20px rgba(16,185,129,0.2)" }
-            }
           >
             {totalDueText}
           </span>
@@ -2713,7 +2978,7 @@ function CompanyCard({
             <button
               type="button"
               onClick={onOpenReport}
-              className="group/img relative w-full overflow-hidden rounded-2xl border border-zinc-200/60 bg-zinc-50 shadow-md transition hover:shadow-xl focus:outline-none dark:border-white/[0.06] dark:bg-white/[0.03]"
+              className="group/img relative w-full overflow-hidden rounded-3xl border border-zinc-200/70 bg-zinc-50 shadow-md transition hover:shadow-xl focus:outline-none dark:border-white/[0.06] dark:bg-white/[0.03]"
               style={{ minHeight: "220px" }}
               title="Abrir reporte"
             >
@@ -2721,13 +2986,18 @@ function CompanyCard({
               <img
                 alt="Portada"
                 src={coverUrl}
-                className="h-full w-full object-cover transition duration-300 group-hover/img:scale-[1.03]"
+                className="h-full w-full object-cover transition duration-500 group-hover/img:scale-[1.04]"
               />
               {/* Gradient overlay on hover */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/img:opacity-100" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/img:opacity-100" />
+              {/* Etiqueta SIEMPRE visible: deja claro que se puede tocar para editar */}
+              <span className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-full bg-zinc-900/90 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg ring-1 ring-white/25 backdrop-blur">
+                <SquarePen className="h-3.5 w-3.5" />
+                Editar
+              </span>
               {/* Attachments badge */}
               {meta?.total ? (
-                <div className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-lg border border-white/20 bg-black/50 px-2 py-1 text-[11px] font-bold text-white backdrop-blur">
+                <div className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
                   <Paperclip className="h-3 w-3" />
                   {meta.total}
                 </div>
@@ -2737,18 +3007,29 @@ function CompanyCard({
             <button
               type="button"
               onClick={onOpenReport}
-              className="group/report w-full overflow-hidden rounded-2xl border border-zinc-200/60 bg-zinc-50 transition hover:bg-zinc-100 focus:outline-none dark:border-white/[0.05] dark:bg-white/[0.02] dark:hover:bg-white/[0.05]"
+              className="group/report w-full overflow-hidden rounded-3xl border border-dashed border-zinc-300 bg-zinc-50/70 transition hover:border-lime-400 hover:bg-lime-50/50 focus:outline-none dark:border-white/10 dark:bg-white/[0.02] dark:hover:border-lime-400/40 dark:hover:bg-lime-400/[0.04]"
               style={{ minHeight: "220px" }}
               title="Abrir reporte"
             >
-              <div className="flex h-full w-full items-center justify-center">
-                <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-white/[0.04]">
-                  <ImageOff className="h-10 w-10 text-zinc-300 dark:text-zinc-600" />
+              <div className="flex h-full w-full flex-col items-center justify-center gap-3">
+                <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 transition group-hover/report:scale-105 dark:bg-white/[0.05] dark:ring-white/[0.08]">
+                  <ImageOff className="h-9 w-9 text-zinc-300 dark:text-zinc-600" />
                 </div>
+                <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500">Toca para llenar el reporte</span>
               </div>
             </button>
           )}
         </div>
+
+        {/* Botón grande y visible para abrir/editar el documento (antes había que adivinar que se tocaba la imagen) */}
+        <button
+          type="button"
+          onClick={onOpenReport}
+          className="btn-ink mt-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold"
+        >
+          <SquarePen className="h-4 w-4" />
+          {reportPayload ? "Editar reporte" : "Llenar reporte"}
+        </button>
 
         {/* Bottom stats */}
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -2757,16 +3038,16 @@ function CompanyCard({
             { label: "Check Fee",    status: checkFeeStatus    },
           ].map(({ label, status }) => (
             <div key={label} className={cn(
-              "rounded-2xl border px-3 py-2.5 text-center",
+              "rounded-2xl px-3 py-3 text-center ring-1",
               status.tone === "paid"
-                ? "border-emerald-100 bg-emerald-50 dark:border-emerald-500/15 dark:bg-emerald-500/[0.07]"
-                : "border-red-100 bg-red-50 dark:border-red-500/15 dark:bg-red-500/[0.07]",
+                ? "bg-emerald-50 ring-emerald-100 dark:bg-emerald-400/[0.08] dark:ring-emerald-400/15"
+                : "bg-red-50 ring-red-100 dark:bg-red-400/[0.08] dark:ring-red-400/15",
             )}>
-              <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
+              <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
                 {label}
               </p>
               <p className={cn(
-                "text-sm font-black",
+                "text-sm font-extrabold",
                 status.tone === "paid"
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-red-500 dark:text-red-400",
@@ -2787,6 +3068,7 @@ function ReportModal({
   initialReport,
   onLocalReportUpdate,
   onReportSynced,
+  onCompanyNameChange,
   onClose,
 }: {
   noteId: string;
@@ -2794,9 +3076,50 @@ function ReportModal({
   initialReport: any;
   onLocalReportUpdate: (payload: unknown) => void;
   onReportSynced?: (meta: { updatedAt?: string | null; updatedBy?: any | null }) => void;
+  /** Se llama cuando el usuario cambia el "Company Name" dentro del reporte (para actualizar el título de la tarjeta). */
+  onCompanyNameChange?: (name: string) => void;
   onClose: () => void;
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  // Siempre usar las versiones MÁS RECIENTES de los callbacks. Antes, el listener de mensajes se
+  // registraba una sola vez y quedaba con callbacks viejos (datos desactualizados).
+  const propsRef = useRef({ onLocalReportUpdate, onReportSynced, onCompanyNameChange });
+  propsRef.current = { onLocalReportUpdate, onReportSynced, onCompanyNameChange };
+
+  // ── Control de cambios sin guardar ──
+  const [dirty, setDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const baselineRef = useRef<{ sig: string; payload: any } | null>(null);
+  const loadedAtRef = useRef<number>(0);
+  const origTitleRef = useRef(companyTitle);
+  const titleRef = useRef(companyTitle);
+  const [liveTitle, setLiveTitle] = useState<string | null>(null);
+  const pendingPayloadRef = useRef<any>(null);
+
+  function payloadSig(payload: any) {
+    try {
+      const imgs = Array.isArray(payload?.images) ? payload.images : [];
+      return JSON.stringify({
+        fields: payload?.fields ?? {},
+        images: imgs.map((im: any) => String(im?.id ?? im?.path ?? "")),
+      });
+    } catch {
+      return String(Math.random());
+    }
+  }
+
+  // Si el usuario editó el "Company Name" dentro del reporte, actualiza también el título de la tarjeta.
+  function syncCompanyName(payload: any) {
+    try {
+      const nm = String(payload?.fields?.companyName ?? "").trim();
+      if (!nm) return;
+      if (nm.toLowerCase() === titleRef.current.trim().toLowerCase()) return;
+      titleRef.current = nm;
+      propsRef.current.onCompanyNameChange?.(nm);
+    } catch {}
+  }
   const saveTimerRef = useRef<number | null>(null);
   const preparedResolverRef = useRef<((ok: boolean) => void) | null>(null);
   const [iframeShown, setIframeShown] = useState(false);
@@ -2859,14 +3182,19 @@ function ReportModal({
       // Mantener sync local (sin mostrar "última edición" / email).
       const json = await res.json().catch(() => ({}));
       const updatedAt = typeof json?.updatedAt === "string" ? json.updatedAt : null;
-      onReportSynced?.({ updatedAt });
+      propsRef.current.onReportSynced?.({ updatedAt });
     } catch {}
     return;
   }
 
   async function saveNow(payload: any) {
     if (!payload) return;
-    if (savingRef.current) return;
+    if (savingRef.current) {
+      // Ya hay un guardado en curso: dejamos este como "pendiente" para guardarlo apenas termine.
+      // (Antes se descartaba y el último cambio podía quedar sin guardar.)
+      pendingPayloadRef.current = payload;
+      return;
+    }
     savingRef.current = true;
     setSyncSnapshot({
       online,
@@ -2912,6 +3240,11 @@ function ReportModal({
     } finally {
       savingRef.current = false;
       setSyncSnapshot({ saving: false, queuedReports: getQueuedReportsCount() });
+      const next = pendingPayloadRef.current;
+      if (next) {
+        pendingPayloadRef.current = null;
+        void saveNow(next);
+      }
     }
   }
 
@@ -3022,13 +3355,28 @@ function ReportModal({
 
         // Update UI immediately (card should reflect total without refresh)
         try {
-          onLocalReportUpdate((data as any).payload);
+          propsRef.current.onLocalReportUpdate((data as any).payload);
+        } catch {}
+
+        // ¿Hay cambios respecto a como estaba al abrir? (los primeros ~1.5 s tras cargar son "la base":
+        // el formulario se normaliza solo al abrir y eso no cuenta como edición del usuario)
+        try {
+          const sig = payloadSig((data as any).payload);
+          if (!baselineRef.current || Date.now() - loadedAtRef.current < 1500) {
+            baselineRef.current = { sig, payload: (data as any).payload };
+            setDirty(false);
+          } else {
+            setDirty(sig !== baselineRef.current.sig);
+          }
+          const nm = String(((data as any).payload as any)?.fields?.companyName ?? "").trim();
+          if (nm) setLiveTitle(nm);
         } catch {}
 
         // Throttle saves to avoid spamming DB while typing
         if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = window.setTimeout(async () => {
           await saveNow((data as any).payload);
+          if (Date.now() - loadedAtRef.current > 1500) syncCompanyName((data as any).payload);
         }, 450);
       }
 
@@ -3180,13 +3528,64 @@ function ReportModal({
           saveTimerRef.current = null;
         }
       } catch {}
+      // Si hay un guardado en curso, esperamos a que termine para no perder el último cambio.
+      for (let i = 0; i < 30 && savingRef.current; i++) {
+        await new Promise((r) => window.setTimeout(r, 100));
+      }
       await saveNow(lastPayloadRef.current);
+      if (baselineRef.current && lastPayloadRef.current && payloadSig(lastPayloadRef.current) !== baselineRef.current.sig) {
+        syncCompanyName(lastPayloadRef.current);
+      }
     } catch {
       // ignore
     } finally {
       onClose();
       setClosing(false);
     }
+  }
+
+  // Descartar: vuelve el reporte (y el nombre de la compañía) a como estaban al abrir.
+  async function discardAndClose() {
+    if (closing || discarding) return;
+    setDiscarding(true);
+    try {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      pendingPayloadRef.current = null;
+      for (let i = 0; i < 30 && savingRef.current; i++) {
+        await new Promise((r) => window.setTimeout(r, 100));
+      }
+      const base = baselineRef.current?.payload ?? null;
+      if (base && online) {
+        try {
+          await postReportPayloadToServer(sanitizeReportForServer(base));
+          removeQueuedReport(noteId);
+          propsRef.current.onLocalReportUpdate(base);
+        } catch {
+          // si falla la red, al menos no dejamos nada en cola
+        }
+      } else {
+        removeQueuedReport(noteId);
+      }
+      if (titleRef.current.trim().toLowerCase() !== origTitleRef.current.trim().toLowerCase()) {
+        titleRef.current = origTitleRef.current;
+        propsRef.current.onCompanyNameChange?.(origTitleRef.current);
+      }
+    } finally {
+      setConfirmClose(false);
+      setDiscarding(false);
+      onClose();
+    }
+  }
+
+  // Cerrar por clic afuera / botón Cerrar: si hay cambios, preguntar primero.
+  function requestClose() {
+    if (closing || discarding) return;
+    if (confirmClose) { setConfirmClose(false); return; }
+    if (dirty) { setConfirmClose(true); return; }
+    void flushAndClose();
   }
 
   useEffect(() => {
@@ -3323,21 +3722,33 @@ function ReportModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-2 sm:items-center sm:p-4"
-      onClick={() => void flushAndClose()}
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 backdrop-blur-sm p-2 sm:items-center sm:p-4"
+      onClick={() => requestClose()}
     >
+      {confirmClose ? (
+        <UnsavedChangesDialog
+          title="¿Guardar los cambios del reporte?"
+          message="Hiciste cambios en este reporte. Elige qué quieres hacer antes de cerrar."
+          saveLabel="Guardar y cerrar"
+          discardLabel="Descartar cambios"
+          saving={closing || discarding}
+          onSave={() => { setConfirmClose(false); return flushAndClose(); }}
+          onDiscard={() => discardAndClose()}
+          onKeepEditing={() => setConfirmClose(false)}
+        />
+      ) : null}
       <div
         role="dialog"
         aria-modal="true"
-        className="flex h-[calc(100dvh-16px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900 sm:h-[92dvh]"
+        className="animate-slide-up flex h-[calc(100dvh-16px)] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-zinc-200/60 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] dark:border-white/10 dark:bg-[#0d121c] sm:h-[92dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Modal header: single compact row ── */}
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200 px-3 py-2.5 dark:border-zinc-800 sm:px-4">
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200/70 bg-white/80 px-3 py-3 backdrop-blur dark:border-white/[0.07] dark:bg-transparent sm:px-5">
           {/* Title */}
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Reporte</p>
-            <p className="truncate text-sm font-bold leading-tight text-zinc-900 dark:text-zinc-50">{companyTitle}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-lime-600 dark:text-lime-300">Reporte</p>
+            <p className="truncate text-[15px] font-extrabold leading-tight tracking-tight text-zinc-900 dark:text-zinc-50">{liveTitle ?? companyTitle}</p>
           </div>
 
           {/* Actions */}
@@ -3347,7 +3758,7 @@ function ReportModal({
               type="button"
               onClick={(e) => { e.stopPropagation(); void shareReport(); }}
               title="Compartir PDF"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
             </button>
@@ -3357,7 +3768,7 @@ function ReportModal({
               type="button"
               onClick={(e) => { e.stopPropagation(); void printFromParent(); }}
               title="Imprimir"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             </button>
@@ -3369,7 +3780,7 @@ function ReportModal({
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
               title="Abrir en pestaña"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             </a>
@@ -3380,8 +3791,8 @@ function ReportModal({
             {/* Cerrar */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); void flushAndClose(); }}
-              disabled={closing}
+              onClick={(e) => { e.stopPropagation(); requestClose(); }}
+              disabled={closing || discarding}
               title="Cerrar"
               className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
@@ -3391,7 +3802,7 @@ function ReportModal({
           </div>
         </div>
 
-        <div className="relative min-h-0 flex-1 bg-zinc-100 dark:bg-zinc-950">
+        <div className="relative min-h-0 flex-1 bg-zinc-100/80 dark:bg-[#080b12]">
           {!iframeShown ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center">
               <div className="rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3 text-sm font-semibold text-zinc-700 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200">
@@ -3410,6 +3821,9 @@ function ReportModal({
             sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"
             onLoad={() => {
               try {
+                loadedAtRef.current = Date.now();
+                baselineRef.current = null;
+                setDirty(false);
                 setIframeShown(false);
                 // Fallback: si por alguna razón no llega el "scrollRestored",
                 // no dejar la pantalla trabada en "Cargando…".
@@ -3454,31 +3868,31 @@ function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-3"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 backdrop-blur-sm p-3"
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900"
+        className="animate-scale-in w-full max-w-sm overflow-hidden rounded-[28px] border border-zinc-200/70 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.30)] dark:border-white/10 dark:bg-[#0d121c]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-          <div className="text-sm font-semibold">{title}</div>
-          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+        <div className="px-6 pb-2 pt-6">
+          <div className="text-base font-extrabold tracking-tight">{title}</div>
+          <div className="mt-1.5 text-[13px] leading-relaxed text-zinc-500 dark:text-zinc-400">
             {message}
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 px-4 py-3">
+        <div className="flex items-center justify-end gap-2 px-6 pb-6 pt-4">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10"
           >
             {cancelText}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500"
+            className="rounded-2xl bg-gradient-to-b from-red-500 to-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(239,68,68,0.35)] transition hover:brightness-110"
           >
             {confirmText}
           </button>
@@ -3510,7 +3924,7 @@ function CompanyListModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 backdrop-blur-sm p-2 sm:p-4"
       onClick={onClose}
     >
       <div
@@ -3732,7 +4146,7 @@ function CompanyModal({
     }
   }
 
-  async function saveEntry() {
+  async function saveEntry(): Promise<boolean> {
     const date = (draftDate || isoToday()).slice(0, 10);
     const agent = (draftAgent ?? "").trim();
     const noteText = (draftNote ?? "").trim();
@@ -3773,8 +4187,10 @@ function CompanyModal({
       try {
         window.localStorage.removeItem(draftKey());
       } catch {}
+      return true;
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error guardando");
+      return false;
     } finally {
       onBusy(false);
     }
@@ -3813,11 +4229,55 @@ function CompanyModal({
 
   const isEditingExisting = !!selectedId && entries.some((e) => e.id === selectedId);
 
+  // ¿Hay una nota escrita/cambiada sin guardar?
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [savingFromDialog, setSavingFromDialog] = useState(false);
+  const dirty = isEditingExisting
+    ? draftNote.trim() !== (selected?.note ?? "").trim() || draftAgent.trim() !== (selected?.agent ?? "").trim()
+    : draftNote.trim() !== "" || draftAgent.trim() !== "";
+
+  function requestClose() {
+    if (savingFromDialog) return;
+    if (confirmClose) { setConfirmClose(false); return; }
+    if (dirty) setConfirmClose(true);
+    else onClose();
+  }
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") requestCloseRef.current(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-2 sm:items-center sm:p-4"
-      onClick={onClose}
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 backdrop-blur-sm p-2 sm:items-center sm:p-4"
+      onClick={requestClose}
     >
+      {confirmClose ? (
+        <UnsavedChangesDialog
+          title={isEditingExisting ? "¿Guardar los cambios?" : "¿Guardar esta nota?"}
+          message={isEditingExisting ? "Hiciste cambios en esta nota que todavía no se han guardado." : "Escribiste una nota que todavía no se ha guardado."}
+          saveLabel={isEditingExisting ? "Guardar cambios" : "Guardar nota"}
+          canSave={!!draftNote.trim()}
+          cantSaveHint="Para guardar, escribe el texto de la nota."
+          saving={savingFromDialog}
+          onSave={async () => {
+            setSavingFromDialog(true);
+            const ok = await saveEntry();
+            setSavingFromDialog(false);
+            if (ok) { setConfirmClose(false); onClose(); }
+          }}
+          onDiscard={() => {
+            // Descartar también borra el borrador guardado en este dispositivo
+            try { window.localStorage.removeItem(draftKey()); } catch {}
+            setConfirmClose(false);
+            onClose();
+          }}
+          onKeepEditing={() => setConfirmClose(false)}
+        />
+      ) : null}
       <div
         role="dialog"
         aria-modal="true"
@@ -3841,7 +4301,7 @@ function CompanyModal({
           <button
             type="button"
             className="ml-3 inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            onClick={onClose}
+            onClick={requestClose}
           >
             <X className="h-4 w-4" />
             Cerrar

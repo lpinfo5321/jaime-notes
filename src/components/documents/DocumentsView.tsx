@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
+import UnsavedChangesDialog from "@/components/UnsavedChangesDialog";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import {
   FileText, Image as ImageIcon, File, Upload, Trash2, Download,
   Share2, Printer, Search, X, FolderOpen, Plus, Eye,
@@ -329,28 +331,59 @@ function RenameModal({ doc, onSave, onClose }: {
 }) {
   const [name, setName] = useState(doc.name);
   const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const dirty = name.trim() !== doc.name.trim();
+
+  // Cerrar por clic afuera / Esc: si cambiaste el nombre, pregunta antes de perderlo.
+  const requestCloseRef = useRef<() => void>(() => {});
+  requestCloseRef.current = () => {
+    if (confirmClose) { setConfirmClose(false); return; }
+    if (dirty && !busy) setConfirmClose(true);
+    else onClose();
+  };
 
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
-    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") requestCloseRef.current(); };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
-  }, [onClose]);
+  }, []);
 
   async function handleSave() {
     if (!name.trim()) return;
     setBusy(true);
-    await onSave(name.trim());
+    setSaveError(null);
+    try {
+      await onSave(name.trim());
+    } catch (e: any) {
+      setSaveError(e?.message ?? "No se pudo guardar el nombre");
+      setConfirmClose(false);
+    }
     setBusy(false);
   }
 
   return createPortal(
     <div
       style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99999, background:"rgba(0,0,0,0.55)", display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}
-      onClick={onClose}
+      onClick={() => requestCloseRef.current()}
     >
+      {confirmClose ? (
+        <UnsavedChangesDialog
+          title="¿Guardar el nuevo nombre?"
+          message="Cambiaste el nombre del documento pero todavía no lo guardas."
+          saveLabel="Guardar nombre"
+          canSave={!!name.trim()}
+          cantSaveHint="El nombre no puede quedar vacío."
+          saving={busy}
+          onSave={handleSave}
+          onDiscard={onClose}
+          onKeepEditing={() => setConfirmClose(false)}
+        />
+      ) : null}
       <div
         style={{ width:"100%", maxWidth:"400px", background:"white", borderRadius:"20px", padding:"24px", boxShadow:"0 25px 50px rgba(0,0,0,0.3)" }}
         onClick={(e) => e.stopPropagation()}
@@ -364,6 +397,9 @@ function RenameModal({ doc, onSave, onClose }: {
           style={{ width:"100%", padding:"10px 12px", borderRadius:"12px", border:"1px solid #e5e7eb", background:"#f9fafb", fontSize:"14px", outline:"none", boxSizing:"border-box" }}
           placeholder="Nombre del documento"
         />
+        {saveError ? (
+          <p style={{ margin:"8px 2px 0", fontSize:"12px", fontWeight:600, color:"#dc2626" }}>{saveError}</p>
+        ) : null}
         <div style={{ display:"flex", gap:"8px", marginTop:"16px" }}>
           <button onClick={onClose} style={{ flex:1, padding:"10px", borderRadius:"12px", border:"1px solid #e5e7eb", background:"white", fontSize:"13px", fontWeight:600, color:"#4b5563", cursor:"pointer" }}>
             Cancelar
@@ -398,12 +434,14 @@ export default function DocumentsView({ onBack }: { onBack?: () => void } = {}) 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setNeedsSetup(false);
-    setError(null);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setNeedsSetup(false);
+      setError(null);
+    }
     try {
-      const res = await fetch("/api/documents");
+      const res = await fetch("/api/documents", { cache: "no-store" });
       const json = await res.json();
       if (json.error) {
         if (json.error.includes("does not exist") || json.error.includes("relation")) {
@@ -422,6 +460,12 @@ export default function DocumentsView({ onBack }: { onBack?: () => void } = {}) 
 
   useEffect(() => { setIsBrowser(true); }, []);
   useEffect(() => { load(); }, [load]);
+
+  /* al día: tiempo real + al volver a la app + respaldo (pausado mientras subes, renombras o borras) */
+  useLiveRefresh(() => { void load(true); }, {
+    table: "documents",
+    enabled: !uploading && !renameTarget && !deleteTarget && !deleteBusy,
+  });
 
   const visible = useMemo(() => {
     if (!q.trim()) return docs;
@@ -504,13 +548,19 @@ export default function DocumentsView({ onBack }: { onBack?: () => void } = {}) 
   }
 
   async function handleRename(doc: Doc, newName: string) {
-    await fetch(`/api/documents/${doc.id}`, {
+    const res = await fetch(`/api/documents/${doc.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName }),
     });
+    // Antes se veía como "guardado" aunque el servidor lo rechazara.
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json?.error ?? "No se pudo guardar el nombre");
+    }
     setDocs((prev) => prev.map((d) => d.id === doc.id ? { ...d, name: newName } : d));
     setRenameTarget(null);
+    void load(true);
   }
 
   function toggleSelect(id: string) {
@@ -678,7 +728,7 @@ create policy "docs storage select" on storage.objects
 create policy "docs storage delete" on storage.objects
   for delete to authenticated
   using (bucket_id = 'documents');`}</pre>
-          <button onClick={load} className="mt-3 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
+          <button onClick={() => void load()} className="mt-3 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
             Reintentar
           </button>
         </div>

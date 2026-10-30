@@ -5,6 +5,8 @@ import {
   Phone, Mail, Building2, Search, Plus, Pencil, Trash2,
   X, ChevronLeft, User, UserPlus, Users,
 } from "lucide-react";
+import UnsavedChangesDialog from "@/components/UnsavedChangesDialog";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
 /* ─────────────────────────── types ─────────────────────────── */
 interface Contact {
@@ -130,19 +132,40 @@ function ContactModal({
 }: {
   mode: "new" | "edit";
   initial: typeof EMPTY_FORM;
-  onSave: (data: typeof EMPTY_FORM) => void;
+  onSave: (data: typeof EMPTY_FORM) => void | Promise<void>;
   onClose: () => void;
   busy: boolean;
 }) {
   const [form, setForm] = useState(initial);
   const firstRef = useRef<HTMLInputElement>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
+
+  // ¿Hay cambios sin guardar? (se comparan los valores ya "limpios")
+  const snap = (f: typeof EMPTY_FORM) =>
+    JSON.stringify({
+      name: f.name.trim(),
+      phones: f.phones.map((p) => p.trim()).filter(Boolean),
+      email: (f.email ?? "").trim(),
+      company: (f.company ?? "").trim(),
+      notes: (f.notes ?? "").trim(),
+    });
+  const dirty = snap(form) !== snap(initial);
+
+  // Cerrar por clic afuera / X / Esc: si hay cambios, preguntar primero.
+  const requestCloseRef = useRef<() => void>(() => {});
+  requestCloseRef.current = () => {
+    if (confirmClose) { setConfirmClose(false); return; } // Esc con el aviso abierto = seguir editando
+    if (dirty && !busy) setConfirmClose(true);
+    else onClose();
+  };
+  const requestClose = () => requestCloseRef.current();
 
   useEffect(() => {
     firstRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") requestCloseRef.current(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   function addPhone() { setForm((f) => ({ ...f, phones: [...f.phones, ""] })); }
   function setPhone(i: number, v: string) {
@@ -155,9 +178,23 @@ function ContactModal({
   return (
     <div
       className="animate-fade-in fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
     >
       <div className="pointer-events-none absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+      {confirmClose ? (
+        <UnsavedChangesDialog
+          title={mode === "new" ? "¿Guardar este contacto?" : "¿Guardar los cambios?"}
+          message={mode === "new" ? "Escribiste datos de un contacto nuevo que todavía no se ha guardado." : "Hiciste cambios en este contacto que todavía no se han guardado."}
+          saveLabel={mode === "new" ? "Guardar contacto" : "Guardar cambios"}
+          canSave={!!form.name.trim()}
+          cantSaveHint="Para guardar, escribe el nombre del contacto."
+          saving={busy}
+          onSave={() => onSave(form)}
+          onDiscard={onClose}
+          onKeepEditing={() => setConfirmClose(false)}
+        />
+      ) : null}
 
       <div className="animate-slide-up relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-zinc-950 sm:animate-scale-in sm:rounded-3xl">
         {/* header */}
@@ -166,7 +203,7 @@ function ContactModal({
             {mode === "new" ? "Nuevo contacto" : "Editar contacto"}
           </h2>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           >
             <X className="h-4 w-4" />
@@ -341,10 +378,10 @@ export default function ContactsView({ onBack }: { onBack?: () => void } = {}) {
   const searchRef = useRef<HTMLInputElement>(null);
 
   /* fetch */
-  const load = useCallback(async (search = "") => {
-    setLoading(true);
+  const load = useCallback(async (search = "", silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const res = await fetch(`/api/contacts${search ? `?q=${encodeURIComponent(search)}` : ""}`);
+      const res = await fetch(`/api/contacts${search ? `?q=${encodeURIComponent(search)}` : ""}`, { cache: "no-store" });
       const json = await res.json();
       setContacts(json.contacts ?? []);
     } catch {}
@@ -358,6 +395,9 @@ export default function ContactsView({ onBack }: { onBack?: () => void } = {}) {
     const t = setTimeout(() => load(q), 250);
     return () => clearTimeout(t);
   }, [q, load]);
+
+  /* al día: tiempo real + al volver a la app + respaldo (no interrumpe si hay una ventana abierta) */
+  useLiveRefresh(() => { void load(q, true); }, { table: "contacts", enabled: mode === "list" && !deleteTarget && !busy });
 
   /* filtered locally too for instant feedback */
   const visible = useMemo(() => {
@@ -395,19 +435,23 @@ export default function ContactsView({ onBack }: { onBack?: () => void } = {}) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...form, phones }),
         });
-        const json = await res.json();
-        if (json.id) {
-          setContacts((prev) =>
-            [...prev, { id: json.id, ...form, phones, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]
-              .sort((a, b) => a.name.localeCompare(b.name)),
-          );
-        }
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.id) throw new Error(json?.error || "No se pudo guardar el contacto");
+        setContacts((prev) =>
+          [...prev, { id: json.id, ...form, phones, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        );
       } else if (editTarget) {
-        await fetch(`/api/contacts/${editTarget.id}`, {
+        const res = await fetch(`/api/contacts/${editTarget.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...form, phones }),
         });
+        // Antes se mostraba como "guardado" aunque el servidor lo rechazara.
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json?.error || "No se pudo guardar los cambios");
+        }
         setContacts((prev) =>
           prev
             .map((c) => (c.id === editTarget.id ? { ...c, ...form, phones } : c))
@@ -416,7 +460,11 @@ export default function ContactsView({ onBack }: { onBack?: () => void } = {}) {
       }
       setMode("list");
       setEditTarget(null);
-    } catch {}
+      // Re-sincroniza con el servidor para que lo que se ve sea siempre lo guardado.
+      void load(q);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo guardar");
+    }
     setBusy(false);
   }
 
@@ -425,10 +473,13 @@ export default function ContactsView({ onBack }: { onBack?: () => void } = {}) {
     if (!deleteTarget) return;
     setBusy(true);
     try {
-      await fetch(`/api/contacts/${deleteTarget.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/contacts/${deleteTarget.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("No se pudo eliminar el contacto");
       setContacts((prev) => prev.filter((c) => c.id !== deleteTarget.id));
       setDeleteTarget(null);
-    } catch {}
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo eliminar");
+    }
     setBusy(false);
   }
 
