@@ -5,8 +5,9 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FolderOpen, Home, LogOut, Moon, MoreHorizontal, Plus, RefreshCw, Search, Settings, Sun, Users } from "lucide-react";
+import { Gauge, FolderOpen, Home, LogOut, Moon, MoreHorizontal, Plus, RefreshCw, Search, Settings, Sun, Users } from "lucide-react";
 import { useTheme } from "next-themes";
+import UsageModal, { USAGE_CACHE_KEY } from "@/components/UsageModal";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
 
 const SELECT_MODE_KEY = "rc:selectMode:v1";
@@ -30,6 +31,33 @@ export default function AppHeader() {
   const [mounted,          setMounted]          = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = mounted && resolvedTheme === "dark";
+
+  const [showUsage, setShowUsage] = useState(false);
+  const [usageWarn, setUsageWarn] = useState<null | "warn" | "danger">(null);
+  // Aviso discreto (punto en el engranaje) si el uso del plan gratis se acerca al límite. Se revisa máx. cada 12 h.
+  useEffect(() => {
+    let alive = true;
+    const apply = (worst: number) => {
+      if (!alive) return;
+      setUsageWarn(worst >= 0.85 ? "danger" : worst >= 0.6 ? "warn" : null);
+    };
+    try {
+      const c = JSON.parse(localStorage.getItem(USAGE_CACHE_KEY) ?? "null");
+      if (c && Date.now() - c.ts < 12 * 3600_000) { apply(Number(c.worst) || 0); return () => { alive = false; }; }
+    } catch {}
+    const t = window.setTimeout(() => {
+      fetch("/api/usage", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!j?.usage) return;
+          const worst = Math.max(j.usage.dbBytes / j.limits.dbBytes, j.usage.storageBytes / j.limits.storageBytes);
+          try { localStorage.setItem(USAGE_CACHE_KEY, JSON.stringify({ ts: Date.now(), worst })); } catch {}
+          apply(worst);
+        })
+        .catch(() => {});
+    }, 4000);
+    return () => { alive = false; window.clearTimeout(t); };
+  }, []);
 
   const [updState, setUpdState] = useState<"idle" | "checking" | "uptodate" | "updating">("idle");
   const buildId = process.env.NEXT_PUBLIC_BUILD_ID ?? "";
@@ -233,13 +261,16 @@ export default function AppHeader() {
                 type="button"
                 onClick={() => setMenuOpen((v) => !v)}
                 title="Menú"
-                className={`flex h-8 w-8 items-center justify-center rounded-xl transition ${
+                className={`relative flex h-8 w-8 items-center justify-center rounded-xl transition ${
                   menuOpen
                     ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
                     : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                 }`}
               >
                 <Settings className="h-4 w-4" />
+                {usageWarn ? (
+                  <span className={`absolute right-1 top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-950 ${usageWarn === "danger" ? "bg-red-500" : "bg-amber-500"}`} />
+                ) : null}
               </button>
 
               {/* Dropdown */}
@@ -276,6 +307,12 @@ export default function AppHeader() {
                   </button>
 
                   <div className="my-1.5 h-px bg-zinc-100 dark:bg-zinc-800" />
+
+                  <button type="button" onClick={() => { setMenuOpen(false); setShowUsage(true); }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
+                    <Gauge className="h-4 w-4 text-zinc-400" /> Herramientas y límites
+                    {usageWarn ? <span className={`ml-auto h-2 w-2 rounded-full ${usageWarn === "danger" ? "bg-red-500" : "bg-amber-500"}`} /> : null}
+                  </button>
 
                   <button type="button" onClick={() => void checkUpdate()} disabled={updState === "checking" || updState === "updating"}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:text-zinc-300 dark:hover:bg-zinc-900">
@@ -340,7 +377,7 @@ export default function AppHeader() {
                 <>
                   <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" />
                   <input value={q} onChange={(e) => setQ(e.target.value)}
-                    placeholder={qBy === "pay" ? "Buscar PAY…" : "Buscar compañía…"}
+                    placeholder={qBy === "pay" ? "Buscar PAY…" : "Buscar compañía, cliente o teléfono…"}
                     className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500" />
                   {q && (
                     <button onClick={() => setQ("")} className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
@@ -422,6 +459,8 @@ export default function AppHeader() {
         </div>
       </div>
     )}
+
+    {showUsage && mounted ? <UsageModal onClose={() => setShowUsage(false)} /> : null}
 
     {/* ── Logout Confirmation Modal ── */}
     {showLogoutModal && mounted && createPortal(

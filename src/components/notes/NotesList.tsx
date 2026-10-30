@@ -12,12 +12,15 @@ import {
   MoreHorizontal,
   Paperclip,
   Pencil,
+  Phone,
+  Plus,
   SquarePen,
   Trash2,
   X,
 } from "lucide-react";
 import UnsavedChangesDialog from "@/components/UnsavedChangesDialog";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import { digitsOnly, normCompany } from "@/lib/company";
 import ContactsView from "@/components/contacts/ContactsView";
 import DocumentsView from "@/components/documents/DocumentsView";
 import { cn } from "@/lib/utils";
@@ -305,6 +308,14 @@ function fitTextToSingleLineInput(
   }
   el.style.fontSize = `${best}px`;
 }
+
+type CompanyContact = {
+  id: string;
+  name: string;
+  phones: string[];
+  email?: string | null;
+  company?: string | null;
+};
 
 export default function NotesList({
   notes,
@@ -822,6 +833,40 @@ export default function NotesList({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [baseBucket]);
 
+  // ── Contactos (clientes/teléfonos) ligados a compañías por nombre ──
+  const [contacts, setContacts] = useState<CompanyContact[]>([]);
+  async function loadContacts() {
+    try {
+      const r = await fetch("/api/contacts", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json();
+      setContacts(Array.isArray(j?.contacts) ? j.contacts : []);
+    } catch {}
+  }
+  useEffect(() => { void loadContacts(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useLiveRefresh(() => { void loadContacts(); }, { table: "contacts", pollMs: 120_000, minGapMs: 5000 });
+
+  // Compañías que coinciden con la búsqueda por ser el cliente / teléfono / correo de un contacto
+  const contactMatchedCompanies = useMemo(() => {
+    const set = new Set<string>();
+    const raw = filterAgent.trim();
+    const qBy = (sp.get("qBy") ?? "company").trim() || "company";
+    if (!raw || qBy !== "company") return set;
+    const q = normCompany(raw);
+    const qd = digitsOnly(raw);
+    for (const c of contacts) {
+      const co = normCompany(c.company);
+      if (!co) continue;
+      const textHit =
+        normCompany(c.name).includes(q) ||
+        normCompany(c.email).includes(q) ||
+        co.includes(q);
+      const phoneHit = qd.length >= 3 && (c.phones ?? []).some((ph) => digitsOnly(ph).includes(qd));
+      if (textHit || phoneHit) set.add(co);
+    }
+    return set;
+  }, [contacts, filterAgent, sp]);
+
   const visible = useMemo(() => {
     const pass = baseBucket.filter((n) => {
       if (filterAgent) {
@@ -832,8 +877,9 @@ export default function NotesList({
           const pay = getPayText(n.values).toLowerCase();
           if (!pay.includes(q)) return false;
         } else {
-          const title = String(n.title ?? "").toLowerCase();
-          if (!title.includes(q)) return false;
+          const titleN = normCompany(n.title);
+          const hit = titleN.includes(normCompany(q)) || contactMatchedCompanies.has(titleN);
+          if (!hit) return false;
         }
       }
       if (filterStatus) {
@@ -843,7 +889,7 @@ export default function NotesList({
       return true;
     });
     return pass;
-  }, [baseBucket, filterAgent, filterStatus, sp]);
+  }, [baseBucket, filterAgent, filterStatus, sp, contactMatchedCompanies]);
 
   // Grouped dashboard: one entry per unique company name
   const companyGroups = useMemo(() => {
@@ -901,10 +947,38 @@ export default function NotesList({
     );
   }, [visible, selectedCompany, pinnedIds]);
 
+  // Agrega un reporte NUEVO dentro de una compañía que ya existe (mismo nombre => misma compañía).
+  async function addReportToCompany(companyName: string) {
+    try {
+      const res = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: companyName, body: "", tags: [], favorite: false }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.id) throw new Error(json?.error || "No se pudo crear el reporte");
+      router.replace(`/app?openReport=${encodeURIComponent(String(json.id))}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error creando el reporte");
+    }
+  }
+
   // Renombra TODA la compañía (todos sus reportes, en cualquier pestaña) de una vez.
   async function renameCompany(oldName: string, newNameRaw: string) {
-    const newName = newNameRaw.trim();
+    let newName = newNameRaw.trim();
     if (!newName || newName === oldName) return;
+    // ¿Ya existe otra compañía con ese nombre? Entonces se unen (misma compañía, un solo lugar).
+    const clash = items.find(
+      (n) => ((n.title ?? "").trim() || "Sin nombre") !== oldName && normCompany(n.title) === normCompany(newName),
+    );
+    if (clash) {
+      const target = (clash.title ?? "").trim();
+      const ok = window.confirm(
+        `Ya existe la compañía "${target}".\n\n¿Unir los reportes de "${oldName}" dentro de "${target}"?`,
+      );
+      if (!ok) return;
+      newName = target;
+    }
     const targets = items.filter((n) => ((n.title ?? "").trim() || "Sin nombre") === oldName);
     if (!targets.length) return;
     const ids = new Set(targets.map((t) => t.id));
@@ -1659,6 +1733,13 @@ export default function NotesList({
             </span>
           </div>
 
+          <CompanyContactsPanel
+            companyName={selectedCompany}
+            contacts={contacts}
+            onChanged={() => void loadContacts()}
+            onNewReport={() => void addReportToCompany(selectedCompany)}
+          />
+
           <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
             {visibleForCompany.map((note) => (
               <CompanyCard
@@ -2352,6 +2433,161 @@ function CompanyNotesModal({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Contactos (clientes / teléfonos) de una compañía + botón para agregar reporte nuevo dentro de ella. */
+function CompanyContactsPanel({
+  companyName,
+  contacts,
+  onChanged,
+  onNewReport,
+}: {
+  companyName: string;
+  contacts: CompanyContact[];
+  onChanged: () => void;
+  onNewReport: () => void;
+}) {
+  const mine = useMemo(
+    () => contacts.filter((c) => normCompany(c.company) === normCompany(companyName)),
+    [contacts, companyName],
+  );
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+
+  const dirty = adding && (name.trim() || phone.trim() || email.trim());
+  function reset() {
+    setAdding(false);
+    setConfirm(false);
+    setName("");
+    setPhone("");
+    setEmail("");
+  }
+  function cancel() {
+    if (saving) return;
+    if (dirty) setConfirm(true);
+    else reset();
+  }
+  async function save(): Promise<void> {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          phones: phone.trim() ? [phone.trim()] : [],
+          email: email.trim(),
+          company: companyName,
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || "No se pudo guardar el contacto");
+      }
+      reset();
+      onChanged();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error guardando el contacto");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls =
+    "w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white";
+
+  return (
+    <div className="mb-5 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="mr-auto text-sm font-extrabold tracking-tight text-zinc-900 dark:text-white">
+          Contactos de esta compañía
+          <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            {mine.length}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => (adding ? cancel() : setAdding(true))}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {adding ? "Cerrar" : "Contacto"}
+        </button>
+        <button
+          type="button"
+          onClick={onNewReport}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-2 text-xs font-bold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Nuevo reporte aquí
+        </button>
+      </div>
+
+      {mine.length === 0 && !adding ? (
+        <p className="mt-2 text-[13px] text-zinc-500 dark:text-zinc-400">
+          Aún no hay contactos de esta compañía. Agrega el teléfono del cliente para encontrarla buscando por número.
+        </p>
+      ) : null}
+
+      {mine.length > 0 ? (
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {mine.map((c) => (
+            <li key={c.id} className="rounded-2xl border border-zinc-100 bg-zinc-50 px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="text-sm font-bold text-zinc-900 dark:text-white">{c.name}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+                {(c.phones ?? []).filter(Boolean).map((ph) => (
+                  <a key={ph} href={`tel:${ph}`} className="inline-flex items-center gap-1 font-semibold text-sky-700 hover:underline dark:text-sky-300">
+                    <Phone className="h-3 w-3" />
+                    {ph}
+                  </a>
+                ))}
+                {c.email ? (
+                  <a href={`mailto:${c.email}`} className="truncate text-zinc-500 hover:underline dark:text-zinc-400">
+                    {c.email}
+                  </a>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {adding ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del cliente *" className={inputCls} autoFocus />
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono" inputMode="tel" className={inputCls} />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Correo (opcional)" inputMode="email" className={inputCls} />
+          <div className="flex justify-end gap-2 sm:col-span-3">
+            <button type="button" onClick={cancel} disabled={saving} className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+              Cancelar
+            </button>
+            <button type="button" onClick={() => void save()} disabled={!name.trim() || saving} className="rounded-xl bg-zinc-900 px-4 py-2 text-xs font-bold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900">
+              {saving ? "Guardando…" : "Guardar contacto"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {confirm ? (
+        <UnsavedChangesDialog
+          title="¿Guardar este contacto?"
+          message="Escribiste datos de un contacto que todavía no se han guardado."
+          saveLabel="Guardar contacto"
+          canSave={!!name.trim()}
+          cantSaveHint="Para guardar, escribe el nombre del cliente."
+          saving={saving}
+          onSave={save}
+          onDiscard={reset}
+          onKeepEditing={() => setConfirm(false)}
+        />
+      ) : null}
     </div>
   );
 }

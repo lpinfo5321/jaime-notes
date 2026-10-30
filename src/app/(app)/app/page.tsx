@@ -26,8 +26,10 @@ export default async function NotesPage({
     .order("updated_at", { ascending: false })
     .limit(200);
 
-  // Default search = only company name (title). Other modes are filtered client-side.
-  if (qBy === "company" && q) query = query.ilike("title", `%${q}%`);
+  // La búsqueda (compañía, cliente, teléfono, PAY) se filtra en el cliente: así también encuentra
+  // compañías por el nombre/teléfono de sus contactos.
+  void q;
+  void qBy;
 
   const { data: notes, error } = await query;
   const safeNotes = notes ?? [];

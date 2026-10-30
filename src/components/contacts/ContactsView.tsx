@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import UnsavedChangesDialog from "@/components/UnsavedChangesDialog";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import { digitsOnly } from "@/lib/company";
 
 /* ─────────────────────────── types ─────────────────────────── */
 interface Contact {
@@ -139,6 +140,18 @@ function ContactModal({
   const [form, setForm] = useState(initial);
   const firstRef = useRef<HTMLInputElement>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  // Compañías que ya existen (para escribir el mismo nombre y que todo quede ligado)
+  const [companyNames, setCompanyNames] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/companies", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (alive && Array.isArray(j?.companies)) setCompanyNames(j.companies.map((c: any) => String(c.name)));
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   // ¿Hay cambios sin guardar? (se comparan los valores ya "limpios")
   const snap = (f: typeof EMPTY_FORM) =>
@@ -225,6 +238,9 @@ function ContactModal({
                 placeholder="Nombre completo"
                 className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm outline-none ring-blue-400 transition focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-blue-500"
               />
+              <datalist id="rc-company-names">
+                {companyNames.map((n) => <option key={n} value={n} />)}
+              </datalist>
             </div>
 
             {/* company */}
@@ -236,6 +252,7 @@ function ContactModal({
                 value={form.company}
                 onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
                 placeholder="Empresa u organización"
+                list="rc-company-names"
                 className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm outline-none ring-blue-400 transition focus:ring-2 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-blue-500"
               />
             </div>
@@ -408,7 +425,7 @@ export default function ContactsView({ onBack }: { onBack?: () => void } = {}) {
         c.name.toLowerCase().includes(lq) ||
         (c.company ?? "").toLowerCase().includes(lq) ||
         (c.email ?? "").toLowerCase().includes(lq) ||
-        c.phones.some((p) => p.includes(lq)),
+        (digitsOnly(lq).length >= 3 && c.phones.some((p) => digitsOnly(p).includes(digitsOnly(lq)))) || c.phones.some((p) => p.includes(lq)),
     );
   }, [contacts, q]);
 
