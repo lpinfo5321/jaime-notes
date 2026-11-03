@@ -960,5 +960,5 @@ html.dash-on .co-detail .co-note .co-contacts .co-primary svg { background: var(
 .pal .kroot .kh-total small, .pal .kroot .kh-total { opacity: 1; }
 
 /* Los documentos nunca salen por debajo de la carpeta */
-.kf { clip-path: inset(-60px -30px 6px -30px); }
+.kf { clip-path: inset(-60px -30px -50px -30px); }
 .kf-front { z-index: 2; }
