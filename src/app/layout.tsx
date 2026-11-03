@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Caveat, Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Kalam } from "next/font/google";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
 import UpdateNotifier from "@/components/UpdateNotifier";
@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const noteHand = Caveat({
-  variable: "--font-note",
+const hand = Kalam({
+  variable: "--font-hand",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
@@ -39,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${noteHand.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${hand.variable} antialiased`}
       >
         <ThemeProvider>
           {children}

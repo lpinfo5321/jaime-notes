@@ -619,8 +619,13 @@ export default function DashboardV2({
       if (header) root.style.setProperty("--dash-hdr-h", `${header.offsetHeight}px`);
     };
     const stick = () => {
-      const bar = document.querySelector<HTMLElement>("header.sticky");
-      if (bar) root.style.setProperty("--dash-kh-top", `${bar.offsetHeight}px`);
+      const kh = document.querySelector<HTMLElement>(".pal .kh");
+      if (!kh) return;
+      const part = kh.querySelector<HTMLElement>(".kh-b-title, .kh-compact, .kh-row, .kh-split-l, .kh-h7-title");
+      const khR = kh.getBoundingClientRect();
+      const compact = part ? part.getBoundingClientRect().bottom - khR.top + 14 : khR.height;
+      root.style.setProperty("--dash-kh-top", "0px");
+      root.style.setProperty("--dash-compact", `${Math.min(khR.height, compact).toFixed(0)}px`);
     };
     const colors = () => {
       const kh = document.querySelector<HTMLElement>(".pal .kh");
@@ -633,7 +638,10 @@ export default function DashboardV2({
       }
       if (kr) root.style.setProperty("--dash-ink", getComputedStyle(kr).color);
     };
-    const onScroll = () => root.classList.toggle("dash-scrolled", window.scrollY > 24);
+    const onScroll = () => {
+      root.classList.toggle("dash-scrolled", window.scrollY > 24);
+      root.style.setProperty("--dash-p", String(Math.min(1, Math.max(0, window.scrollY / 150))));
+    };
     measure();
     const raf = requestAnimationFrame(colors);
     const t = window.setTimeout(() => { colors(); stick(); }, 160);
@@ -652,6 +660,7 @@ export default function DashboardV2({
       window.removeEventListener("scroll", onScroll);
       root.classList.remove("dash-home", "dash-scrolled");
       root.style.removeProperty("--dash-kh-top");
+      root.style.removeProperty("--dash-p");
       const bar = root.style.getPropertyValue("--dash-bar");
       const fg = root.style.getPropertyValue("--dash-bar-fg");
       if (bar) root.style.setProperty("--dash-hbg", bar);
