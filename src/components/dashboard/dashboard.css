@@ -949,6 +949,54 @@ html.dash-on .co-detail .co-note .co-contacts .co-primary svg { background: var(
 .kc:hover .kf-front { transform: translateY(3px); }
 @media (min-width: 900px) { .kf-sheet.has-img { top: 52px; height: 230px; } }
 
-/* Encabezado fijo: al hacer scroll se recorta (sin cambiar el alto) y queda solo título + total */
-.pal .kroot .kh { clip-path: inset(0 0 0 0 round 0 0 28px 28px); transition: clip-path .35s cubic-bezier(.32,.72,0,1); }
-html.dash-scrolled .pal .kroot .kh { clip-path: inset(0 0 calc(100% - var(--dash-compact, 100%)) 0 round 0 0 28px 28px); }
+/* Pastillas debajo del total: texto siempre legible en el celular */
+.pal .kh-h1 .kh-chips span,
+.pal .kh-h2 .kh-chips span {
+  background: #fff;
+  color: #111;
+  border: 0;
+  font-weight: 800;
+}
+.pal-yellow .kh-h1 .kh-chips span,
+.pal-yellow .kh-h2 .kh-chips span {
+  background: #111;
+  color: #fff;
+}
+
+/* Tipografía de libreta también en iPhone / Android */
+.nb-lines, .nb-text, .nb-textarea, .nb-empty, .nb-field input, .nb-agent {
+  font-family: var(--font-note), "Segoe Print", "Bradley Hand", cursive !important;
+}
+
+/* Encabezado fijo: las tarjetas y la cinta se recogen, el título se queda */
+.pal .kroot .kh {
+  top: var(--dash-kh-top, 0px);
+  clip-path: none !important;
+  transition: padding .48s cubic-bezier(.32,.72,0,1), box-shadow .4s;
+}
+.pal .kroot .kh-kpis,
+.pal .kroot .kh-ticker,
+.pal .kroot .kh-chips,
+.pal .kroot .kh-strip,
+.pal .kroot .kh-h7-stats {
+  overflow: hidden;
+  max-height: 240px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height .5s cubic-bezier(.32,.72,0,1), opacity .32s ease, margin .5s cubic-bezier(.32,.72,0,1), transform .5s cubic-bezier(.32,.72,0,1), padding .5s;
+}
+html.dash-scrolled .pal .kroot .kh-kpis,
+html.dash-scrolled .pal .kroot .kh-ticker,
+html.dash-scrolled .pal .kroot .kh-chips,
+html.dash-scrolled .pal .kroot .kh-strip,
+html.dash-scrolled .pal .kroot .kh-h7-stats {
+  max-height: 0 !important;
+  opacity: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: translateY(-18px);
+  pointer-events: none;
+  border: 0;
+}
+html.dash-scrolled .pal .kroot .kh { box-shadow: 0 12px 28px -18px rgba(0,0,0,.45); }
+

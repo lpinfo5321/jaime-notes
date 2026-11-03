@@ -619,13 +619,8 @@ export default function DashboardV2({
       if (header) root.style.setProperty("--dash-hdr-h", `${header.offsetHeight}px`);
     };
     const stick = () => {
-      const kh = document.querySelector<HTMLElement>(".pal .kh");
-      if (!kh) return;
-      const part = kh.querySelector<HTMLElement>(".kh-b-title, .kh-compact, .kh-row, .kh-split-l, .kh-h7-title");
-      const khR = kh.getBoundingClientRect();
-      const compact = part ? part.getBoundingClientRect().bottom - khR.top + 14 : khR.height;
-      root.style.setProperty("--dash-kh-top", "0px");
-      root.style.setProperty("--dash-compact", `${Math.min(khR.height, compact).toFixed(0)}px`);
+      const bar = document.querySelector<HTMLElement>("header.sticky");
+      if (bar) root.style.setProperty("--dash-kh-top", `${bar.offsetHeight}px`);
     };
     const colors = () => {
       const kh = document.querySelector<HTMLElement>(".pal .kh");

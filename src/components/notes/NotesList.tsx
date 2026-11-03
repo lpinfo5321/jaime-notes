@@ -2468,7 +2468,6 @@ function CompanyNotesModal({
                       <div className="nb-head">
                         <span>{list[0]?.date ? formatUsMmDdYy(list[0].date) : "—"}</span>
                         <span className="nb-tools">
-                          <button type="button" onClick={() => setMode("new")} disabled={busy} title="Nueva nota">+</button>
                           <span>{allEntries.length}</span>
                           <button type="button" onClick={() => requestLeave("close")} title="Cerrar">×</button>
                         </span>
