@@ -938,7 +938,6 @@ html.dash-on .co-detail .co-note .co-contacts .co-primary svg { background: var(
 
 /* Sticky: overflow-x:hidden convertía .kroot en contenedor de scroll y rompía el encabezado fijo */
 .kroot, .pal { overflow: visible !important; overflow-x: clip !important; overflow-y: visible !important; }
-html.dash-on, html.dash-on body { overflow-x: clip; }
 
 /* ===== Carpeta: pestaña unida sin muescas + documentos más adentro ===== */
 .pal .kroot .kf-back, .v6 .kf-back, .v8 .kf-back { border-radius: 0 28px 28px 28px; }
@@ -948,3 +947,7 @@ html.dash-on, html.dash-on body { overflow-x: clip; }
 .kc .kf-front { transition: transform .6s cubic-bezier(.32,.72,0,1); }
 .kc:hover .kf-front { transform: translateY(3px); }
 @media (min-width: 900px) { .kf-sheet.has-img { top: 52px; height: 230px; } }
+
+/* Encabezado fijo: al hacer scroll se recorta (sin cambiar el alto) y queda solo título + total */
+.pal .kroot .kh { clip-path: inset(0 0 0 0 round 0 0 28px 28px); transition: clip-path .35s cubic-bezier(.32,.72,0,1); }
+html.dash-scrolled .pal .kroot .kh { clip-path: inset(0 0 calc(100% - var(--dash-compact, 100%)) 0 round 0 0 28px 28px); }

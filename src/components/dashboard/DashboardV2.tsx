@@ -624,7 +624,8 @@ export default function DashboardV2({
       const part = kh.querySelector<HTMLElement>(".kh-b-title, .kh-compact, .kh-row, .kh-split-l, .kh-h7-title");
       const khR = kh.getBoundingClientRect();
       const compact = part ? part.getBoundingClientRect().bottom - khR.top + 14 : khR.height;
-      root.style.setProperty("--dash-kh-top", `${Math.min(0, -(khR.height - compact)).toFixed(0)}px`);
+      root.style.setProperty("--dash-kh-top", "0px");
+      root.style.setProperty("--dash-compact", `${Math.min(khR.height, compact).toFixed(0)}px`);
     };
     const colors = () => {
       const kh = document.querySelector<HTMLElement>(".pal .kh");

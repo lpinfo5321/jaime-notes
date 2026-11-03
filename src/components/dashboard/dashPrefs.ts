@@ -22,7 +22,6 @@ export const PAL_LIST: { id: string; name: string; sw: string; page: string }[] 
   { id: "pink", name: "Rosa", sw: "#ff2d8a", page: "#f8f1f4" },
   { id: "teal", name: "Turquesa", sw: "#00b8d9", page: "#f0f6f7" },
   { id: "yellow", name: "Amarillo", sw: "#ffd60a", page: "#f8f7f1" },
-  { id: "night", name: "Noche", sw: "#000000", page: "#000000" },
 ];
 
 export const HDR_NAMES = ["Bloque de color", "Título grande", "Bento", "Compacto", "Negro con total", "Dividido", "Total gigante"];
@@ -85,7 +84,6 @@ export function useDashPrefs(): DashPrefs {
 
 /** Colores de la barra superior fuera del panel principal. */
 export function palBar(id: string): { bar: string; fg: string } {
-  if (id === "night") return { bar: "#000000", fg: "#ffffff" };
   if (id === "yellow") return { bar: "#ffd60a", fg: "#111111" };
   const pal = PAL_LIST.find((p) => p.id === id) ?? PAL_LIST[0];
   return { bar: pal.sw, fg: "#ffffff" };
