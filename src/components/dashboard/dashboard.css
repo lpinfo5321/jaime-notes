@@ -937,7 +937,8 @@ html.dash-on .co-detail .co-note .co-contacts .co-primary svg { background: var(
 .nb-open.is-sticky .nb-arrow { background: var(--dash-bar, #3b3200); }
 
 /* Sticky: overflow-x:hidden convertía .kroot en contenedor de scroll y rompía el encabezado fijo */
-.kroot, .pal { overflow: visible !important; overflow-x: clip !important; overflow-y: visible !important; }
+.kroot { overflow: visible !important; overflow-x: clip !important; overflow-y: visible !important; }
+.pal { overflow: visible !important; }
 
 /* ===== Carpeta: pestaña unida sin muescas + documentos más adentro ===== */
 .pal .kroot .kf-back, .v6 .kf-back, .v8 .kf-back { border-radius: 0 28px 28px 28px; }
