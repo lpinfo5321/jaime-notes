@@ -935,3 +935,7 @@ html.dash-on .co-detail .co-note .co-contacts .co-primary svg { background: var(
 .nb-add, .nb-save { background: var(--dash-bar, #0a84ff); color: var(--dash-bar-fg, #fff); box-shadow: 0 6px 14px -6px rgba(0,0,0,.35); }
 .nb-arrow { background: var(--dash-bar, #2b241b); color: var(--dash-bar-fg, #fff); }
 .nb-open.is-sticky .nb-arrow { background: var(--dash-bar, #3b3200); }
+
+/* Sticky: overflow-x:hidden convertía .kroot en contenedor de scroll y rompía el encabezado fijo */
+.kroot, .pal { overflow: visible !important; overflow-x: clip !important; overflow-y: visible !important; }
+html.dash-on, html.dash-on body { overflow-x: clip; }
