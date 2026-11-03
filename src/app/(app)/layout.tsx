@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { tryGetPublicEnv } from "@/lib/env";
 import AppHeader from "@/components/AppHeader";
 import ResumeGate from "@/components/ResumeGate";
+import DashFrame from "@/components/dashboard/DashFrame";
 
 export default async function AppLayout({
   children,
@@ -20,7 +21,9 @@ export default async function AppLayout({
       <AppHeader />
 
       <main className="mx-auto max-w-6xl px-4 py-4">
-        <ResumeGate>{children}</ResumeGate>
+        <ResumeGate>
+          <DashFrame>{children}</DashFrame>
+        </ResumeGate>
       </main>
     </div>
   );

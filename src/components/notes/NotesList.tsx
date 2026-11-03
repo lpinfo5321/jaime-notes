@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import DashboardV2, { DashSettingsButton, type DashCompany } from "@/components/dashboard/DashboardV2";
+import { useDashPrefs } from "@/components/dashboard/dashPrefs";
 import {
   Archive,
   ArchiveRestore,
@@ -945,6 +947,48 @@ export default function NotesList({
       .sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Datos para el dashboard con estilo (carpetas + notas)
+  const dashPrefs = useDashPrefs();
+  const dashCompanies = useMemo<DashCompany[]>(() => {
+    if (dashPrefs.design === 0) return [];
+    const fmtDay = (iso: string) => (iso ? formatUsMmDdYy(iso) : "—");
+    return companyGroups.map((g) => {
+      const sheets = g.notes.slice(0, 3).map((n) => {
+        const ent = sortEntriesDesc(toEntryArray(n.values))[0];
+        return {
+          id: n.id,
+          no: n.id.replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase(),
+          amount: formatUsd(getTotalDueCentsFromValues(n.values)),
+          date: fmtDay(ent?.date ?? (n.updated_at ?? "").slice(0, 10)),
+          paid: deriveBucketFromNote(n) === "completed",
+          agent: (ent?.agent ?? "").trim(),
+          cover: localCoverUrls[n.id] ?? coverUrls[n.id] ?? null,
+        };
+      });
+      const recent = g.notes
+        .flatMap((n) => toEntryArray(n.values))
+        .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
+        .slice(0, 3)
+        .map((e) => ({ text: e.note.replace(/\s+/g, " ").trim().slice(0, 90), date: e.date, agent: e.agent }))
+        .filter((e) => e.text);
+      return {
+        name: g.name,
+        init: g.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase(),
+        totalDueCents: g.totalDueCents,
+        due: formatUsd(g.totalDueCents),
+        pendingCount: g.pendingCount,
+        completedCount: g.completedCount,
+        checkCount: g.notes.length,
+        lastDate: g.lastActivity ? new Date(g.lastActivity).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "2-digit" }) : "—",
+        entryDate: g.latestEntryDate ? formatUsMmDdYy(g.latestEntryDate) : "",
+        entryAgent: g.latestEntryAgent,
+        entryText: g.latestEntryText,
+        sheets,
+        recent,
+      };
+    });
+  }, [companyGroups, dashPrefs.design, localCoverUrls, coverUrls]); // eslint-disable-line react-hooks/exhaustive-deps
+  const useNewDash = dashPrefs.design !== 0 && !selectedCompany;
   // Notes visible when drilled into a specific company
   // Reportes que se renombraron estando dentro de la compañía: se quedan visibles en la pantalla
   // (antes la tarjeta "desaparecía" a mitad de escribir porque ya no coincidía con el nombre).
@@ -1176,7 +1220,7 @@ export default function NotesList({
       { id: "trash",     label: "Papelera",    icon: <Trash2       className="h-4 w-4 shrink-0" /> },
     ];
     return (
-      <div className="fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4 pointer-events-none">
+      <div data-bar="buckets" className="fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4 pointer-events-none">
         <div
           className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/85"
           style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)" }}
@@ -1703,10 +1747,29 @@ export default function NotesList({
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl pb-24">
+    <div className={selectedCompany ? "w-full pb-24" : "mx-auto w-full max-w-7xl pb-24"}>
 
       {/* ── DASHBOARD: tarjetas agrupadas por compañía ── */}
-      {!selectedCompany ? (
+      {dashPrefs.design === 0 && !selectedCompany ? <DashSettingsButton /> : null}
+      {useNewDash ? (
+        <DashboardV2
+          companies={dashCompanies}
+          bucket={bucket}
+          counts={bucketCounts}
+          onBucket={setBucket}
+          onOpenCompany={(name) => setSelectedCompany(name)}
+          onOpenNotes={(name) => {
+            const g = companyGroups.find((x) => x.name === name);
+            if (g) setNotesModal({ name, notes: g.notes });
+          }}
+          onQuickAdd={(name) => {
+            const g = companyGroups.find((x) => x.name === name);
+            if (g) setNotesModal({ name, notes: g.notes, startInNew: true });
+          }}
+          onNew={() => router.push("/app/new")}
+          onContacts={() => setShowContacts(true)}
+        />
+      ) : !selectedCompany ? (
         <div className="stagger-children grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {companyGroups.map((group) => (
             <DashboardCompanyCard
@@ -1728,31 +1791,39 @@ export default function NotesList({
         </div>
       ) : (
         /* ── DETALLE: reportes de la compañía seleccionada ── */
-        <div>
-          {/* Botón volver */}
-          <div className="mb-5 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setSelectedCompany(null)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-              Dashboard
-            </button>
-            <CompanyTitleEditor name={selectedCompany} onRename={(n) => renameCompany(selectedCompany, n)} />
-            <span className="ml-auto rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-              {visibleForCompany.length} {visibleForCompany.length === 1 ? "reporte" : "reportes"}
-            </span>
+        <div className="co-detail">
+          <div className="co-hero">
+            <section className="co-folder">
+              <div className="co-folder-top">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCompany(null)}
+                  className="co-back"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                  Dashboard
+                </button>
+                <span className="co-count">
+                  {visibleForCompany.length} {visibleForCompany.length === 1 ? "reporte" : "reportes"}
+                </span>
+              </div>
+              <CompanyTitleEditor name={selectedCompany} onRename={(n) => renameCompany(selectedCompany, n)} />
+              <div className="co-folder-due">
+                <small>Total due with fees</small>
+                <b>{formatUsd(visibleForCompany.reduce((sum, n) => sum + getTotalDueCentsFromValues(n.values), 0))}</b>
+              </div>
+            </section>
+            <aside className="co-note">
+              <CompanyContactsPanel
+                companyName={selectedCompany}
+                contacts={contacts}
+                onChanged={() => void loadContacts()}
+                onNewReport={() => void addReportToCompany(selectedCompany)}
+              />
+            </aside>
           </div>
 
-          <CompanyContactsPanel
-            companyName={selectedCompany}
-            contacts={contacts}
-            onChanged={() => void loadContacts()}
-            onNewReport={() => void addReportToCompany(selectedCompany)}
-          />
-
-          <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
+          <div className="report-grid">
             {visibleForCompany.map((note) => (
               <CompanyCard
                 key={note.id}
@@ -2009,7 +2080,7 @@ export default function NotesList({
       ) : null}
 
       <MultiSelectBar />
-      <BucketBar />
+      {useNewDash ? null : <BucketBar />}
     </div>
   );
 }
@@ -2058,6 +2129,25 @@ function CompanyNotesModal({
 
   // Form state
   const [mode, setMode] = useState<"list" | "new" | "edit">(startInNew ? "new" : "list");
+  const PER_PAGE = 4;
+  const [notePage, setNotePage] = useState(0);
+  const noteDesign = useDashPrefs().design;
+  const isSticky = noteDesign === 8;
+  const [anim, setAnim] = useState<null | { dir: "next" | "prev"; from: number; to: number }>(null);
+  const pageCount = Math.max(1, Math.ceil(allEntries.length / PER_PAGE));
+  const entriesOfPage = (idx: number) => allEntries.slice(idx * PER_PAGE, idx * PER_PAGE + PER_PAGE);
+  function turnPage(dir: 1 | -1) {
+    if (anim) return;
+    const to = Math.min(pageCount - 1, Math.max(0, notePage + dir));
+    if (to === notePage) return;
+    setAnim({ dir: dir > 0 ? "next" : "prev", from: notePage, to });
+  }
+  function onPageFlipEnd() {
+    setAnim((a) => {
+      if (a) setNotePage(a.to);
+      return null;
+    });
+  }
   const [editEntry, setEditEntry] = useState<TaggedEntry | null>(null);
   const [draftDate, setDraftDate] = useState(isoToday());
   const [draftAgent, setDraftAgent] = useState("");
@@ -2183,6 +2273,8 @@ function CompanyNotesModal({
   }
 
   const isForm = mode === "new" || mode === "edit";
+  const visitedList = useRef(!startInNew);
+  useEffect(() => { if (mode === "list") visitedList.current = true; }, [mode]);
 
   // ¿Hay algo escrito/cambiado que no se ha guardado?
   const baseDate = mode === "edit" && editEntry ? (editEntry.date || isoToday()) : isoToday();
@@ -2195,7 +2287,7 @@ function CompanyNotesModal({
       (mode === "edit" && draftDate !== baseDate));
 
   function leave(kind: "close" | "back") {
-    if (kind === "close") onClose();
+    if (kind === "close" && !(isForm && visitedList.current)) onClose();
     else { setMode("list"); setEditEntry(null); }
   }
   requestLeaveRef.current = (kind) => {
@@ -2266,12 +2358,12 @@ function CompanyNotesModal({
       ) : null}
 
       <div
-        className="animate-slide-up relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-zinc-950 sm:animate-scale-in sm:rounded-3xl"
-        style={{ maxHeight: "90dvh" }}
+        className={`animate-slide-up relative z-10 flex w-full max-w-2xl flex-col sm:animate-scale-in nb-modal overflow-visible bg-transparent shadow-none`}
+        style={{ maxHeight: "92dvh" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+        <div className={`flex shrink-0 items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800 hidden`}>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
               {isForm ? (mode === "new" ? "Nueva Nota" : "Editar Nota") : "Notas"}
@@ -2316,134 +2408,118 @@ function CompanyNotesModal({
         </div>
 
         {/* Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className={`min-h-0 flex-1 overscroll-contain overflow-visible`}>
           {isForm ? (
             /* ── Form: new / edit ── */
-            <div className="px-5 py-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Fecha</span>
-                  <input
-                    type="date"
-                    value={draftDate}
-                    onChange={(e) => setDraftDate(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-zinc-600"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Agente</span>
-                  <input
-                    type="text"
-                    value={draftAgent}
-                    onChange={(e) => setDraftAgent(e.target.value)}
-                    placeholder="Nombre del agente…"
-                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-zinc-600"
-                  />
-                </label>
-              </div>
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Nota</span>
+            <div className={`nb-open ${isSticky ? "is-sticky" : ""}`}>
+              <div className="nb-page nb-formpage">
+                <div className="nb-head">
+                  <span>{mode === "new" ? "Nueva nota" : "Editar nota"} · {companyName}</span>
+                  <span className="nb-tools">
+                    <button type="button" onClick={() => (mode === "edit" ? requestLeave("back") : requestLeave("close"))} disabled={busy} title={mode === "edit" ? "Volver" : "Cerrar"}>{mode === "edit" ? "‹" : "×"}</button>
+                  </span>
+                </div>
+                <div className="nb-fields">
+                  <label className="nb-field">
+                    <span>Fecha</span>
+                    <input type="date" value={draftDate} onChange={(e) => setDraftDate(e.target.value)} />
+                  </label>
+                  <label className="nb-field">
+                    <span>Agente</span>
+                    <input type="text" value={draftAgent} onChange={(e) => setDraftAgent(e.target.value)} placeholder="Nombre del agente…" />
+                  </label>
+                </div>
+                <div className="nb-field-label">Escribe tu nota</div>
                 <textarea
                   ref={noteRef}
+                  className="nb-textarea"
                   value={draftNote}
                   onChange={(e) => setDraftNote(e.target.value)}
                   placeholder="Escribe aquí la nota…"
-                  rows={5}
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-zinc-600"
+                  rows={7}
                 />
-              </label>
-            </div>
-          ) : (
-            /* ── List of entries ── */
-            <div className="px-4 py-4">
-              {allEntries.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
-                  <p className="text-sm text-zinc-400 dark:text-zinc-500">No hay notas todavía.</p>
+                <div className="nb-actions">
                   <button
                     type="button"
-                    onClick={() => setMode("new")}
-                    className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-bold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                    className="nb-cancel"
+                    disabled={busy}
+                    onClick={() => {
+                      if (busy) return;
+                      if (mode === "edit" || visitedList.current) { setMode("list"); setEditEntry(null); }
+                      else { onClose(); }
+                    }}
                   >
-                    + Agregar primera nota
+                    Cancelar
+                  </button>
+                  <button type="button" className="nb-save" onClick={saveEntry} disabled={busy || !draftNote.trim()}>
+                    {busy ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "+ Agregar nota"}
                   </button>
                 </div>
-              ) : (
-                <div className="stagger-children space-y-2.5">
-                  {allEntries.map((entry, i) => (
-                    <div
-                      key={entry.id || i}
-                      className="animate-card-in rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 transition-shadow dark:border-zinc-800 dark:bg-zinc-900"
-                    >
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-lg bg-white px-2 py-0.5 text-[11px] font-bold tabular-nums text-zinc-600 shadow-sm dark:bg-zinc-800 dark:text-zinc-300">
-                            {formatUsMmDdYy(entry.date)}
-                          </span>
-                          {entry.agent ? (
-                            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                              {entry.agent}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => { setEditEntry(entry); setMode("edit"); }}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700 disabled:opacity-40 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
-                            title="Editar"
-                          >
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => setConfirmDelEntry(entry)}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-950/30 dark:hover:text-red-400"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+              </div>
+            </div>
+          ) : (
+            /* ── Libreta: las notas se pasan como hojas ── */
+            <div className={`nb-open ${isSticky ? "is-sticky" : ""}`}>
+              {(() => {
+                const renderSheet = (idx: number, cls: string, interactive: boolean, onEnd?: () => void) => {
+                  const list = entriesOfPage(idx);
+                  return (
+                    <div className={`nb-page ${cls}`} onAnimationEnd={onEnd} aria-hidden={!interactive}>
+                      <div className="nb-head">
+                        <span>{list[0]?.date ? formatUsMmDdYy(list[0].date) : "—"}</span>
+                        <span className="nb-tools">
+                          <button type="button" onClick={() => setMode("new")} disabled={busy} title="Nueva nota">+</button>
+                          <span>{allEntries.length}</span>
+                          <button type="button" onClick={() => requestLeave("close")} title="Cerrar">×</button>
+                        </span>
                       </div>
-                      <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-200">
-                        {entry.note || <span className="italic text-zinc-400">(sin contenido)</span>}
-                      </p>
+                      <div className="nb-agent">Última nota{list[0]?.agent ? ` · ${list[0].agent}` : ""}</div>
+                      {allEntries.length === 0 ? (
+                        <button type="button" className="nb-empty" onClick={() => setMode("new")}>Escribe la primera nota</button>
+                      ) : (
+                        <ul className="nb-lines">
+                          {list.map((entry, i) => (
+                            <li key={entry.id || i} className={i > 0 ? "done" : ""}>
+                              <span className="nb-box">{i > 0 ? "✓" : ""}</span>
+                              <button type="button" className="nb-text" onClick={() => { setEditEntry(entry); setMode("edit"); }}>
+                                {entry.note || "(sin contenido)"}
+                              </button>
+                              <button type="button" className="nb-del" disabled={busy} onClick={() => setConfirmDelEntry(entry)} title="Eliminar">×</button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="nb-foot">
+                        <button type="button" className="nb-arrow" onClick={() => turnPage(-1)} disabled={idx === 0 || !!anim || pageCount < 2} aria-label="Hoja anterior">‹</button>
+                        <button type="button" className="nb-add" onClick={() => setMode("new")} disabled={busy}>+ Nueva nota</button>
+                        <span className="nb-count">{idx + 1} / {pageCount}</span>
+                        <button type="button" className="nb-arrow" onClick={() => turnPage(1)} disabled={idx >= pageCount - 1 || !!anim || pageCount < 2} aria-label="Hoja siguiente">›</button>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                };
+                if (!anim) return <div className="nb-stack">{renderSheet(notePage, "", true)}</div>;
+                // La hoja de abajo ya muestra el destino; la de arriba se levanta (siguiente) o cae (anterior).
+                return (
+                  <div className="nb-stack">
+                    {anim.dir === "next" ? (
+                      <>
+                        {renderSheet(anim.to, "under", false)}
+                        {renderSheet(anim.from, "over flip-next", true, onPageFlipEnd)}
+                      </>
+                    ) : (
+                      <>
+                        {renderSheet(anim.from, "under", false)}
+                        {renderSheet(anim.to, "over flip-prev", true, onPageFlipEnd)}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        {isForm && (
-          <div className="shrink-0 border-t border-zinc-100 px-5 py-4 dark:border-zinc-800">
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  if (busy) return;
-                  if (mode === "edit") { setMode("list"); setEditEntry(null); }
-                  else { onClose(); }
-                }}
-                disabled={busy}
-                className="flex-1 rounded-2xl border border-zinc-200 bg-white py-2.5 text-sm font-bold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={saveEntry}
-                disabled={busy || !draftNote.trim()}
-                className="flex-1 rounded-2xl bg-zinc-900 py-2.5 text-sm font-bold text-white transition hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-              >
-                {busy ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "Agregar nota"}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -2516,7 +2592,7 @@ function CompanyContactsPanel({
     "w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white";
 
   return (
-    <div className="mb-5 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="co-contacts mb-5 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto text-sm font-extrabold tracking-tight text-zinc-900 dark:text-white">
           Contactos de esta compañía
@@ -2535,7 +2611,7 @@ function CompanyContactsPanel({
         <button
           type="button"
           onClick={onNewReport}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-2 text-xs font-bold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+          className="co-primary inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-2 text-xs font-bold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
         >
           <Plus className="h-3.5 w-3.5" />
           Nuevo reporte aquí
@@ -2980,6 +3056,7 @@ function CompanyCard({
   onDelete: () => void;
   onActions: () => void;
 }) {
+  const modernCard = true;
   const [companyName, setCompanyName] = useState(note.title ?? "");
   const lastSavedNameRef = useRef(companyName);
   const companyNameInputRef = useRef<HTMLInputElement | null>(null);
@@ -3121,10 +3198,52 @@ function CompanyCard({
     ? { tone: "pending" }
     : { tone: "paid" };
 
+  if (modernCard) {
+    return (
+      <article className={cn("report-shot", busy && "is-busy")}>
+        <div className="report-shot-img">
+          {coverUrl ? (
+            <button type="button" onClick={onOpenReport} title="Abrir reporte">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt="Reporte" src={coverUrl} />
+            </button>
+          ) : (
+            <button type="button" className="report-shot-empty" onClick={onOpenReport} title="Abrir reporte">
+              <ImageOff className="h-8 w-8" />
+            </button>
+          )}
+          {selectMode ? (
+            <button
+              type="button"
+              className={cn("report-shot-check", selected && "on")}
+              onClick={(e) => { e.stopPropagation(); onToggleSelected(); }}
+              aria-pressed={selected}
+            >
+              {selected ? <CheckCircle2 className="h-4 w-4" /> : null}
+            </button>
+          ) : null}
+          <button type="button" className="report-shot-more" onClick={(e) => { e.stopPropagation(); onActions(); }} title="Acciones" aria-label="Acciones">
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {meta?.total ? (
+            <span className="report-shot-clip"><Paperclip className="h-3 w-3" /> {meta.total}</span>
+          ) : null}
+        </div>
+        <div className="report-shot-foot">
+          <div>
+            <b className={anyPending ? "due" : "paid"}>{totalDueText}</b>
+            <span className={anyPending ? "pend" : "ok"}>{anyPending ? "Pending" : "Paid"}</span>
+          </div>
+          <button type="button" onClick={onOpenReport}>{reportPayload ? "Editar" : "Llenar"}</button>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <div
       className={cn(
-        "animate-card-in group relative flex h-full flex-col overflow-hidden rounded-3xl border transition-[transform,box-shadow] duration-200 ease-out",
+        "company-card animate-card-in group relative flex h-full flex-col overflow-hidden rounded-3xl border transition-[transform,box-shadow] duration-200 ease-out",
         // light
         "border-zinc-200/80 bg-white shadow-[0_4px_24px_rgba(15,23,42,0.07)] hover:shadow-[0_12px_40px_rgba(15,23,42,0.13)]",
         // dark
@@ -3269,7 +3388,7 @@ function CompanyCard({
         <button
           type="button"
           onClick={onOpenReport}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 py-3 text-sm font-bold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+          className="co-edit mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 py-3 text-sm font-bold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
         >
           <SquarePen className="h-4 w-4" />
           {reportPayload ? "Editar reporte" : "Llenar reporte"}

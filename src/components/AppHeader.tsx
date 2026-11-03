@@ -9,6 +9,7 @@ import { Gauge, FolderOpen, Home, LogOut, Moon, MoreHorizontal, Plus, RefreshCw,
 import { useTheme } from "next-themes";
 import UsageModal, { USAGE_CACHE_KEY } from "@/components/UsageModal";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
+import { useDashSettingsNode } from "@/components/dashboard/dashPrefs";
 
 const SELECT_MODE_KEY = "rc:selectMode:v1";
 
@@ -189,6 +190,11 @@ export default function AppHeader() {
     router.replace("/app");
   }
 
+  const dashSettings = useDashSettingsNode();
+  const gearSlotRef = useRef<HTMLSpanElement>(null);
+  const [gearSlot, setGearSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => { setGearSlot(gearSlotRef.current); }, []);
+
   return (
     <>
     {/* ═══════════════════════════════ HEADER ═══════════════════════════════ */}
@@ -214,10 +220,10 @@ export default function AppHeader() {
           </Link>
 
           {/* Divider (desktop) */}
-          <div className="hidden h-5 w-px bg-zinc-200 dark:bg-zinc-700 sm:block" />
+          <div data-hd="divider" className="hidden h-5 w-px bg-zinc-200 dark:bg-zinc-700 sm:block" />
 
           {/* ── Nav pills ── */}
-          <nav className="flex items-center gap-0.5">
+          <nav data-hd="nav" className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={goHome}
@@ -258,14 +264,37 @@ export default function AppHeader() {
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* ── Right actions ── */}
-          <div className="flex items-center gap-1">
+          {/* Acciones de la derecha, en la fila superior */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {isNotesHome ? (
+              <button type="button" title="Seleccionar varias" data-hd="select"
+                className="hidden h-10 items-center gap-1.5 rounded-2xl border border-zinc-200/80 bg-white/80 px-3 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 md:flex dark:border-zinc-800/60 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                onClick={() => { try { window.dispatchEvent(new CustomEvent("rc:toggleSelectMode")); } catch {} }}>
+                {selectMode ? "Cancelar" : "Seleccionar"}
+              </button>
+            ) : null}
+            {dashSettings}
+            <div ref={menuRef} className="relative">
+              <span ref={gearSlotRef} className="contents" />
+            </div>
+            {isNotesHome ? (
+              <Link href="/app/new" data-hd="plus"
+                className="hidden h-10 w-10 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-sm transition hover:bg-zinc-800 md:flex dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+                title="Nueva nota">
+                <Plus className="h-4 w-4" />
+              </Link>
+            ) : null}
+          </div>
+
+          {/* ── Menú (se mueve al hueco de arriba con un portal) ── */}
+          <div className="contents">
 
             {/* User menu button */}
-            <div ref={menuRef} className="relative">
+            <div data-hd="gear">{gearSlot ? createPortal(<>
               <button
                 type="button"
                 onClick={() => setMenuOpen((v) => !v)}
+                data-hd="menu"
                 title="Menú"
                 className={`relative flex h-8 w-8 items-center justify-center rounded-xl transition ${
                   menuOpen
@@ -334,7 +363,7 @@ export default function AppHeader() {
                   </button>
                 </div>
               )}
-            </div>
+            </>, gearSlot) : null}</div>
           </div>
         </div>
 
@@ -343,7 +372,7 @@ export default function AppHeader() {
           <div className="flex w-full items-center gap-2 pb-2.5">
 
             {/* Search + filter */}
-            <div className="relative flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-zinc-200/80 bg-white/80 px-2.5 shadow-sm backdrop-blur-sm dark:border-zinc-800/60 dark:bg-zinc-900/60" style={{ height: "40px" }}>
+            <div data-hd="search" className="relative flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-zinc-200/80 bg-white/80 px-2.5 shadow-sm backdrop-blur-sm dark:border-zinc-800/60 dark:bg-zinc-900/60" style={{ height: "40px" }}>
 
               {/* Filter chips */}
               <div className="flex shrink-0 items-center gap-0.5">
@@ -354,7 +383,7 @@ export default function AppHeader() {
                 ] as const).map(({ key, short, full, title }) => {
                   const active = (qBy || "company") === key;
                   return (
-                    <button key={key} type="button" onClick={() => setMode(key)} title={title}
+                    <button key={key} type="button" onClick={() => setMode(key)} title={title} data-hd={active ? "tab-on" : "tab"}
                       className={`rounded-lg px-2 py-0.5 text-[11px] font-black leading-none transition-all ${
                         active
                           ? "bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900"
@@ -415,20 +444,6 @@ export default function AppHeader() {
                   </Link>
                 </div>
               )}
-            </div>
-
-            {/* Desktop action buttons */}
-            <div className="hidden shrink-0 items-center gap-1.5 md:flex">
-              <button type="button" title="Seleccionar varias"
-                className="flex h-10 items-center gap-1.5 rounded-2xl border border-zinc-200/80 bg-white/80 px-3 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/60 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                onClick={() => { try { window.dispatchEvent(new CustomEvent("rc:toggleSelectMode")); } catch {} }}>
-                {selectMode ? "Cancelar" : "Seleccionar"}
-              </button>
-              <Link href="/app/new"
-                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-sm transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-                title="Nueva nota">
-                <Plus className="h-4 w-4" />
-              </Link>
             </div>
 
           </div>
