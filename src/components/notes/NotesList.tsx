@@ -1051,10 +1051,28 @@ export default function NotesList({
   }
 
   // Si se cancela un reporte NUEVO sin haber escrito nada, se elimina (no queda un reporte vacío).
+  // Se ignoran los campos que la app llena sola (nombre, maker/payor, cuota y total).
+  function reportHasContent(p: any): boolean {
+    if (!p) return false;
+    if (Array.isArray(p.images) && p.images.length) return true;
+    const fields = (p.fields ?? {}) as Record<string, unknown>;
+    for (const [k, val] of Object.entries(fields)) {
+      if (/^(company_?name|maker_?payor|total_?due|returned_?fee)$/i.test(k)) continue;
+      if (typeof val === "string") {
+        const t = val.trim();
+        if (t && t.toUpperCase() !== "RELLENAR" && t !== "$0.00") return true;
+      } else if (val && typeof val === "object") {
+        if (Array.isArray(val) ? val.length : Object.keys(val as object).length) return true;
+      } else if (val === true) return true;
+    }
+    return false;
+  }
+
   async function dropIfEmptyDraft(noteId: string) {
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
-      if (getQueuedReport(noteId)) return;
+      const queued = getQueuedReport(noteId);
+      if (queued?.payload && reportHasContent(queued.payload)) return;
       const supabase = createClient();
       const { data: row, error } = await supabase.from("notes").select("values,body").eq("id", noteId).single();
       if (error || !row) return;
@@ -1063,27 +1081,12 @@ export default function NotesList({
       const v = ((row.values ?? {}) as Record<string, any>) ?? {};
       if (Array.isArray(v._entries) && v._entries.length) return;
       if (String(row.body ?? "").trim()) return;
-      const p = v._report?.payload;
-      if (p) {
-        if (Array.isArray(p.images) && p.images.length) return;
-        const fields = (p.fields ?? {}) as Record<string, unknown>;
-        for (const [k, val] of Object.entries(fields)) {
-          if (/^company_?name$/i.test(k)) continue;
-          if (/^total_?due$/i.test(k)) {
-            const c = parseMoneyToCents(val);
-            if (c !== null && c > 0) return;
-            continue;
-          }
-          if (typeof val === "string") {
-            const t = val.trim();
-            if (t && t.toUpperCase() !== "RELLENAR") return;
-          } else if (val && typeof val === "object") {
-            if (Array.isArray(val) ? val.length : Object.keys(val as object).length) return;
-          } else if (val === true) return;
-        }
-      }
+      if (reportHasContent(v._report?.payload)) return;
       const del = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
-      if (del.ok) setItems((prev) => prev.filter((n) => n.id !== noteId));
+      if (del.ok) {
+        removeQueuedReport(noteId);
+        setItems((prev) => prev.filter((n) => n.id !== noteId));
+      }
     } catch {
       // ante cualquier duda, NO se borra nada
     }
@@ -3530,6 +3533,9 @@ function ReportModal({
 
   // ── Control de cambios sin guardar ──
   const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+  const iframeLoadedRef = useRef(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const baselineRef = useRef<{ sig: string; payload: any } | null>(null);
@@ -3698,26 +3704,27 @@ function ReportModal({
   }
 
   async function enrichReportForIframe(payload: any) {
-    // The server stores images as {id,name,path} (no signed url).
-    // For UI, we need a temporary signed URL to actually display them.
+    // El server guarda las imágenes como {id,name,path} (sin URL firmada): se firman TODAS de una sola vez.
     try {
       const imgs = Array.isArray(payload?.images) ? (payload.images as any[]) : [];
       if (!imgs.length) return payload;
+      const need = imgs.filter((im) => {
+        const path = typeof im?.path === "string" ? String(im.path).trim() : "";
+        const hasUrl = typeof im?.url === "string" && String(im.url).trim();
+        const hasDataUrl = typeof im?.dataUrl === "string" && String(im.dataUrl).startsWith("data:image/");
+        return !!path && !hasUrl && !hasDataUrl;
+      });
+      if (!need.length) return payload;
       const supabase = createClient();
-      const nextImgs = await Promise.all(
-        imgs.map(async (im) => {
-          const path = typeof im?.path === "string" ? String(im.path).trim() : "";
-          if (!path) return im;
-          const hasUrl = typeof im?.url === "string" && String(im.url).trim();
-          const hasDataUrl = typeof im?.dataUrl === "string" && String(im.dataUrl).startsWith("data:image/");
-          if (hasUrl || hasDataUrl) return im;
-          const { data } = await supabase.storage
-            .from("attachments")
-            .createSignedUrl(path, 60 * 60 * 24); // 24h
-          const signedUrl = data?.signedUrl ? String(data.signedUrl) : "";
-          return signedUrl ? { ...im, url: signedUrl } : im;
-        }),
-      );
+      const { data } = await supabase.storage
+        .from("attachments")
+        .createSignedUrls(need.map((im) => String(im.path).trim()), 60 * 60 * 24);
+      const byPath = new Map<string, string>();
+      for (const sg of data ?? []) if (sg?.path && sg?.signedUrl) byPath.set(sg.path, sg.signedUrl);
+      const nextImgs = imgs.map((im) => {
+        const url = byPath.get(String(im?.path ?? "").trim());
+        return url ? { ...im, url } : im;
+      });
       return { ...(payload ?? {}), images: nextImgs };
     } catch {
       return payload;
@@ -3740,6 +3747,10 @@ function ReportModal({
       const enriched = await enrichReportForIframe(base);
       if (cancelled) return;
       setInitReport(enriched);
+      // Si el iframe ya cargó antes de tener las URLs de las imágenes, se las enviamos ya (sin esperar).
+      if (iframeLoadedRef.current && !dirtyRef.current && Array.isArray(enriched?.images) && enriched.images.length) {
+        try { iframeRef.current?.contentWindow?.postMessage({ type: "rc:init", noteId, initialReport: enriched }, "*"); } catch {}
+      }
     })();
     return () => {
       cancelled = true;
@@ -4263,6 +4274,7 @@ function ReportModal({
             onLoad={() => {
               try {
                 loadedAtRef.current = Date.now();
+                iframeLoadedRef.current = true;
                 baselineRef.current = null;
                 setDirty(false);
                 setIframeShown(false);
