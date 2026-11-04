@@ -608,6 +608,21 @@ export default function DashboardV2({
   const prefs = useDashPrefs();
   const design = prefs.design === 6 ? 6 : 8;
 
+  // Render progresivo: se dibujan 12 tarjetas y el resto al acercarse al final (menos DOM = menos lag).
+  const PAGE = 12;
+  const [shown, setShown] = useState(PAGE);
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { setShown(PAGE); }, [bucket]);
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) setShown((n) => n + PAGE);
+    }, { rootMargin: "900px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [shown, companies.length]);
+
   // Integra el encabezado de la app con el panel: color de página, alto y color de texto.
   useEffect(() => {
     const pal = PAL_LIST.find((p) => p.id === prefs.pal) ?? PAL_LIST[0];
@@ -691,7 +706,7 @@ export default function DashboardV2({
         <Head prefs={prefs} title={title} eyebrow={eyebrow} companies={companies} onSettings={() => {}} />
         <div className="kg">
           {companies.length ? (
-            companies.map((c, i) => (
+            companies.slice(0, shown).map((c, i) => (
               <Card
                 key={c.name}
                 c={c}
@@ -707,6 +722,7 @@ export default function DashboardV2({
             </div>
           )}
         </div>
+        {companies.length > shown ? <div ref={moreRef} aria-hidden style={{ height: 1 }} /> : null}
         <NotchDock bucket={bucket} counts={counts} onBucket={onBucket} onNew={onNew} onContacts={onContacts} />
       </div>
     </div>

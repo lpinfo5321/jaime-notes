@@ -668,7 +668,7 @@ li.done .kn-box { background: var(--ink); border-color: var(--ink); color: var(-
 .pal-ink .kt5, .pal-night .kt5 { opacity: .12; }
 @media (prefers-reduced-motion: reduce) { .kt, .kt * { animation: none !important; } }
 /* ============ Sticky realista (8): papel nitido, esquina doblada real, sombra fisica, sin blur falso ============ */
-.v8 .kn { background: none; box-shadow: none; border-radius: 0; rotate: .7deg; filter: drop-shadow(0 .5px .5px rgba(70,50,0,.45)) drop-shadow(0 3px 3px rgba(70,50,0,.18)) drop-shadow(0 12px 12px rgba(70,50,0,.16)); }
+.v8 .kn { background: none; box-shadow: none; border-radius: 0; rotate: .7deg; filter: drop-shadow(0 1px 1px rgba(70,50,0,.38)) drop-shadow(0 9px 9px rgba(70,50,0,.2)); }
 .v8 .kc:hover .kn { rotate: 0deg; }
 .v8 .kn::before { content: ""; position: absolute; inset: 0; z-index: -1; mix-blend-mode: normal; border-radius: 0; pointer-events: none;
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%);
