@@ -964,3 +964,55 @@ html.dash-on .co-detail .co-note .co-contacts .co-primary svg { background: var(
 .kf-front { z-index: 2; }
 
 html.dash-on { scrollbar-gutter: stable; }
+
+/* ───────── Notas escondidas dentro de la carpeta (pestaña lateral / asomando) ───────── */
+.kc.nt-tab, .kc.nt-peek { grid-template-columns: minmax(0, 1fr); }
+.kc.nt-tab { padding-right: 150px; }
+.kc.nt-peek { padding-top: 46px; }
+@media (max-width: 560px) { .kc.nt-tab { padding-right: 44px; } }
+.kc.nt-tab .kf { clip-path: inset(-60px -240px -50px -30px); }
+.kc.nt-peek .kf { clip-path: inset(-120px -30px -50px -30px); }
+.sn { position: absolute; z-index: 0; cursor: pointer; text-align: left; color: #3b3200; outline: none; background: #ffe45c; border-radius: 2px; filter: drop-shadow(0 1px 1px rgba(70,50,0,.35)) drop-shadow(0 6px 6px rgba(70,50,0,.18)); }
+.sn::after { content: ""; position: absolute; right: 0; bottom: 0; width: 24px; height: 24px; clip-path: polygon(0 0, 100% 0, 0 100%); background: linear-gradient(135deg, #fff6b8, #e9c93f); pointer-events: none; }
+.sn:focus-visible { box-shadow: 0 0 0 3px rgba(10,132,255,.6); }
+.sn-coil { display: none; }
+.sn-tab { top: 36px; right: -42px; width: 190px; height: 170px; transition: right .55s cubic-bezier(.2,.9,.3,1.08), height .4s, width .4s; }
+.sn-tab.on { z-index: 6; right: -150px; width: 236px; height: 216px; }
+.sn-strip { position: absolute; right: 0; top: 0; bottom: 0; width: 42px; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 10px; }
+.sn-strip b { min-width: 22px; height: 22px; display: grid; place-items: center; border-radius: 99px; background: #3b3200; color: #fff; font-size: 12px; font-weight: 900; }
+.sn-strip em { writing-mode: vertical-rl; font-style: normal; font-weight: 900; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #7a6700; }
+.sn-pk { position: absolute; inset: 0; padding: 12px 14px 0; display: flex; flex-direction: column; gap: 4px; }
+.sn-pk .sn-badge { position: absolute; right: 8px; top: 8px; min-width: 22px; height: 22px; display: grid; place-items: center; border-radius: 99px; background: #3b3200; color: #fff; font-size: 12px; font-weight: 900; }
+.sn-date { font-size: 11px; font-weight: 900; letter-spacing: .04em; color: #7a6700; padding-right: 28px; }
+.sn-last { font-family: var(--font-hand), "Segoe Print", cursive; font-size: 15px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sn.sn-peek { top: -44px; right: 7%; width: min(230px, 52%); height: 200px; rotate: 1.4deg; transform-origin: 50% 100%; transition: top .5s cubic-bezier(.2,.9,.3,1.1), width .5s cubic-bezier(.2,.9,.3,1.1), height .5s, right .5s, rotate .5s; display: block; }
+.sn.sn-peek:not(.on):hover { top: -56px; rotate: 3.5deg; }
+.sn.sn-peek.on { z-index: 6; top: -58px; right: 3%; width: min(300px, 76%); height: 232px; rotate: -1deg; cursor: default; }
+.sn.sn-tab.on { cursor: default; }
+@media (max-width: 560px) { .sn.sn-tab.on { right: -40px; width: min(236px, 86%); } }
+.sn-full { position: absolute; inset: 0; padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px; animation: sn-in .35s ease both; cursor: default; }
+@keyframes sn-in { from { opacity: 0; transform: translateY(4px); } }
+.sn-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; font-weight: 900; letter-spacing: .04em; color: #7a6700; }
+.sn-ib { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 99px; background: rgba(0,0,0,.1); color: #3b3200; cursor: pointer; }
+.sn-ib:hover { background: rgba(0,0,0,.18); }
+.sn-text { flex: 1; overflow-y: auto; font-family: var(--font-hand), "Segoe Print", cursive; font-size: 16px; line-height: 1.4; }
+.sn-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-right: 18px; }
+.sn-pager { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 800; color: #5a4a00; }
+.sn-pager i { font-style: normal; min-width: 30px; text-align: center; }
+.sn-pager button { width: 26px; height: 26px; border: 0; border-radius: 99px; background: var(--dash-bar, #0a84ff); color: var(--dash-bar-fg, #fff); font-size: 16px; line-height: 1; cursor: pointer; }
+.sn-pager button:disabled { opacity: .35; cursor: default; }
+.sn-all { border: 0; background: transparent; font-size: 11px; font-weight: 900; color: #7a6700; text-decoration: underline; cursor: pointer; }
+
+/* estilo libreta */
+.v6 .sn { background-color: #fffcf2; background-image: linear-gradient(90deg, transparent 22px, rgba(225,70,70,.5) 22px, rgba(225,70,70,.5) 23px, transparent 23px), repeating-linear-gradient(transparent 0 25px, rgba(37,99,235,.2) 25px 26px); border-radius: 3px 3px 12px 12px; filter: none; box-shadow: 0 1px 0 #ebe3cf, 0 3px 0 -1px #f7f1e2, 0 4px 0 -1px #dfd6be, 0 12px 16px -8px rgba(60,40,10,.4); color: #1d3566; }
+.v6 .sn::after { content: none; }
+.v6 .sn-coil { display: block; position: absolute; left: 0; right: 0; top: -12px; height: 24px; pointer-events: none; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='30' viewBox='0 0 22 30'><defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='%23f7f8fa'/><stop offset='.5' stop-color='%237f8791'/><stop offset='1' stop-color='%23dde1e6'/></linearGradient></defs><ellipse cx='11' cy='20' rx='4.8' ry='3.5' fill='%232a241c'/><rect x='8.6' y='0' width='4.8' height='20' rx='2.4' fill='url(%23g)'/></svg>") center 0 / 18px 24px repeat-x; }
+.v6 .sn-strip b, .v6 .sn-pk .sn-badge { background: #ff3b30; }
+.v6 .sn-pk .sn-badge { top: 20px; }
+.v6 .sn-strip em { color: #0a84ff; }
+.v6 .sn-date, .v6 .sn-head { color: #6b5a40; }
+.v6 .sn-pk { padding-top: 18px; padding-left: 30px; }
+.v6 .sn-full { padding-top: 18px; padding-left: 30px; }
+.v6 .sn-pager, .v6 .sn-all { color: #6b5a40; }
+.v6 .sn-ib { background: rgba(0,0,0,.08); color: #2b241b; }
+@media (prefers-reduced-motion: reduce) { .sn, .sn-full { transition: none !important; animation: none !important; } }

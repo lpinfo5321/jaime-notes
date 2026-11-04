@@ -8,9 +8,11 @@ export type DashPrefs = {
   pal: string;
   hdr: number; // 1..7
   bg: number; // 0..5
+  /** big = nota grande al lado, tab = pestaña lateral, peek = asoma detrás de la carpeta */
+  notes: "big" | "tab" | "peek";
 };
 
-export const DASH_DEFAULTS: DashPrefs = { design: 8, pal: "blue", hdr: 1, bg: 0 };
+export const DASH_DEFAULTS: DashPrefs = { design: 8, pal: "blue", hdr: 1, bg: 0, notes: "big" };
 
 export const PAL_LIST: { id: string; name: string; sw: string; page: string }[] = [
   { id: "blue", name: "Azul", sw: "#0a84ff", page: "#f2f2f7" },
@@ -37,7 +39,8 @@ function sanitize(raw: unknown): DashPrefs {
   const pal = typeof o.pal === "string" && PAL_LIST.some((p) => p.id === o.pal) ? o.pal : DASH_DEFAULTS.pal;
   const hdr = typeof o.hdr === "number" && o.hdr >= 1 && o.hdr <= 7 ? Math.floor(o.hdr) : DASH_DEFAULTS.hdr;
   const bg = typeof o.bg === "number" && o.bg >= 0 && o.bg <= 5 ? Math.floor(o.bg) : DASH_DEFAULTS.bg;
-  return { design: design as DashPrefs["design"], pal, hdr, bg };
+  const notes = o.notes === "tab" || o.notes === "peek" ? o.notes : "big";
+  return { design: design as DashPrefs["design"], pal, hdr, bg, notes };
 }
 
 function read(): DashPrefs {

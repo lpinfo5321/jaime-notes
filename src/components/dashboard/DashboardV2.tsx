@@ -4,6 +4,15 @@ import { onCoverError } from "@/lib/coverRetry";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Archive,
+  BookOpen,
+  BookmarkPlus,
+  Eye,
+  LayoutGrid,
+  PanelRight,
+  PanelTop,
+  Rows3,
+  StickyNote,
+  Type,
   Building2,
   Check,
   CheckCircle2,
@@ -58,7 +67,7 @@ function useCountUp(target: number, ms = 1200) {
   return v;
 }
 
-/* ───────── Panel para personalizar (estilo, encabezado, fondo, paleta) ───────── */
+/* ───────── Panel para personalizar (diseño, notas, encabezado, fondo, color) ───────── */
 export function DashSettingsPanel({ prefs, onClose }: { prefs: DashPrefs; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -75,71 +84,126 @@ export function DashSettingsPanel({ prefs, onClose }: { prefs: DashPrefs; onClos
     };
   }, [onClose]);
 
-  const Seg = ({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) => (
+  const accent = "var(--dash-bar, #0a84ff)";
+  const accentFg = "var(--dash-bar-fg, #fff)";
+
+  /** Tarjeta grande con icono y descripción corta. */
+  const Tile = ({ on, onClick, icon, title, hint }: { on: boolean; onClick: () => void; icon: React.ReactNode; title: string; hint: string }) => (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-        on ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+      aria-pressed={on}
+      className={`group relative flex flex-col items-start gap-1.5 rounded-2xl border p-3 text-left transition active:scale-[.98] ${
+        on ? "border-transparent shadow-md" : "border-zinc-200 bg-zinc-50 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:hover:bg-zinc-800"
       }`}
+      style={on ? { background: accent, color: accentFg } : undefined}
+    >
+      <span className={`grid h-8 w-8 place-items-center rounded-xl ${on ? "bg-white/25" : "bg-white text-zinc-700 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"}`}>{icon}</span>
+      <span className="text-[13px] font-extrabold leading-tight">{title}</span>
+      <span className={`text-[11px] font-medium leading-snug ${on ? "opacity-85" : "text-zinc-500 dark:text-zinc-400"}`}>{hint}</span>
+      {on ? <Check className="absolute right-2.5 top-2.5 h-4 w-4" strokeWidth={3} /> : null}
+    </button>
+  );
+  const Chip = ({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={`rounded-xl px-3 py-2 text-left text-xs font-bold transition active:scale-[.98] ${on ? "shadow-sm" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"}`}
+      style={on ? { background: accent, color: accentFg } : undefined}
     >
       {children}
     </button>
   );
-  const H = ({ children }: { children: React.ReactNode }) => (
-    <div className="mb-1.5 mt-3 text-[10px] font-black uppercase tracking-widest text-zinc-400 first:mt-0">{children}</div>
+  const Sec = ({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) => (
+    <section className="border-t border-zinc-100 px-4 py-3.5 first:border-t-0 dark:border-zinc-800">
+      <div className="mb-2.5 flex items-center gap-2 text-[11px] font-black uppercase tracking-[.14em] text-zinc-400">
+        <span className="grid h-5 w-5 place-items-center rounded-md bg-zinc-100 text-zinc-500 dark:bg-zinc-800">{icon}</span>
+        {title}
+      </div>
+      {children}
+    </section>
   );
 
   return (
     <div
       ref={ref}
-      className="fixed right-3 top-16 z-[90] max-h-[80dvh] w-[min(92vw,360px)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 text-zinc-900 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+      className="fixed right-3 top-16 z-[90] flex max-h-[82dvh] w-[min(94vw,400px)] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
     >
-      <div className="mb-2 flex items-center justify-between">
-        <div className="text-sm font-black">Estilo del panel</div>
-        <button type="button" onClick={onClose} className="grid h-7 w-7 place-items-center rounded-full bg-zinc-100 dark:bg-zinc-800" aria-label="Cerrar">
+      <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-9 w-9 place-items-center rounded-xl shadow-sm" style={{ background: accent, color: accentFg }}>
+            <Palette className="h-4.5 w-4.5" />
+          </span>
+          <div>
+            <div className="text-[15px] font-black leading-tight">Estilo del panel</div>
+            <div className="text-[11px] font-medium text-zinc-500">Se guarda solo en este equipo</div>
+          </div>
+        </div>
+        <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full bg-zinc-100 transition hover:bg-zinc-200 dark:bg-zinc-800" aria-label="Cerrar">
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <H>Diseño</H>
-      <div className="flex flex-wrap gap-1.5">
-        <Seg on={prefs.design === 8} onClick={() => setDashPrefs({ design: 8 })}>Carpeta + nota adhesiva</Seg>
-        <Seg on={prefs.design === 6} onClick={() => setDashPrefs({ design: 6 })}>Carpeta + libreta</Seg>
-        <Seg on={prefs.design === 0} onClick={() => setDashPrefs({ design: 0 })}>Clásico</Seg>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <Sec icon={<LayoutGrid className="h-3 w-3" />} title="Diseño">
+          <div className="grid grid-cols-3 gap-2">
+            <Tile on={prefs.design === 8} onClick={() => setDashPrefs({ design: 8 })} icon={<StickyNote className="h-4 w-4" />} title="Nota adhesiva" hint="Carpeta con post-it" />
+            <Tile on={prefs.design === 6} onClick={() => setDashPrefs({ design: 6 })} icon={<BookOpen className="h-4 w-4" />} title="Libreta" hint="Carpeta con cuaderno" />
+            <Tile on={prefs.design === 0} onClick={() => setDashPrefs({ design: 0 })} icon={<Rows3 className="h-4 w-4" />} title="Clásico" hint="Lista simple" />
+          </div>
+        </Sec>
+
+        {prefs.design !== 0 ? (
+          <>
+            <Sec icon={<StickyNote className="h-3 w-3" />} title="Cómo se ven las notas">
+              <div className="grid grid-cols-3 gap-2">
+                <Tile on={prefs.notes === "big"} onClick={() => setDashPrefs({ notes: "big" })} icon={<PanelRight className="h-4 w-4" />} title="Grande" hint="Siempre visible al lado" />
+                <Tile on={prefs.notes === "tab"} onClick={() => setDashPrefs({ notes: "tab" })} icon={<BookmarkPlus className="h-4 w-4" />} title="Pestaña" hint="Escondida, sale a la derecha" />
+                <Tile on={prefs.notes === "peek"} onClick={() => setDashPrefs({ notes: "peek" })} icon={<Eye className="h-4 w-4" />} title="Asomando" hint="Se ve la última nota" />
+              </div>
+            </Sec>
+
+            <Sec icon={<PanelTop className="h-3 w-3" />} title="Encabezado">
+              <div className="grid grid-cols-2 gap-1.5">
+                {HDR_NAMES.map((n, i) => (
+                  <Chip key={n} on={prefs.hdr === i + 1} onClick={() => setDashPrefs({ hdr: i + 1 })}>{n}</Chip>
+                ))}
+              </div>
+            </Sec>
+
+            <Sec icon={<Type className="h-3 w-3" />} title="Texto de fondo">
+              <div className="grid grid-cols-2 gap-1.5">
+                {BG_NAMES.map((n, i) => (
+                  <Chip key={n} on={prefs.bg === i} onClick={() => setDashPrefs({ bg: i })}>{n}</Chip>
+                ))}
+              </div>
+            </Sec>
+
+            <Sec icon={<Palette className="h-3 w-3" />} title="Color">
+              <div className="grid grid-cols-5 gap-2.5">
+                {PAL_LIST.map((p) => {
+                  const on = prefs.pal === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      title={p.name}
+                      aria-label={p.name}
+                      aria-pressed={on}
+                      onClick={() => setDashPrefs({ pal: p.id })}
+                      className={`relative mx-auto grid h-9 w-9 place-items-center rounded-full ring-2 ring-offset-2 ring-offset-white transition active:scale-95 dark:ring-offset-zinc-900 ${on ? "ring-zinc-400" : "ring-transparent hover:ring-zinc-200"}`}
+                      style={{ background: p.sw }}
+                    >
+                      {on ? <Check className="h-4 w-4" strokeWidth={3.5} style={{ color: p.id === "yellow" ? "#111" : "#fff" }} /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </Sec>
+          </>
+        ) : null}
       </div>
-
-      {prefs.design !== 0 ? (
-        <>
-          <H>Encabezado</H>
-          <div className="flex flex-wrap gap-1.5">
-            {HDR_NAMES.map((n, i) => (
-              <Seg key={n} on={prefs.hdr === i + 1} onClick={() => setDashPrefs({ hdr: i + 1 })}>{n}</Seg>
-            ))}
-          </div>
-
-          <H>Texto de fondo</H>
-          <div className="flex flex-wrap gap-1.5">
-            {BG_NAMES.map((n, i) => (
-              <Seg key={n} on={prefs.bg === i} onClick={() => setDashPrefs({ bg: i })}>{n}</Seg>
-            ))}
-          </div>
-
-          <H>Color</H>
-          <div className="flex flex-wrap gap-2">
-            {PAL_LIST.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                title={p.name}
-                onClick={() => setDashPrefs({ pal: p.id })}
-                className={`h-8 w-8 rounded-full ring-2 ring-offset-2 ring-offset-white transition dark:ring-offset-zinc-900 ${prefs.pal === p.id ? "ring-zinc-900 dark:ring-white" : "ring-transparent"}`}
-                style={{ background: p.sw }}
-              />
-            ))}
-          </div>
-        </>
-      ) : null}
     </div>
   );
 }
@@ -399,6 +463,109 @@ function Head({
   );
 }
 
+/* ───────── Notas escondidas dentro de la carpeta: pestaña lateral / asomando ───────── */
+function SideNote({
+  c,
+  mode,
+  onOpenNotes,
+  onQuickAdd,
+}: {
+  c: DashCompany;
+  mode: "tab" | "peek";
+  onOpenNotes: () => void;
+  onQuickAdd: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [k, setK] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const list = c.recent;
+  const n = list.length;
+  const idx = Math.min(k, Math.max(0, n - 1));
+  const cur = n ? list[idx] : null;
+
+  const close = () => {
+    setOpen(false);
+    setK(0);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && close();
+    document.addEventListener("pointerdown", down);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("pointerdown", down);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open]);
+
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+
+  return (
+    <div
+      ref={ref}
+      className={`sn sn-${mode} ${open ? "on" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-label="Notas"
+      aria-expanded={open}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!open) setOpen(true);
+      }}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (!open && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          setOpen(true);
+        }
+      }}
+    >
+      <span className="sn-coil" aria-hidden />
+      {!open ? (
+        mode === "tab" ? (
+          <span className="sn-strip">
+            <b>{n}</b>
+            <em>Notas</em>
+          </span>
+        ) : (
+          <span className="sn-pk">
+            <b className="sn-badge">{n}</b>
+            <span className="sn-date">{cur ? `${cur.date}${cur.agent ? ` · ${cur.agent}` : ""}` : "Sin notas"}</span>
+            <span className="sn-last">{cur?.text || "Toca para agregar la primera nota"}</span>
+          </span>
+        )
+      ) : (
+        <span className="sn-full" onClick={stop}>
+          <span className="sn-head">
+            <span>{cur ? `${cur.date}${cur.agent ? ` · ${cur.agent}` : ""}` : "Notas"}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <button type="button" className="sn-ib" title="Agregar nota rápida" aria-label="Agregar nota rápida" onClick={(e) => { stop(e); close(); onQuickAdd(); }}>
+                <Plus className="h-3 w-3" strokeWidth={3} />
+              </button>
+              <button type="button" className="sn-ib" title="Cerrar" aria-label="Cerrar" onClick={(e) => { stop(e); close(); }}>
+                <X className="h-3 w-3" strokeWidth={3} />
+              </button>
+            </span>
+          </span>
+          <span className="sn-text">{cur?.text || <em>(sin notas todavía)</em>}</span>
+          <span className="sn-foot">
+            <span className="sn-pager">
+              <button type="button" aria-label="Anterior" disabled={idx <= 0} onClick={(e) => { stop(e); setK(idx - 1); }}>‹</button>
+              <i>{n ? `${idx + 1}/${n}` : "0/0"}</i>
+              <button type="button" aria-label="Siguiente" disabled={idx >= n - 1} onClick={(e) => { stop(e); setK(idx + 1); }}>›</button>
+            </span>
+            <button type="button" className="sn-all" onClick={(e) => { stop(e); close(); onOpenNotes(); }}>Ver todas</button>
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 /* ───────── Tarjeta: carpeta con reportes + nota ───────── */
 function Card({
   c,
@@ -406,9 +573,11 @@ function Card({
   onOpen,
   onOpenNotes,
   onQuickAdd,
+  notesMode,
 }: {
   c: DashCompany;
   i: number;
+  notesMode: "big" | "tab" | "peek";
   onOpen: () => void;
   onOpenNotes: () => void;
   onQuickAdd: () => void;
@@ -418,7 +587,7 @@ function Card({
   const off = 3 - sheets.length;
   const entries = c.recent.length ? c.recent : [{ text: "", date: "", agent: "" }];
   return (
-    <article className="kc" style={{ animationDelay: `${Math.min(i, 10) * 70}ms` }}>
+    <article className={`kc ${notesMode !== "big" ? `nt-${notesMode}` : ""}`} style={{ animationDelay: `${Math.min(i, 10) * 70}ms` }}>
       <div
         className="kf"
         role="button"
@@ -433,6 +602,7 @@ function Card({
         style={{ cursor: "pointer" }}
       >
         <div className="kf-back" />
+        {notesMode !== "big" ? <SideNote c={c} mode={notesMode} onOpenNotes={onOpenNotes} onQuickAdd={onQuickAdd} /> : null}
         {sheets.map((s, k) => (
           <div key={s.id} className={`kf-sheet ${s.cover ? "has-img" : ""}`} style={{ ["--o" as string]: k + off } as CSSProperties}>
             {s.cover ? (
@@ -480,6 +650,7 @@ function Card({
           </div>
         </div>
       </div>
+      {notesMode === "big" ? (
       <aside
         className="kn"
         role="button"
@@ -530,6 +701,7 @@ function Card({
           <div className="g"><small>Paid</small><b>{c.completedCount}</b></div>
         </div>
       </aside>
+      ) : null}
     </article>
   );
 }
@@ -714,6 +886,7 @@ export default function DashboardV2({
                 onOpen={() => onOpenCompany(c.name)}
                 onOpenNotes={() => onOpenNotes(c.name)}
                 onQuickAdd={() => onQuickAdd(c.name)}
+                notesMode={prefs.notes}
               />
             ))
           ) : (
