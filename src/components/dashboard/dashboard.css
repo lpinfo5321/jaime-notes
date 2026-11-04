@@ -966,10 +966,10 @@ html.dash-on .co-detail .co-note .co-contacts .co-primary svg { background: var(
 html.dash-on { scrollbar-gutter: stable; }
 
 /* ───────── Notas escondidas dentro de la carpeta (pestaña lateral / asomando) ───────── */
-.kc.nt-tab, .kc.nt-peek { grid-template-columns: minmax(0, 1fr); }
-.kc.nt-tab { padding-right: 150px; }
+/* La carpeta conserva el mismo ancho que con la nota grande (2ª columna vacía) */
+.kc.nt-tab, .kc.nt-peek { align-items: end; }
 .kc.nt-peek { padding-top: 46px; }
-@media (max-width: 560px) { .kc.nt-tab { padding-right: 44px; } }
+@media (max-width: 560px) { .kc.nt-tab { padding-right: 44px; } .kc.nt-tab, .kc.nt-peek { grid-template-columns: minmax(0, 1fr); } }
 .kc.nt-tab .kf { clip-path: inset(-60px -240px -50px -30px); }
 .kc.nt-peek .kf { clip-path: inset(-120px -30px -50px -30px); }
 .sn { position: absolute; z-index: 0; cursor: pointer; text-align: left; color: #3b3200; outline: none; background: #ffe45c; border-radius: 2px; filter: drop-shadow(0 1px 1px rgba(70,50,0,.35)) drop-shadow(0 6px 6px rgba(70,50,0,.18)); }
