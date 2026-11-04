@@ -5,6 +5,10 @@ const BUILD_ID = new Date().toISOString();
 
 const nextConfig: NextConfig = {
   generateBuildId: async () => BUILD_ID,
+  compress: true,
+  poweredByHeader: false,
+  compiler: { removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false },
+  experimental: { optimizePackageImports: ["lucide-react"] },
   env: {
     NEXT_PUBLIC_BUILD_ID: BUILD_ID,
   },

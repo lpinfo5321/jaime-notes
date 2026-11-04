@@ -438,7 +438,7 @@ function Card({
             {s.cover ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="ks-photo" src={s.cover} alt="" onError={onCoverError} />
+                <img className="ks-photo" src={s.cover} alt="" loading="lazy" decoding="async" onError={onCoverError} />
                 <span className={`ks-tag ks-float ${s.paid ? "ok" : "pend"}`}>{s.paid ? "Pagado" : "Pendiente"}</span>
               </>
             ) : (
@@ -639,14 +639,26 @@ export default function DashboardV2({
       }
       if (kr) root.style.setProperty("--dash-ink", getComputedStyle(kr).color);
     };
-    const onScroll = () => {
-      root.classList.toggle("dash-scrolled", window.scrollY > 24);
-      root.style.setProperty("--dash-p", String(Math.min(1, Math.max(0, window.scrollY / 150))));
+    let scrollRaf = 0;
+    let lastP = -1;
+    let khEl: HTMLElement | null = null;
+    const apply = () => {
+      scrollRaf = 0;
+      const y = window.scrollY;
+      root.classList.toggle("dash-scrolled", y > 24);
+      const p = Math.round(Math.min(1, Math.max(0, y / 150)) * 100) / 100;
+      if (p === lastP) return;
+      lastP = p;
+      if (!khEl || !khEl.isConnected) khEl = document.querySelector<HTMLElement>(".pal .kh");
+      khEl?.style.setProperty("--dash-p", String(p));
     };
+    const onScroll = () => { if (!scrollRaf) scrollRaf = requestAnimationFrame(apply); };
     measure();
     const raf = requestAnimationFrame(colors);
     const t = window.setTimeout(() => { colors(); stick(); }, 160);
-    const t2 = window.setInterval(stick, 1500);
+    const khObs = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => stick()) : null;
+    const khNode = document.querySelector<HTMLElement>(".pal .kh");
+    if (khNode) khObs?.observe(khNode);
     window.addEventListener("resize", stick);
     onScroll();
     const ro = header ? new ResizeObserver(measure) : null;
@@ -655,13 +667,14 @@ export default function DashboardV2({
     return () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(t);
-      window.clearInterval(t2);
+      khObs?.disconnect();
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
       window.removeEventListener("resize", stick);
       ro?.disconnect();
       window.removeEventListener("scroll", onScroll);
       root.classList.remove("dash-home", "dash-scrolled");
       root.style.removeProperty("--dash-kh-top");
-      root.style.removeProperty("--dash-p");
+      document.querySelector<HTMLElement>(".pal .kh")?.style.removeProperty("--dash-p");
       const bar = root.style.getPropertyValue("--dash-bar");
       const fg = root.style.getPropertyValue("--dash-bar-fg");
       if (bar) root.style.setProperty("--dash-hbg", bar);

@@ -18,6 +18,8 @@ const hand = Kalam({
   variable: "--font-hand",
   subsets: ["latin"],
   weight: ["400", "700"],
+  display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {

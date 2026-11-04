@@ -141,6 +141,15 @@ export default async function NotesPage({
     if (url) firstDocUrlsByNoteId[noteId] = { url, filename: doc.filename, mime: doc.mime };
   }
 
+  // La portada inline (base64) ya viaja en `coverUrls`: no se manda dos veces al navegador.
+  const lightNotes = (safeNotes as any[]).map((n) => {
+    const ci = n?.values?._coverInline;
+    if (ci && typeof ci.dataUrl === "string" && coverUrls[String(n.id)]) {
+      return { ...n, values: { ...n.values, _coverInline: { ...ci, dataUrl: "" } } };
+    }
+    return n;
+  });
+
   return (
     <div className="space-y-4">
       {error ? (
@@ -149,7 +158,7 @@ export default async function NotesPage({
         </div>
       ) : (
         <NotesList
-          notes={safeNotes as any}
+          notes={lightNotes as any}
           coverUrls={coverUrls}
           attachmentMetaByNoteId={attachmentMetaByNoteId}
           firstDocUrlsByNoteId={firstDocUrlsByNoteId}

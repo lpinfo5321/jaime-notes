@@ -3327,7 +3327,7 @@ function CompanyCard({
           {coverUrl ? (
             <button type="button" onClick={onOpenReport} title="Abrir reporte">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="Reporte" src={coverUrl} onError={onCoverError} />
+              <img alt="Reporte" src={coverUrl} loading="lazy" decoding="async" onError={onCoverError} />
             </button>
           ) : (
             <button type="button" className="report-shot-empty" onClick={onOpenReport} title="Abrir reporte">
