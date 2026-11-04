@@ -1,4 +1,5 @@
 "use client";
+import { onCoverError } from "@/lib/coverRetry";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
@@ -437,7 +438,7 @@ function Card({
             {s.cover ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="ks-photo" src={s.cover} alt="" />
+                <img className="ks-photo" src={s.cover} alt="" onError={onCoverError} />
                 <span className={`ks-tag ks-float ${s.paid ? "ok" : "pend"}`}>{s.paid ? "Pagado" : "Pendiente"}</span>
               </>
             ) : (

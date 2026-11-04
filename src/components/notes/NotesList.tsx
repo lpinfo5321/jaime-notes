@@ -27,6 +27,7 @@ import ContactsView from "@/components/contacts/ContactsView";
 import DocumentsView from "@/components/documents/DocumentsView";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { onCoverError } from "@/lib/coverRetry";
 import {
   enqueueReport,
   flushQueuedReportsOnce,
@@ -365,7 +366,9 @@ export default function NotesList({
     title: string;
     values: Record<string, unknown> | null;
     coverUrl: string | null;
+    isNew?: boolean;
   } | null>(null);
+  const [creatingReport, setCreatingReport] = useState(false);
 
   const [items, setItems] = useState<NoteListItem[]>(notes);
   // Portadas: `coverUrls` viene del server (y no cambia “en vivo”).
@@ -383,8 +386,25 @@ export default function NotesList({
 
   useEffect(() => {
     // Mantener base del server, pero no pisar overrides locales recientes.
-    setLocalCoverUrls((prev) => ({ ...(coverUrls ?? {}), ...(prev ?? {}) }));
+    // El server manda URLs firmadas nuevas: tienen prioridad (las viejas pueden estar vencidas).
+    setLocalCoverUrls((prev) => {
+      const next: Record<string, string> = { ...(prev ?? {}), ...(coverUrls ?? {}) };
+      for (const [k, v] of Object.entries(prev ?? {})) if (v.startsWith("blob:")) next[k] = v;
+      return next;
+    });
   }, [coverUrls]);
+
+  // Si una portada falla varias veces (URL vencida), pide datos nuevos al servidor (máx. 1 vez / 20 s).
+  useEffect(() => {
+    let last = 0;
+    const h = () => {
+      if (Date.now() - last < 20000) return;
+      last = Date.now();
+      router.refresh();
+    };
+    window.addEventListener("rc:cover-expired", h);
+    return () => window.removeEventListener("rc:cover-expired", h);
+  }, [router]);
 
   // Sync filters from URL (controlled by header UI)
   useEffect(() => {
@@ -1005,6 +1025,8 @@ export default function NotesList({
 
   // Agrega un reporte NUEVO dentro de una compañía que ya existe (mismo nombre => misma compañía).
   async function addReportToCompany(companyName: string) {
+    if (creatingReport) return;
+    setCreatingReport(true);
     try {
       const res = await fetch("/api/notes", {
         method: "POST",
@@ -1013,9 +1035,57 @@ export default function NotesList({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.id) throw new Error(json?.error || "No se pudo crear el reporte");
-      router.replace(`/app?openReport=${encodeURIComponent(String(json.id))}`);
+      const nowIso = new Date().toISOString();
+      const id = String(json.id);
+      // Se abre al instante (sin recargar la página) y no aparece en la lista hasta que tenga contenido.
+      setReportForCompany({ id, title: companyName, values: null, coverUrl: null, isNew: true });
+      setItems((prev) => [
+        { id, title: companyName, body: "", tags: [], favorite: false, values: null, updated_at: nowIso, created_at: nowIso },
+        ...prev,
+      ]);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error creando el reporte");
+    } finally {
+      setCreatingReport(false);
+    }
+  }
+
+  // Si se cancela un reporte NUEVO sin haber escrito nada, se elimina (no queda un reporte vacío).
+  async function dropIfEmptyDraft(noteId: string) {
+    try {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      if (getQueuedReport(noteId)) return;
+      const supabase = createClient();
+      const { data: row, error } = await supabase.from("notes").select("values,body").eq("id", noteId).single();
+      if (error || !row) return;
+      const { count } = await supabase.from("attachments").select("id", { count: "exact", head: true }).eq("note_id", noteId);
+      if ((count ?? 0) > 0) return;
+      const v = ((row.values ?? {}) as Record<string, any>) ?? {};
+      if (Array.isArray(v._entries) && v._entries.length) return;
+      if (String(row.body ?? "").trim()) return;
+      const p = v._report?.payload;
+      if (p) {
+        if (Array.isArray(p.images) && p.images.length) return;
+        const fields = (p.fields ?? {}) as Record<string, unknown>;
+        for (const [k, val] of Object.entries(fields)) {
+          if (/^company_?name$/i.test(k)) continue;
+          if (/^total_?due$/i.test(k)) {
+            const c = parseMoneyToCents(val);
+            if (c !== null && c > 0) return;
+            continue;
+          }
+          if (typeof val === "string") {
+            const t = val.trim();
+            if (t && t.toUpperCase() !== "RELLENAR") return;
+          } else if (val && typeof val === "object") {
+            if (Array.isArray(val) ? val.length : Object.keys(val as object).length) return;
+          } else if (val === true) return;
+        }
+      }
+      const del = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
+      if (del.ok) setItems((prev) => prev.filter((n) => n.id !== noteId));
+    } catch {
+      // ante cualquier duda, NO se borra nada
     }
   }
 
@@ -1916,6 +1986,12 @@ export default function NotesList({
         />
       ) : null}
 
+      {creatingReport ? (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="rounded-2xl bg-white px-6 py-4 text-sm font-bold text-zinc-800 shadow-xl">Creando reporte…</div>
+        </div>
+      ) : null}
+
       {reportForCompany ? (
         <ReportModal
           noteId={reportForCompany.id}
@@ -2035,11 +2111,13 @@ export default function NotesList({
             const noteId = reportForCompany.id;
             const title = reportForCompany.title;
             const values = reportForCompany.values;
+            const wasNew = !!reportForCompany.isNew;
             setReportForCompany(null);
             if (shouldSuggestMoveToCompleted(noteId, values)) {
               setConfirmMoveComplete({ id: noteId, title });
             }
-            resyncSoon();
+            if (wasNew) void dropIfEmptyDraft(noteId).finally(() => resyncSoon());
+            else resyncSoon();
           }}
         />
       ) : null}
@@ -3204,7 +3282,7 @@ function CompanyCard({
           {coverUrl ? (
             <button type="button" onClick={onOpenReport} title="Abrir reporte">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="Reporte" src={coverUrl} />
+              <img alt="Reporte" src={coverUrl} onError={onCoverError} />
             </button>
           ) : (
             <button type="button" className="report-shot-empty" onClick={onOpenReport} title="Abrir reporte">
@@ -3352,6 +3430,7 @@ function CompanyCard({
               <img
                 alt="Portada"
                 src={coverUrl}
+                onError={onCoverError}
                 loading="lazy"
                 decoding="async"
                 className="h-full w-full bg-zinc-100 object-cover transition duration-300 group-hover/img:scale-[1.03] dark:bg-zinc-800"

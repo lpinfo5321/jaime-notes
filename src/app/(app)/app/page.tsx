@@ -121,7 +121,7 @@ export default async function NotesPage({
   if (allPaths.length) {
     const { data: signed } = await supabase.storage
       .from("attachments")
-      .createSignedUrls(allPaths, 60 * 15);
+      .createSignedUrls(allPaths, 60 * 60 * 24);
     for (const s of signed ?? []) {
       if (s?.path && s?.signedUrl) signedByPath.set(s.path, s.signedUrl);
     }
