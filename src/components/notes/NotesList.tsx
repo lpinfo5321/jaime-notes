@@ -183,6 +183,7 @@ export default function NotesList({
   } | null>(null);
   const [creatingReport, setCreatingReport] = useState(false);
   const discardedDraftRef = useRef<string | null>(null);
+  const freshCoversRef = useRef(false);
 
   // Los reportes "borrador" (recién creados, aún sin guardar) no se muestran en ninguna lista.
   const [itemsRaw, setItems] = useState<NoteListItem[]>(notes);
@@ -203,10 +204,24 @@ export default function NotesList({
   useEffect(() => {
     // Mantener base del server, pero no pisar overrides locales recientes.
     // El server manda URLs firmadas nuevas: tienen prioridad (las viejas pueden estar vencidas).
+    // Las URLs firmadas cambian de token en cada recarga: si es la MISMA imagen se conserva la URL actual
+    // (así no se vuelve a descargar ni parpadea). Solo se renueva si una portada falló (URL vencida).
+    const fresh = freshCoversRef.current;
+    freshCoversRef.current = false;
     setLocalCoverUrls((prev) => {
-      const next: Record<string, string> = { ...(prev ?? {}), ...(coverUrls ?? {}) };
-      for (const [k, v] of Object.entries(prev ?? {})) if (v.startsWith("blob:")) next[k] = v;
-      return next;
+      const p = prev ?? {};
+      const next: Record<string, string> = { ...p };
+      let changed = false;
+      for (const [k, v] of Object.entries(coverUrls ?? {})) {
+        const cur = p[k];
+        if (!cur) { next[k] = v; changed = true; continue; }
+        if (cur.startsWith("blob:") || cur === v) continue;
+        if (!fresh && cur.split("?")[0] === v.split("?")[0]) continue;
+        if (cur.startsWith("data:") && v.startsWith("data:") && !fresh) continue;
+        next[k] = v;
+        changed = true;
+      }
+      return changed ? next : p;
     });
   }, [coverUrls]);
 
@@ -216,6 +231,7 @@ export default function NotesList({
     const h = () => {
       if (Date.now() - last < 20000) return;
       last = Date.now();
+      freshCoversRef.current = true;
       router.refresh();
     };
     window.addEventListener("rc:cover-expired", h);
