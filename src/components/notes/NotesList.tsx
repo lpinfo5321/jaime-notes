@@ -37,6 +37,8 @@ import {
 } from "@/lib/reportQueue";
 import { setSyncSnapshot } from "@/lib/syncStatus";
 
+const DRAFT_TAG = "__draft";
+
 export type NoteListItem = {
   id: string;
   title: string;
@@ -369,8 +371,11 @@ export default function NotesList({
     isNew?: boolean;
   } | null>(null);
   const [creatingReport, setCreatingReport] = useState(false);
+  const discardedDraftRef = useRef<string | null>(null);
 
-  const [items, setItems] = useState<NoteListItem[]>(notes);
+  // Los reportes "borrador" (recién creados, aún sin guardar) no se muestran en ninguna lista.
+  const [itemsRaw, setItems] = useState<NoteListItem[]>(notes);
+  const items = useMemo(() => itemsRaw.filter((n) => !(n.tags ?? []).includes(DRAFT_TAG)), [itemsRaw]);
   // Portadas: `coverUrls` viene del server (y no cambia “en vivo”).
   // Mantenemos un override local para que al guardar el reporte se refleje al instante.
   const [localCoverUrls, setLocalCoverUrls] = useState<Record<string, string>>(
@@ -405,6 +410,17 @@ export default function NotesList({
     window.addEventListener("rc:cover-expired", h);
     return () => window.removeEventListener("rc:cover-expired", h);
   }, [router]);
+
+  // Borradores huérfanos (pestaña cerrada a medias): con contenido se publican, vacíos se eliminan.
+  const draftsSweptRef = useRef(false);
+  useEffect(() => {
+    if (draftsSweptRef.current) return;
+    draftsSweptRef.current = true;
+    const old = notes.filter(
+      (n) => (n.tags ?? []).includes(DRAFT_TAG) && Date.now() - new Date(n.created_at).getTime() > 15 * 60 * 1000,
+    );
+    for (const n of old) void finalizeDraft(n.id, false);
+  }, [notes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync filters from URL (controlled by header UI)
   useEffect(() => {
@@ -1031,7 +1047,7 @@ export default function NotesList({
       const res = await fetch("/api/notes", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: companyName, body: "", tags: [], favorite: false }),
+        body: JSON.stringify({ title: companyName, body: "", tags: [DRAFT_TAG], favorite: false }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.id) throw new Error(json?.error || "No se pudo crear el reporte");
@@ -1040,7 +1056,7 @@ export default function NotesList({
       // Se abre al instante (sin recargar la página) y no aparece en la lista hasta que tenga contenido.
       setReportForCompany({ id, title: companyName, values: null, coverUrl: null, isNew: true });
       setItems((prev) => [
-        { id, title: companyName, body: "", tags: [], favorite: false, values: null, updated_at: nowIso, created_at: nowIso },
+        { id, title: companyName, body: "", tags: [DRAFT_TAG], favorite: false, values: null, updated_at: nowIso, created_at: nowIso },
         ...prev,
       ]);
     } catch (e) {
@@ -1068,27 +1084,48 @@ export default function NotesList({
     return false;
   }
 
-  async function dropIfEmptyDraft(noteId: string) {
+  // Al cerrar un reporte NUEVO: si el usuario descartó o no escribió nada → se elimina por completo;
+  // si hay contenido → se "publica" (deja de ser borrador y aparece en la lista).
+  async function finalizeDraft(noteId: string, forceDelete: boolean) {
+    const removeLocal = () => setItems((prev) => prev.filter((n) => n.id !== noteId));
+    const publish = async () => {
+      setItems((prev) => prev.map((n) => (n.id === noteId ? { ...n, tags: (n.tags ?? []).filter((t) => t !== DRAFT_TAG) } : n)));
+      try {
+        await fetch(`/api/notes/${noteId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ tags: [] }),
+        });
+      } catch {}
+    };
     try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      if (forceDelete) {
+        removeQueuedReport(noteId);
+        const del = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
+        if (del.ok) removeLocal();
+        return;
+      }
+      if (typeof navigator !== "undefined" && !navigator.onLine) return void (await publish());
       const queued = getQueuedReport(noteId);
-      if (queued?.payload && reportHasContent(queued.payload)) return;
+      if (queued?.payload && reportHasContent(queued.payload)) return void (await publish());
       const supabase = createClient();
       const { data: row, error } = await supabase.from("notes").select("values,body").eq("id", noteId).single();
-      if (error || !row) return;
+      if (error || !row) return void (await publish());
       const { count } = await supabase.from("attachments").select("id", { count: "exact", head: true }).eq("note_id", noteId);
-      if ((count ?? 0) > 0) return;
       const v = ((row.values ?? {}) as Record<string, any>) ?? {};
-      if (Array.isArray(v._entries) && v._entries.length) return;
-      if (String(row.body ?? "").trim()) return;
-      if (reportHasContent(v._report?.payload)) return;
+      const hasContent =
+        (count ?? 0) > 0 ||
+        (Array.isArray(v._entries) && v._entries.length > 0) ||
+        !!String(row.body ?? "").trim() ||
+        reportHasContent(v._report?.payload);
+      if (hasContent) return void (await publish());
       const del = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
       if (del.ok) {
         removeQueuedReport(noteId);
-        setItems((prev) => prev.filter((n) => n.id !== noteId));
-      }
+        removeLocal();
+      } else await publish();
     } catch {
-      // ante cualquier duda, NO se borra nada
+      await publish(); // ante cualquier duda NO se pierde nada
     }
   }
 
@@ -2000,6 +2037,7 @@ export default function NotesList({
           noteId={reportForCompany.id}
           companyTitle={reportForCompany.title}
           onCompanyNameChange={(name) => void renameSingleNote(reportForCompany.id, name)}
+          onDiscarded={() => { discardedDraftRef.current = reportForCompany.id; }}
           initialReport={(reportForCompany.values as any)?._report?.payload ?? null}
           onLocalReportUpdate={(payload) => {
             const now = new Date().toISOString();
@@ -2119,7 +2157,11 @@ export default function NotesList({
             if (shouldSuggestMoveToCompleted(noteId, values)) {
               setConfirmMoveComplete({ id: noteId, title });
             }
-            if (wasNew) void dropIfEmptyDraft(noteId).finally(() => resyncSoon());
+            if (wasNew) {
+              const forced = discardedDraftRef.current === noteId;
+              discardedDraftRef.current = null;
+              void finalizeDraft(noteId, forced).finally(() => resyncSoon());
+            }
             else resyncSoon();
           }}
         />
@@ -3513,9 +3555,11 @@ function ReportModal({
   onLocalReportUpdate,
   onReportSynced,
   onCompanyNameChange,
+  onDiscarded,
   onClose,
 }: {
   noteId: string;
+  onDiscarded?: () => void;
   companyTitle: string;
   initialReport: any;
   onLocalReportUpdate: (payload: unknown) => void;
@@ -4000,6 +4044,7 @@ function ReportModal({
   async function discardAndClose() {
     if (closing || discarding) return;
     setDiscarding(true);
+    try { onDiscarded?.(); } catch {}
     try {
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current);
