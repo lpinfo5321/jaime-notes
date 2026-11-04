@@ -184,6 +184,15 @@ export default function NotesList({
   const [creatingReport, setCreatingReport] = useState(false);
   const discardedDraftRef = useRef<string | null>(null);
   const freshCoversRef = useRef(false);
+  // Cambia la portada solo si es una imagen distinta (mismo archivo con otro token = no se toca → sin parpadeo).
+  function setCoverStable(id: string, url: string) {
+    setLocalCoverUrls((prev) => {
+      const cur = prev?.[id];
+      if (cur === url) return prev;
+      if (cur && !url.startsWith("data:") && !cur.startsWith("data:") && cur.split("?")[0] === url.split("?")[0]) return prev;
+      return { ...(prev ?? {}), [id]: url };
+    });
+  }
 
   // Los reportes "borrador" (recién creados, aún sin guardar) no se muestran en ninguna lista.
   const [itemsRaw, setItems] = useState<NoteListItem[]>(notes);
@@ -1940,7 +1949,7 @@ export default function NotesList({
                   nextValues._cover = null;
                 }
                 // Update local cover so the card updates immediately.
-                setLocalCoverUrls((prev) => ({ ...(prev ?? {}), [reportForCompany.id]: nextCover }));
+                setCoverStable(reportForCompany.id, nextCover);
               } else if (nextPath) {
                 // If we have a storage path (report images uploaded), use it as cover (server will sign it).
                 nextValues._coverInline = null;
@@ -1954,7 +1963,7 @@ export default function NotesList({
                       .createSignedUrl(nextPath, 60 * 60 * 24);
                     const signedUrl = data?.signedUrl ? String(data.signedUrl) : "";
                     if (signedUrl) {
-                      setLocalCoverUrls((prev) => ({ ...(prev ?? {}), [reportForCompany.id]: signedUrl }));
+                      setCoverStable(reportForCompany.id, signedUrl);
                     }
                   } catch {
                     // ignore

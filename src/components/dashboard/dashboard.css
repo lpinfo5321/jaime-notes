@@ -962,3 +962,5 @@ html.dash-on .co-detail .co-note .co-contacts .co-primary svg { background: var(
 /* Los documentos nunca salen por debajo de la carpeta */
 .kf { clip-path: inset(-60px -30px -50px -30px); }
 .kf-front { z-index: 2; }
+
+html.dash-on { scrollbar-gutter: stable; }
