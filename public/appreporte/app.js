@@ -2537,7 +2537,10 @@
         notice.start("Exportando…", "Preparando el PDF");
         let dir = null;
         const viaHelper = await nsfHelperUp();
-        const noDesktop = !viaHelper && typeof window.showDirectoryPicker !== "function";
+        const isPhone =
+          /Android|iPhone|iPad|iPod|Mobile|SM-|Tablet/i.test(navigator.userAgent || "") ||
+          (navigator.maxTouchPoints > 1 && window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+        const noDesktop = !viaHelper && (isPhone || typeof window.showDirectoryPicker !== "function");
         if (noDesktop) {
           /* Celular: no hay carpeta local. Se envía a la nube y la computadora lo copia a OneDrive. */
           try {
@@ -2630,6 +2633,13 @@
     let manualSaving = false;
     const saveReportManual = async () => {
       if (manualSaving) return;
+      /* En el celular no hay carpeta que elegir: se envía a OneDrive por la computadora, igual que el botón automático. */
+      if (
+        /Android|iPhone|iPad|iPod|Mobile|SM-|Tablet/i.test(navigator.userAgent || "") ||
+        (navigator.maxTouchPoints > 1 && window.matchMedia && window.matchMedia("(pointer: coarse)").matches)
+      ) {
+        return saveReportToOneDrive();
+      }
       manualSaving = true;
       const notice = rcNotice();
       try {

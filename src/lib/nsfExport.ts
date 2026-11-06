@@ -331,7 +331,12 @@ export async function sendToOneDriveViaPc(
 
 /** Celular o tablet: sin ayudante ni selector de carpetas. */
 export function isMobileExport() {
-  return typeof window !== "undefined" && typeof (window as PickerWindow).showDirectoryPicker !== "function";
+  if (typeof window === "undefined") return false;
+  /* Los Chrome nuevos de Android ya tienen selector de carpetas, por eso se detecta por dispositivo táctil. */
+  const ua = navigator.userAgent || "";
+  if (/Android|iPhone|iPad|iPod|Mobile|SM-|Tablet/i.test(ua)) return true;
+  if (navigator.maxTouchPoints > 1 && window.matchMedia?.("(pointer: coarse)").matches) return true;
+  return typeof (window as PickerWindow).showDirectoryPicker !== "function";
 }
 
 /** Entrega los archivos con la hoja nativa de compartir (Archivos, OneDrive, Drive…). Devuelve false si se canceló. */
