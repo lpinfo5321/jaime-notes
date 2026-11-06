@@ -1021,3 +1021,8 @@ html.dash-on { scrollbar-gutter: stable; }
 .kg.kg-hide .kc { grid-template-columns: minmax(0, 1fr); }
 .kc:has(.sn.on) { z-index: 8; }
 @media (min-width: 1280px) { .kg.kg-hide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 330px)); } }
+
+/* 5 por fila en pantallas anchas */
+.kg.kg-hide, .kg.kg-hide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr)); justify-content: stretch; justify-items: center; gap: 56px 26px; padding-left: clamp(12px, 1.5vw, 28px); padding-right: clamp(12px, 1.5vw, 28px); }
+.kg.kg-hide .kc { width: 100%; max-width: 340px; }
+@media (min-width: 1280px) { .kg.kg-hide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr)); } }
