@@ -121,7 +121,12 @@ export default function UsageModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
   }, [onClose]);
 
   const worst = useMemo(() => {
@@ -131,9 +136,9 @@ export default function UsageModal({ onClose }: { onClose: () => void }) {
   const t = tone(worst);
 
   return createPortal(
-    <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/60 p-2 sm:items-center sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[95] grid place-items-center overflow-y-auto bg-black/60 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-zinc-50 shadow-xl dark:bg-zinc-900"
+        className="my-auto flex max-h-[min(760px,calc(100dvh-32px))] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-zinc-50 shadow-2xl dark:bg-zinc-900"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
