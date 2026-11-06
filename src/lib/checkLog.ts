@@ -18,6 +18,7 @@ export type LogRow = {
   S?: string | null; // forma pago cheque
   T?: string | null; // agente
   U?: string | null; // notas / estado
+  n?: string; // id del reporte en la app (si todavía existe)
 };
 
 export type LogSnapshot = {

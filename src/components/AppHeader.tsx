@@ -190,6 +190,8 @@ export default function AppHeader() {
     router.replace("/app");
   }
 
+  useEffect(() => { router.prefetch("/app/registro"); }, [router]);
+
   const dashSettings = useDashSettingsNode();
   const gearSlotRef = useRef<HTMLSpanElement>(null);
   const [gearSlot, setGearSlot] = useState<HTMLElement | null>(null);

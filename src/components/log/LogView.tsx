@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Clock, FileSpreadsheet, RefreshCw, Search, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, FileSpreadsheet, ExternalLink, RefreshCw, Search, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
 import {
   buildLogXlsx,
   fmtDate,
@@ -58,8 +58,40 @@ function ago(iso?: string | null) {
   return new Date(iso).toLocaleDateString("es");
 }
 
-export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot | null; loadError: string | null }) {
+const CACHE_KEY = "rc:log:v1";
+
+export default function LogView() {
   const router = useRouter();
+  const [snapshot, setSnapshot] = useState<LogSnapshot | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  /* Se muestra al instante lo último guardado y en paralelo se pide lo más nuevo. */
+  useEffect(() => {
+    let alive = true;
+    try {
+      const c = localStorage.getItem(CACHE_KEY);
+      if (c) setSnapshot(JSON.parse(c) as LogSnapshot);
+    } catch {}
+    fetch("/api/log", { cache: "no-store" })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => null)) as { snapshot?: LogSnapshot | null; error?: string } | null;
+        if (!alive) return;
+        if (!r.ok) throw new Error(j?.error || "No se pudo cargar el registro");
+        if (j?.snapshot) {
+          setSnapshot(j.snapshot);
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify(j.snapshot)); } catch {}
+        }
+        setLoadError(null);
+      })
+      .catch((e) => alive && setLoadError(e instanceof Error ? e.message : "No se pudo cargar el registro"))
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => { router.prefetch("/app"); }, [router]);
+
+  const openReport = useCallback((id: string) => router.push(`/app?openReport=${encodeURIComponent(id)}`), [router]);
   const rows = useMemo(() => (snapshot?.rows ?? []).filter((r) => r.H || r.F), [snapshot]);
 
   const [q, setQ] = useState("");
@@ -146,7 +178,12 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
     try {
       const r = await fetch(`${HELPER}/log/sync?all=0`, { method: "POST" });
       if (r.ok) setHelper((await r.json()) as HelperStatus);
-      router.refresh();
+      const rr = await fetch("/api/log", { cache: "no-store" });
+      const jj = (await rr.json().catch(() => null)) as { snapshot?: LogSnapshot | null } | null;
+      if (jj?.snapshot) {
+        setSnapshot(jj.snapshot);
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(jj.snapshot)); } catch {}
+      }
     } catch {
       setHelper(null);
     } finally {
@@ -272,8 +309,10 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
         ) : null}
       </div>
 
-      {loadError ? (
+      {loadError && !snapshot ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{loadError}</div>
+      ) : !snapshot && loading ? (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">Cargando registro…</div>
       ) : !snapshot ? (
         <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
           Todavía no hay datos. Cuando el ayudante de la computadora esté activo (INSTALAR.bat) subirá aquí el registro.
@@ -408,14 +447,14 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
               <table className="w-full text-left text-[13px]">
                 <thead className="sticky top-0 z-10 bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-500 dark:bg-zinc-800">
                   <tr>
-                    {["Devuelto", "Compañía / emisor", "# Cheque", "Motivo", "Monto", "Comisión", "Total", "Pago comisión", "Pago cheque", "Agente", "Estado"].map((h) => (
+                    {["Devuelto", "Compañía / emisor", "# Cheque", "Motivo", "Monto", "Comisión", "Total", "Pago comisión", "Pago cheque", "Agente", "Estado", "Reporte"].map((h) => (
                       <th key={h} className="whitespace-nowrap px-3 py-2.5 font-bold">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {list.map((r) => (
-                    <Row key={r.r} r={r} />
+                    <Row key={r.r} r={r} onOpen={openReport} />
                   ))}
                 </tbody>
               </table>
@@ -426,7 +465,7 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
           {/* Celular: tarjetas */}
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto md:hidden">
             {list.map((r) => (
-              <Card key={r.r} r={r} />
+              <Card key={r.r} r={r} onOpen={openReport} />
             ))}
             {!list.length ? <div className="p-8 text-center text-sm text-zinc-500">Sin resultados.</div> : null}
           </div>
@@ -441,7 +480,21 @@ function pay(date?: string | null, method?: string | null) {
   return `${fmtDate(date)}${method ? ` · ${method}` : ""}`;
 }
 
-function Row({ r }: { r: LogRow }) {
+function OpenBtn({ r, onOpen }: { r: LogRow; onOpen: (id: string) => void }) {
+  if (!r.n) return <span className="text-[11px] text-zinc-400">Ya no está en la app</span>;
+  const id = r.n;
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onOpen(id); }}
+      className="inline-flex h-7 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-bold text-white hover:bg-emerald-700"
+    >
+      <ExternalLink className="h-3 w-3" /> Abrir
+    </button>
+  );
+}
+
+function Row({ r, onOpen }: { r: LogRow; onOpen: (id: string) => void }) {
   return (
     <tr className="border-t border-zinc-100 hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
       <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fmtDate(r.D || r.B)}</td>
@@ -458,11 +511,12 @@ function Row({ r }: { r: LogRow }) {
       <td className="whitespace-nowrap px-3 py-2 text-zinc-600 dark:text-zinc-300">{pay(r.R, r.S)}</td>
       <td className="whitespace-nowrap px-3 py-2">{r.T}</td>
       <td className="px-3 py-2"><Badge s={rowState(r)} /></td>
+      <td className="px-3 py-2"><OpenBtn r={r} onOpen={onOpen} /></td>
     </tr>
   );
 }
 
-function Card({ r }: { r: LogRow }) {
+function Card({ r, onOpen }: { r: LogRow; onOpen: (id: string) => void }) {
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-start justify-between gap-2">
@@ -484,6 +538,7 @@ function Card({ r }: { r: LogRow }) {
         {r.P || r.Q ? <span>Comisión: {pay(r.P, r.Q)}</span> : null}
         {r.R || r.S ? <span>Cheque: {pay(r.R, r.S)}</span> : null}
       </div>
+      {r.n ? <div className="mt-2"><OpenBtn r={r} onOpen={onOpen} /></div> : null}
     </div>
   );
 }
