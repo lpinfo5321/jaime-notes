@@ -217,8 +217,25 @@ type NsfDir = FileSystemDirectoryHandle & {
   requestPermission?: (opts: { mode: "readwrite" }) => Promise<PermissionState>;
 };
 
+const HELPER = "http://127.0.0.1:47321";
+const HELPER_MARK = "__rcHelper";
+
+/** Ayudante local (tools/onedrive-helper): guarda en OneDrive sin pedir nada. */
+async function helperUp() {
+  try {
+    const ctrl = new AbortController();
+    const t = window.setTimeout(() => ctrl.abort(), 1200);
+    const r = await fetch(`${HELPER}/ping`, { signal: ctrl.signal });
+    window.clearTimeout(t);
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Carpeta del año en curso. Si no existe (por ejemplo 2027), la crea. */
 export async function yearFolderForExport(): Promise<FileSystemDirectoryHandle | null> {
+  if (await helperUp()) return { [HELPER_MARK]: true, name: String(new Date().getFullYear()) } as unknown as FileSystemDirectoryHandle;
   const saved = (await idbGet().catch(() => null)) as NsfDir | null;
   if (!saved) return null;
   try {
@@ -235,6 +252,11 @@ export async function yearFolderForExport(): Promise<FileSystemDirectoryHandle |
 }
 
 export async function writeExportFile(dir: FileSystemDirectoryHandle, filename: string, data: Blob) {
+  if ((dir as unknown as Record<string, unknown>)[HELPER_MARK]) {
+    const r = await fetch(`${HELPER}/save?name=${encodeURIComponent(filename)}`, { method: "POST", body: data });
+    if (!r.ok) throw new Error("El ayudante de OneDrive no pudo guardar el archivo");
+    return;
+  }
   const file = await dir.getFileHandle(filename, { create: true });
   const writer = await file.createWritable();
   await writer.write(data);
