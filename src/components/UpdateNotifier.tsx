@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { isStaleBuildError, recoverApp } from "@/lib/recoverApp";
 
 const CLIENT_BUILD = process.env.NEXT_PUBLIC_BUILD_ID ?? "dev";
 const POLL_INTERVAL = 4 * 60 * 1000; // 4 minutes
@@ -15,6 +16,15 @@ export default function UpdateNotifier() {
   const [mounted,  setMounted]  = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // Si tras una actualización quedaron archivos viejos, se limpia y recarga solo (sin pantalla en blanco).
+  useEffect(() => {
+    const onErr = (e: ErrorEvent) => { if (isStaleBuildError(e.error ?? e.message)) void recoverApp(); };
+    const onRej = (e: PromiseRejectionEvent) => { if (isStaleBuildError(e.reason)) void recoverApp(); };
+    window.addEventListener("error", onErr);
+    window.addEventListener("unhandledrejection", onRej);
+    return () => { window.removeEventListener("error", onErr); window.removeEventListener("unhandledrejection", onRej); };
+  }, []);
 
   // ── Poll for new version ─────────────────────────────────────────────────
   useEffect(() => {
@@ -53,7 +63,7 @@ export default function UpdateNotifier() {
       if (pct >= 72) setStep(s => Math.max(s, 2));
       if (pct >= 100) {
         clearInterval(tick);
-        setTimeout(() => window.location.reload(), 700);
+        setTimeout(() => { void recoverApp(true); }, 700);
       }
     }, 110);
   }
