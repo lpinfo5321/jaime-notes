@@ -2502,7 +2502,30 @@
       return await handle.getDirectoryHandle(year, { create: true });
     };
 
+    const nsfHelperUp = async () => {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 1200);
+        const r = await fetch("http://127.0.0.1:47321/ping", { signal: ctrl.signal });
+        clearTimeout(t);
+        return r.ok;
+      } catch {
+        return false;
+      }
+    };
+
     const saveReportToOneDrive = async () => {
+      if (await nsfHelperUp()) {
+        try {
+          await waitForImagesReady();
+        } catch {}
+        const blob = await exportPdfBlob();
+        const filename = nsfPdfName(report?.fields || {});
+        const r = await fetch(`http://127.0.0.1:47321/save?name=${encodeURIComponent(filename)}`, { method: "POST", body: blob });
+        if (!r.ok) throw new Error("El ayudante de OneDrive no pudo guardar el PDF");
+        alert(`PDF guardado en OneDrive:\n${NSF_FOLDER_NAME}\\${new Date().getFullYear()}\\${filename}`);
+        return;
+      }
       const dir = await nsfYearDir();
       if (!dir) {
         alert(`No se guardó solo.\n\nCuando aparezca el selector, elige esta carpeta (no la del año):\n${NSF_FOLDER_HINT}`);
