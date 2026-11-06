@@ -174,9 +174,9 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-[calc(100dvh-5.75rem)] min-h-[420px] flex-col gap-3">
       {/* Encabezado */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex shrink-0 flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => router.push("/app")}
@@ -199,7 +199,7 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
       </div>
 
       {/* Estado de la sincronización con el Excel */}
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-3 text-xs shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-2 text-xs shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         {helper ? (
           helper.locked || (helper.pending ?? 0) > 0 ? (
             <span className="inline-flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300">
@@ -249,24 +249,24 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid shrink-0 grid-cols-4 gap-2 sm:gap-3">
             {kpis.map((k) => (
               <button
                 key={k.label}
                 type="button"
                 onClick={() => k.key && setState(state === k.key ? "all" : k.key)}
-                className={`rounded-2xl border bg-white p-3 text-left shadow-sm transition dark:bg-zinc-900 ${
+                className={`min-w-0 rounded-2xl border bg-white p-2 text-left shadow-sm transition sm:p-3 dark:bg-zinc-900 ${
                   k.key && state === k.key ? "border-emerald-400 ring-2 ring-emerald-200" : "border-zinc-200 dark:border-zinc-800"
                 }`}
               >
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{k.label}</div>
-                <div className={`mt-1 text-2xl font-extrabold tabular-nums ${k.tone}`}>{k.value}</div>
+                <div className="truncate text-[9px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[11px]">{k.label}</div>
+                <div className={`mt-0.5 truncate text-base font-extrabold tabular-nums sm:text-2xl ${k.tone}`}>{k.value}</div>
               </button>
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[200px] flex-1">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <div className="relative min-w-[160px] flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <input
                 value={q}
@@ -299,8 +299,8 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
           </div>
 
           {/* Escritorio: tabla */}
-          <div className="hidden overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm md:block dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="max-h-[68vh] overflow-auto">
+          <div className="hidden min-h-0 flex-1 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm md:block dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="h-full overflow-auto">
               <table className="w-full text-left text-[13px]">
                 <thead className="sticky top-0 z-10 bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-500 dark:bg-zinc-800">
                   <tr>
@@ -320,7 +320,7 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
           </div>
 
           {/* Celular: tarjetas */}
-          <div className="space-y-2 md:hidden">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto md:hidden">
             {list.map((r) => (
               <Card key={r.r} r={r} />
             ))}
@@ -340,7 +340,7 @@ function pay(date?: string | null, method?: string | null) {
 function Row({ r }: { r: LogRow }) {
   return (
     <tr className="border-t border-zinc-100 hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
-      <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fmtDate(r.D)}</td>
+      <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fmtDate(r.D || r.B)}</td>
       <td className="max-w-[260px] px-3 py-2">
         <div className="truncate font-semibold text-zinc-900 dark:text-zinc-100">{r.H || "—"}</div>
         <div className="truncate text-[11px] text-zinc-500">{r.E}</div>
@@ -374,7 +374,7 @@ function Card({ r }: { r: LogRow }) {
         <div><div className="text-zinc-500">Total</div><div className="font-bold tabular-nums">{fmtMoney(rowTotal(r))}</div></div>
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-        <span>Devuelto {fmtDate(r.D)}</span>
+        <span>Devuelto {fmtDate(r.D || r.B)}</span>
         {r.I ? <span>{r.I}</span> : null}
         {r.T ? <span>Agente {r.T}</span> : null}
         {r.P || r.Q ? <span>Comisión: {pay(r.P, r.Q)}</span> : null}
