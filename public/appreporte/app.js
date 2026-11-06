@@ -2574,12 +2574,62 @@
       }
     };
 
+    /* Guardado MANUAL: la persona elige dónde (o se descarga). El automático es el botón verde de arriba. */
+    let manualSaving = false;
+    const saveReportManual = async () => {
+      if (manualSaving) return;
+      manualSaving = true;
+      const notice = rcNotice();
+      try {
+        notice.start("Preparando PDF…", "Un momento");
+        try {
+          await waitForImagesReady();
+        } catch {}
+        const blob = await exportPdfBlob();
+        if (!blob || !blob.size) throw new Error("El PDF salió vacío.");
+        const filename = nsfPdfName(report?.fields || {});
+        if (typeof window.showSaveFilePicker === "function") {
+          notice.close();
+          let handle;
+          try {
+            handle = await window.showSaveFilePicker({
+              id: "nsf-manual-save",
+              suggestedName: filename,
+              types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
+            });
+          } catch (e) {
+            if (e && e.name === "AbortError") return;
+            throw e;
+          }
+          notice.start("Guardando…", "");
+          const writer = await handle.createWritable();
+          await writer.write(blob);
+          await writer.close();
+          const saved = await handle.getFile();
+          if (saved.size !== blob.size) throw new Error("El archivo se guardó incompleto. Vuelve a intentarlo.");
+          notice.success("PDF guardado", handle.name);
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+          notice.success("PDF descargado", filename);
+        }
+      } catch (e) {
+        notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo guardar el PDF");
+      } finally {
+        manualSaving = false;
+      }
+    };
+
     el.btnPrint?.addEventListener?.("click", () => {
-      void saveReportToOneDrive();
+      void saveReportManual();
     });
 
     el.btnPdf?.addEventListener?.("click", () => {
-      void saveReportToOneDrive();
+      void saveReportManual();
     });
 
     // Allow parent to request a PDF for bulk-export (returns ArrayBuffer)

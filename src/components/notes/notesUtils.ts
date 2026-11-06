@@ -1,6 +1,6 @@
 export type Bucket = "pending" | "completed" | "trash";
 
-export const APPREPORTE_V = "20261106-4";
+export const APPREPORTE_V = "20261106-5";
 
 export type Entry = {
   id: string;
