@@ -6,6 +6,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { syncLog, LOG_DIR, LOG_FILE } from "./logsync.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +29,13 @@ http
     if (req.method === "OPTIONS") return send(204, {});
     const url = new URL(req.url, "http://localhost");
     if (url.pathname === "/ping") return send(200, { ok: true, dir: path.join(BASE, String(new Date().getFullYear())) });
+    if (url.pathname === "/log/status") return send(200, { ok: true, ...logPublic() });
+    if (url.pathname === "/log/sync" && req.method === "POST") {
+      logTick(url.searchParams.get("all") === "1")
+        .then(() => send(200, { ok: true, ...logPublic() }))
+        .catch((e) => send(500, { ok: false, error: String(e && e.message) }));
+      return;
+    }
     if (url.pathname === "/save" && req.method === "POST") {
       const name = path.basename(url.searchParams.get("name") || "").replace(/[\\/:*?"<>|]/g, " ").trim();
       if (!name) return send(400, { ok: false, error: "sin nombre" });
@@ -35,7 +43,7 @@ http
       req.on("data", (c) => chunks.push(c));
       req.on("end", () => {
         try {
-          const dir = path.join(BASE, String(new Date().getFullYear()));
+          const dir = url.searchParams.get("dir") === "logs" ? LOG_DIR : path.join(BASE, String(new Date().getFullYear()));
           fs.mkdirSync(dir, { recursive: true });
           const file = path.join(dir, name);
           fs.writeFileSync(file, Buffer.concat(chunks));
@@ -157,3 +165,56 @@ setInterval(() => {
   drainOutbox().catch((e) => console.log("Outbox", e && e.message));
 }, 3000);
 drainOutbox().catch(() => {});
+
+/* Registro (Excel RETURNED CHECK LOG): cada cierto tiempo pasa los reportes al Excel y sube una copia para verla en la app. */
+const LOG_STATE = path.join(HERE, "log-state.json");
+let logBusy = false;
+let logLast = { at: null, ok: null, locked: false, pending: 0, adoptable: 0, written: 0, errors: [], rowsInExcel: 0, file: LOG_FILE };
+let logHash = "";
+
+function logPublic() {
+  return { ...logLast, running: logBusy };
+}
+
+async function logTick(adoptAll = false) {
+  if (logBusy) return;
+  const admin = outboxClient();
+  if (!admin) {
+    logLast = { ...logLast, at: new Date().toISOString(), ok: false, errors: ["Falta secrets.local.json"] };
+    return;
+  }
+  logBusy = true;
+  try {
+    const { data, error } = await admin.from("notes").select("id,title,tags,values,created_at,updated_at").limit(5000);
+    if (error) throw new Error(error.message);
+    const res = await syncLog({ notes: data || [], stateFile: LOG_STATE, adoptAll });
+    logLast = {
+      at: new Date().toISOString(),
+      ok: res.ok,
+      locked: !!res.locked,
+      pending: (res.pending || []).length,
+      adoptable: res.adoptable || 0,
+      written: (res.written || []).length,
+      errors: res.errors || [],
+      rowsInExcel: res.rowsInExcel || 0,
+      file: res.file,
+    };
+    if (res.written && res.written.length) console.log("Registro Excel +", res.written.length, "filas");
+    if (res.snapshot) {
+      const body = JSON.stringify({ at: logLast.at, status: { locked: logLast.locked, pending: logLast.pending, adoptable: logLast.adoptable, errors: logLast.errors }, ...res.snapshot });
+      const h = String(body.length) + ":" + JSON.stringify(res.snapshot.rows).split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7) + JSON.stringify(logLast.pending + "|" + logLast.locked);
+      if (h !== logHash) {
+        const up = await admin.storage.from(OUTBOX).upload("_log/snapshot.json", body, { contentType: "application/json", upsert: true });
+        if (!up.error) logHash = h;
+      }
+    }
+  } catch (e) {
+    logLast = { ...logLast, at: new Date().toISOString(), ok: false, errors: [String((e && e.message) || e)] };
+    console.log("Registro", logLast.errors[0]);
+  } finally {
+    logBusy = false;
+  }
+}
+
+setInterval(() => logTick().catch(() => {}), 45000);
+setTimeout(() => logTick().catch(() => {}), 4000);

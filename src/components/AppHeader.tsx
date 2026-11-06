@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Gauge, FolderOpen, Home, LogOut, Moon, MoreHorizontal, Plus, RefreshCw, Search, Settings, Sun, Users } from "lucide-react";
+import { FileSpreadsheet, Gauge, FolderOpen, Home, LogOut, Moon, MoreHorizontal, Plus, RefreshCw, Search, Settings, Sun, Users } from "lucide-react";
 import { useTheme } from "next-themes";
 import UsageModal, { USAGE_CACHE_KEY } from "@/components/UsageModal";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
@@ -258,6 +258,16 @@ export default function AppHeader() {
             >
               <FolderOpen className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">Docs</span>
+            </button>
+
+            <button
+              type="button"
+              title="Registro de cheques (Excel)"
+              onClick={() => router.push("/app/registro")}
+              className="flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">Registro</span>
             </button>
           </nav>
 

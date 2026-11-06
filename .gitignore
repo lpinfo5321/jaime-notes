@@ -46,3 +46,4 @@ public/workbox-*.js
 next-env.d.ts
 
 .vercel
+tools/onedrive-helper/log-state.json
