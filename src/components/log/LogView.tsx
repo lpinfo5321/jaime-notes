@@ -47,7 +47,9 @@ function Badge({ s }: { s: LogState }) {
   );
 }
 
-const effDate = (r: LogRow) => r.D || r.B || r.C || "";
+/* Fechas con año raro (errores de captura en el Excel, ej. 0260) no deben ir arriba del orden. */
+const okDate = (d?: string | null) => (d && /^(20\d\d)-/.test(d) ? d : "");
+const effDate = (r: LogRow) => okDate(r.D) || okDate(r.B) || okDate(r.C) || "";
 
 function ago(iso?: string | null) {
   if (!iso) return "—";
