@@ -30,6 +30,19 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { onCoverError } from "@/lib/coverRetry";
 import {
+  NSF_FOLDER_NAME,
+  connectNsfFolder,
+  csvExportName,
+  exportPdfName,
+  exportRow,
+  exportYear,
+  nsfFolderLinked,
+  rowsToCsv,
+  uniqueExportName,
+  writeExportFile,
+  yearFolderForExport,
+} from "@/lib/nsfExport";
+import {
   enqueueReport,
   flushQueuedReportsOnce,
   getQueuedReport,
@@ -143,6 +156,10 @@ export default function NotesList({
   const sp = useSearchParams();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [nsfLinked, setNsfLinked] = useState(false);
+  useEffect(() => {
+    void nsfFolderLinked().then(setNsfLinked);
+  }, []);
   const [open, setOpen] = useState<{
     id: string;
     mode: "list" | "new" | "edit";
@@ -1240,13 +1257,6 @@ export default function NotesList({
     );
   }
 
-  function csvEscape(v: unknown) {
-    const s = v == null ? "" : String(v);
-    const needs = /[",\n\r]/.test(s);
-    const out = s.replace(/"/g, '""');
-    return needs ? `"${out}"` : out;
-  }
-
   function downloadText(filename: string, content: string, mime = "text/plain") {
     try {
       const blob = new Blob([content], { type: mime + ";charset=utf-8" });
@@ -1284,14 +1294,34 @@ export default function NotesList({
     }
   }
 
+  function rowFor(n: NoteListItem) {
+    const payload = (n.values as any)?._report?.payload ?? null;
+    return exportRow({
+      company: (n.title ?? "").trim(),
+      fields: payload?.fields ?? null,
+      bucket: deriveBucketFromNote(n),
+      createdAt: n.created_at,
+      latestDate: getLatestEntry(n.values)?.date ?? "",
+    });
+  }
+
+  async function destinationYearDir() {
+    let dir = await yearFolderForExport();
+    if (dir) return dir;
+    const ok = await connectNsfFolder();
+    if (!ok) return null;
+    setNsfLinked(true);
+    return yearFolderForExport();
+  }
+
   async function exportSelectedPdfsZip() {
     const ids = selectedInBucket;
     if (!ids.length) return;
 
     setBulkBusy(true);
     try {
+      const dir = await destinationYearDir();
       const { default: JSZip } = await import("jszip");
-      const zip = new JSZip();
 
       const exportOne = (noteId: string) =>
         new Promise<{ filename: string; buffer: ArrayBuffer }>((resolve, reject) => {
@@ -1368,15 +1398,44 @@ export default function NotesList({
           document.body.appendChild(iframe);
         });
 
-      // Export sequentially to avoid memory spikes
+      const used = new Set<string>();
+      const loose: { filename: string; buffer: ArrayBuffer }[] = [];
+
+      // Uno por uno para no cargar todos los PDF en memoria a la vez.
       for (const id of ids) {
-        const { filename, buffer } = await exportOne(String(id));
-        zip.file(filename, buffer);
+        const note = items.find((n) => String(n.id) === String(id)) ?? null;
+        const { buffer } = await exportOne(String(id));
+        const filename = uniqueExportName(used, note ? exportPdfName(rowFor(note)) : `cheque-${id}.pdf`);
+        loose.push({ filename, buffer });
       }
 
-      const blob = await zip.generateAsync({ type: "blob" });
-      const stamp = new Date().toISOString().slice(0, 10);
-      downloadBlob(`PDFs-${stamp}.zip`, blob);
+      if (dir) {
+        const failed: { filename: string; buffer: ArrayBuffer }[] = [];
+        for (const file of loose) {
+          try {
+            await writeExportFile(dir, file.filename, new Blob([file.buffer], { type: "application/pdf" }));
+          } catch {
+            failed.push(file);
+          }
+        }
+        const year = exportYear();
+        const saved = loose.length - failed.length;
+        if (saved > 0) {
+          alert(`Se guardaron ${saved} PDF en OneDrive:\n${NSF_FOLDER_NAME}\\${year}`);
+        }
+        if (failed.length) {
+          const z = new JSZip();
+          for (const file of failed) z.file(file.filename, file.buffer);
+          downloadBlob(`PDFs-${year}.zip`, await z.generateAsync({ type: "blob" }));
+          alert(`No se pudieron guardar ${failed.length} PDF en OneDrive. Esos se descargaron.`);
+        }
+        return;
+      }
+
+      const z = new JSZip();
+      for (const file of loose) z.file(file.filename, file.buffer);
+      downloadBlob(`PDFs-${exportYear()}.zip`, await z.generateAsync({ type: "blob" }));
+      alert("No se eligió la carpeta de OneDrive. Los PDF se descargaron en un ZIP.");
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error exportando PDFs");
     } finally {
@@ -1384,51 +1443,28 @@ export default function NotesList({
     }
   }
 
-  function exportSelectedCsv() {
+  async function exportSelectedCsv() {
     const ids = selectedInBucket;
     if (!ids.length) return;
-    const idSet = new Set(ids.map(String));
-    const rows = items.filter((n) => idSet.has(String(n.id)));
-    const header = [
-      "id",
-      "company",
-      "bucket",
-      "total_due",
-      "status_check",
-      "status_fee",
-      "latest_note_date",
-      "latest_agent",
-      "latest_note",
-    ];
-    const lines = [header.join(",")];
-    for (const n of rows) {
-      const bucketNow = deriveBucketFromNote(n);
-      const total = formatUsd(getTotalDueCentsFromValues(n.values));
-      const payload = (n.values as any)?._report?.payload ?? null;
-      const fields = payload?.fields ?? null;
-      const feeMethodRaw = pickField(fields, ["feePaymentMethod", "fee_payment_method"]);
-      const checkMethodRaw = pickField(fields, ["checkPaymentMethod", "check_payment_method"]);
-      const fee = statusFromPaymentMethod(feeMethodRaw, { allowRedeposited: true }).text;
-      const chk = statusFromPaymentMethod(checkMethodRaw, { allowRedeposited: true }).text;
-      const latest = getLatestEntry(n.values);
-      const latestDate = latest?.date ? formatUsMmDdYy(latest.date) : "";
-      const latestAgent = latest?.agent ?? "";
-      const latestNote = latest?.note ?? "";
-      const line = [
-        csvEscape(n.id),
-        csvEscape((n.title ?? "").trim()),
-        csvEscape(bucketNow),
-        csvEscape(total),
-        csvEscape(chk),
-        csvEscape(fee),
-        csvEscape(latestDate),
-        csvEscape(latestAgent),
-        csvEscape(latestNote),
-      ].join(",");
-      lines.push(line);
+    try {
+      const idSet = new Set(ids.map(String));
+      const rows = items.filter((n) => idSet.has(String(n.id))).map((n) => rowFor(n));
+      const csv = rowsToCsv(rows);
+      const filename = csvExportName();
+      const dir = await destinationYearDir();
+      if (dir) {
+        try {
+          await writeExportFile(dir, filename, new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
+          alert(`Exportación guardada en OneDrive:\n${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
+          return;
+        } catch (e) {
+          alert(e instanceof Error ? e.message : "No se pudo guardar en OneDrive. Se descargará el archivo.");
+        }
+      }
+      downloadText(filename, csv, "text/csv");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo exportar");
     }
-    const stamp = new Date().toISOString().slice(0, 10);
-    downloadText(`export-${stamp}.csv`, lines.join("\n"), "text/csv");
   }
 
   function MultiSelectBar() {
@@ -1494,10 +1530,27 @@ export default function NotesList({
 
             <button
               type="button"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={() =>
+                void (async () => {
+                  const ok = await connectNsfFolder();
+                  if (!ok) return;
+                  setNsfLinked(true);
+                  alert(`Listo. A partir de ahora se guarda en:\n${NSF_FOLDER_NAME}\\${exportYear()}`);
+                })()
+              }
+              disabled={bulkBusy}
+              title="Elige la carpeta NSF CHECKS PDF FILES. La app crea sola la carpeta del año."
+            >
+              {nsfLinked ? "OneDrive listo" : "Carpeta OneDrive"}
+            </button>
+
+            <button
+              type="button"
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              onClick={exportSelectedCsv}
+              onClick={() => void exportSelectedCsv()}
               disabled={bulkBusy || selectedCount === 0}
-              title="Exportar seleccionados"
+              title="Fecha, Pagado, Compañía y # de cheque"
             >
               <Download className="h-4 w-4" />
               Exportar
@@ -1508,7 +1561,7 @@ export default function NotesList({
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               onClick={() => void exportSelectedPdfsZip()}
               disabled={bulkBusy || selectedCount === 0}
-              title="Exportar PDFs (ZIP)"
+              title="Guarda cada PDF suelto en la carpeta del año"
             >
               <Download className="h-4 w-4" />
               PDFs

@@ -10,6 +10,7 @@ import { setSyncSnapshot } from "@/lib/syncStatus";
 import { useDashPrefs } from "@/components/dashboard/dashPrefs";
 import type { NoteListItem } from "./NotesList";
 import { APPREPORTE_V, isoToday, toEntryArray, sortEntriesDesc, formatUsMmDdYy, parseMoneyToCents, formatUsd, getTotalDueFromValues, normText, pickField, getTotalDueCentsFromValues, isBucket, normalizePaymentToken, statusFromPaymentMethod, getLatestEntry, getLatestEntryDateIso, getLatestEntryDateTime, getLatestAgent, getCheckPaymentStatusText, getPayText, fitTextToSingleLineInput, type Entry } from "./notesUtils";
+import { NSF_FOLDER_NAME, connectNsfFolder, exportPdfName, exportRow, exportYear, writeExportFile, yearFolderForExport } from "@/lib/nsfExport";
 
 export default function ReportModal({
   noteId,
@@ -558,8 +559,25 @@ export default function ReportModal({
     const iframe = iframeRef.current;
     if (!iframe) return;
 
+    let dir: FileSystemDirectoryHandle | null = null;
+    try {
+      dir = await yearFolderForExport();
+      if (!dir) {
+        const ok = await connectNsfFolder();
+        if (ok) dir = await yearFolderForExport();
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo abrir la carpeta de OneDrive");
+    }
+
     const reqId = `share-${Date.now()}`;
-    const filename = `Returned Checks - ${companyTitle}.pdf`;
+    const payload = lastPayloadRef.current ?? initReport;
+    const filename = exportPdfName(
+      exportRow({
+        company: (liveTitle ?? titleRef.current ?? companyTitle).trim(),
+        fields: payload?.fields ?? null,
+      }),
+    );
 
     let buffer: ArrayBuffer | null = null;
 
@@ -602,6 +620,15 @@ export default function ReportModal({
     if (!buffer) return;
 
     const blob = new Blob([buffer], { type: "application/pdf" });
+    if (dir) {
+      try {
+        await writeExportFile(dir, filename, blob);
+        alert(`PDF guardado en OneDrive:\n${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
+        return;
+      } catch (e) {
+        alert(e instanceof Error ? `${e.message} Se descargará el PDF.` : "No se pudo guardar en OneDrive. Se descargará el PDF.");
+      }
+    }
     const file = new File([blob], filename, { type: "application/pdf" });
 
     // Try native share with file (mobile)
@@ -717,7 +744,7 @@ export default function ReportModal({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); void shareReport(); }}
-              title="Compartir PDF"
+              title="Guardar PDF en OneDrive"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
