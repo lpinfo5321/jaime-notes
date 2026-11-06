@@ -876,7 +876,7 @@ export default function DashboardV2({
     <div className={`pal pal-${prefs.pal}`}>
       <div className={`kroot v${design}`}>
         <Head prefs={prefs} title={title} eyebrow={eyebrow} companies={companies} onSettings={() => {}} />
-        <div className="kg">
+        <div className={`kg ${prefs.notes !== "big" ? "kg-hide" : ""}`}>
           {companies.length ? (
             companies.slice(0, shown).map((c, i) => (
               <Card

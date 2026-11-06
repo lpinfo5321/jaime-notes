@@ -1016,3 +1016,8 @@ html.dash-on { scrollbar-gutter: stable; }
 .v6 .sn-pager, .v6 .sn-all { color: #6b5a40; }
 .v6 .sn-ib { background: rgba(0,0,0,.08); color: #2b241b; }
 @media (prefers-reduced-motion: reduce) { .sn, .sn-full { transition: none !important; animation: none !important; } }
+/* Notas escondidas: tarjetas del ancho de la carpeta, caben más por fila */
+.kg.kg-hide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 340px)); justify-content: center; gap: 56px clamp(40px, 4vw, 70px); }
+.kg.kg-hide .kc { grid-template-columns: minmax(0, 1fr); }
+.kc:has(.sn.on) { z-index: 8; }
+@media (min-width: 1280px) { .kg.kg-hide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 330px)); } }
