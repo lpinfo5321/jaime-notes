@@ -26,6 +26,7 @@ export const metadata: Metadata = {
   title: "Return Checks",
   description: "Gestión de cheques retornados",
   manifest: "/manifest.json",
+  other: { google: "notranslate" },
   appleWebApp: {
     capable: true,
     title: "Return Checks",
@@ -39,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" translate="no" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${hand.variable} antialiased`}
       >
