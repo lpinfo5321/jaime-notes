@@ -19,6 +19,8 @@ export async function recoverApp(force = false, to?: string) {
     await Promise.all((keys ?? []).map((k) => caches.delete(k)));
   } catch {}
   if (to) { window.location.replace(`${to}?v=${Date.now()}`); return true; }
-  window.location.replace(window.location.pathname + window.location.search.replace(/[?&]v=\d+/, "") + (window.location.search ? "&" : "?") + "v=" + Date.now());
+  const u = new URL(window.location.href);
+  u.searchParams.set("v", String(Date.now()));
+  window.location.replace(u.toString());
   return true;
 }
