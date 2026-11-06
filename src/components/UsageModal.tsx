@@ -136,9 +136,14 @@ export default function UsageModal({ onClose }: { onClose: () => void }) {
   const t = tone(worst);
 
   return createPortal(
-    <div className="fixed inset-0 z-[95] grid place-items-center overflow-y-auto bg-black/60 p-4" onClick={onClose}>
+    <div className="rc-usage-back" onClick={onClose}>
+      <style>{`
+        .rc-usage-back{position:fixed!important;inset:0!important;z-index:2147483000!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:16px!important;background:rgba(15,23,42,.55)!important;overflow:hidden!important}
+        .rc-usage-card{width:min(720px,100%)!important;max-height:calc(100dvh - 32px)!important;max-height:calc(100svh - 32px)!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;margin:0!important;position:relative!important;top:auto!important;bottom:auto!important;transform:none!important}
+        .rc-usage-body{min-height:0!important;flex:1 1 auto!important;overflow-y:auto!important}
+      `}</style>
       <div
-        className="my-auto flex max-h-[min(760px,calc(100dvh-32px))] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-zinc-50 shadow-2xl dark:bg-zinc-900"
+        className="rc-usage-card flex w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-zinc-50 shadow-2xl dark:bg-zinc-900"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
@@ -165,7 +170,7 @@ export default function UsageModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="space-y-4 overflow-y-auto p-4">
+        <div className="rc-usage-body space-y-4 overflow-y-auto p-4">
           {loading && !data ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-zinc-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Calculando uso…
