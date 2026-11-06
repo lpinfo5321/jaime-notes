@@ -279,8 +279,7 @@ export default function ReportModal({
       const data = ev?.data;
       if (!data || typeof data !== "object") return;
       if (data.type === "rc:print") {
-        // parent-driven print (works better on mobile)
-        void printFromParent();
+        void shareReport();
       }
       if (data.type === "rc:prepared" && (data as any).noteId === noteId) {
         preparedResolverRef.current?.(true);
@@ -570,6 +569,11 @@ export default function ReportModal({
       alert(e instanceof Error ? e.message : "No se pudo abrir la carpeta de OneDrive");
     }
 
+    if (!dir) {
+      alert("Para guardarlo solo, elige la carpeta NSF CHECKS PDF FILES (la que contiene 2026).");
+      return;
+    }
+
     const reqId = `share-${Date.now()}`;
     const payload = lastPayloadRef.current ?? initReport;
     const filename = exportPdfName(
@@ -620,32 +624,12 @@ export default function ReportModal({
     if (!buffer) return;
 
     const blob = new Blob([buffer], { type: "application/pdf" });
-    if (dir) {
-      try {
-        await writeExportFile(dir, filename, blob);
-        alert(`PDF guardado en OneDrive:\n${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
-        return;
-      } catch (e) {
-        alert(e instanceof Error ? `${e.message} Se descargará el PDF.` : "No se pudo guardar en OneDrive. Se descargará el PDF.");
-      }
+    try {
+      await writeExportFile(dir, filename, blob);
+      alert(`PDF guardado en OneDrive:\n${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo guardar en OneDrive");
     }
-    const file = new File([blob], filename, { type: "application/pdf" });
-
-    // Try native share with file (mobile)
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: companyTitle });
-        return;
-      } catch {}
-    }
-
-    // Fallback: download
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
   async function printFromParent() {
@@ -753,8 +737,8 @@ export default function ReportModal({
             {/* Imprimir */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); void printFromParent(); }}
-              title="Imprimir"
+              onClick={(e) => { e.stopPropagation(); void shareReport(); }}
+              title="Guardar PDF en OneDrive"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -805,7 +789,6 @@ export default function ReportModal({
               "h-full w-full transition-opacity duration-150",
               iframeShown ? "opacity-100" : "opacity-0",
             )}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"
             onLoad={() => {
               try {
                 loadedAtRef.current = Date.now();

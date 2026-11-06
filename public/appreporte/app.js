@@ -2399,41 +2399,137 @@
       if (e.target === el.adminImagesModal) closeAdminImages();
     });
 
-    el.btnPrint?.addEventListener?.("click", () => {
-      if (canPostToParent) {
+    const NSF_FOLDER_NAME = "NSF CHECKS PDF FILES";
+    const NSF_FOLDER_HINT =
+      "C:\\Users\\lapri\\OneDrive\\LA PRIMAVERA SUPERMARKET INC\\CHECK CASHING SERVICES\\RETURNED CHECKS\\NSF CHECKS PDF FILES";
+    let nsfParentHandle = null;
+
+    const nsfOpenDb = () =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open("rc-nsf-export", 1);
+        req.onupgradeneeded = () => {
+          if (!req.result.objectStoreNames.contains("handles")) req.result.createObjectStore("handles");
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+
+    const nsfRemember = async (handle) => {
+      nsfParentHandle = handle;
+      try {
+        const db = await nsfOpenDb();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction("handles", "readwrite");
+          tx.objectStore("handles").put(handle, "parent");
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch {}
+    };
+
+    (async () => {
+      try {
+        const db = await nsfOpenDb();
+        const handle = await new Promise((resolve, reject) => {
+          const req = db.transaction("handles", "readonly").objectStore("handles").get("parent");
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+        if (handle) nsfParentHandle = handle;
+      } catch {}
+    })();
+
+    const nsfToIso = (raw) => {
+      const s = String(raw || "").trim();
+      if (!s) return "";
+      let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+      m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+      if (!m) return "";
+      let y = Number(m[3]);
+      if (y < 100) y += 2000;
+      const mo = Number(m[1]);
+      const d = Number(m[2]);
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) return "";
+      return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    };
+
+    const nsfPdfName = (fields) => {
+      const f = fields || {};
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const iso = nsfToIso(f.dateReturned) || nsfToIso(f.dateCashed) || nsfToIso(f.dateDeposit) || today;
+      const [y, mo, d] = iso.split("-");
+      const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+      const fecha = `${months[Number(mo) - 1]} ${d}, ${y}`;
+      const method = String(f.checkPaymentMethod || "").trim().toUpperCase();
+      const pagado = method === "PAID CASH" || method === "PAID CHECK" || method === "REDEPOSITED" ? "PAGADO" : "PENDIENTE";
+      const clean = (value) => String(value || "").replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim();
+      const company = clean(f.companyName) || "SIN COMPANIA";
+      const ck = clean(String(f.checkNumber || "").replace(/^#/, "")) || "SIN NUMERO";
+      let name = `${fecha} ${pagado} ${company} CK ${ck}.pdf`;
+      if (name.length > 180) name = `${name.slice(0, 176).trim()}.pdf`;
+      return name;
+    };
+
+    const nsfYearDir = async () => {
+      const year = String(new Date().getFullYear());
+      if (nsfParentHandle) {
         try {
-          window.parent.postMessage({ type: "rc:print", noteId }, "*");
-        } catch {}
+          let perm = "prompt";
+          if (nsfParentHandle.queryPermission) perm = await nsfParentHandle.queryPermission({ mode: "readwrite" });
+          if (perm !== "granted" && nsfParentHandle.requestPermission) {
+            perm = await nsfParentHandle.requestPermission({ mode: "readwrite" });
+          }
+          if (perm === "granted") return await nsfParentHandle.getDirectoryHandle(year, { create: true });
+        } catch {
+          nsfParentHandle = null;
+        }
+      }
+      if (typeof window.showDirectoryPicker !== "function") return null;
+      let handle;
+      try {
+        handle = await window.showDirectoryPicker({ id: "nsf-checks-pdf-files", mode: "readwrite" });
+      } catch (e) {
+        if (e && e.name === "AbortError") return null;
+        throw e;
+      }
+      if (String(handle.name || "").trim().toLowerCase() !== NSF_FOLDER_NAME.toLowerCase()) {
+        alert(`Elegiste "${handle.name}".\n\nElige la carpeta que contiene los años (2026, 2025…):\n${NSF_FOLDER_HINT}`);
+        return null;
+      }
+      await nsfRemember(handle);
+      return await handle.getDirectoryHandle(year, { create: true });
+    };
+
+    const saveReportToOneDrive = async () => {
+      const dir = await nsfYearDir();
+      if (!dir) {
+        alert(`No se guardó solo.\n\nCuando aparezca el selector, elige esta carpeta (no la del año):\n${NSF_FOLDER_HINT}`);
         return;
       }
-      window.print();
-    });
-
-    el.btnPdf?.addEventListener?.("click", async () => {
       try {
         await waitForImagesReady();
       } catch {}
-      try {
-        if (el.lastSaved) el.lastSaved.textContent = "Exportando PDF…";
-      } catch {}
-      try {
-        const cname = String(report?.fields?.companyName || "").trim() || "Reporte";
-        const blob = await exportPdfBlob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `Returned Checks - ${cname}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        try {
-          alert(e instanceof Error ? e.message : "No se pudo exportar PDF");
-        } catch {}
-      } finally {
-        // indicador desactivado
-      }
+      const blob = await exportPdfBlob();
+      const filename = nsfPdfName(report?.fields || {});
+      const file = await dir.getFileHandle(filename, { create: true });
+      const writer = await file.createWritable();
+      await writer.write(blob);
+      await writer.close();
+      alert(`PDF guardado en OneDrive:\n${NSF_FOLDER_NAME}\\${new Date().getFullYear()}\\${filename}`);
+    };
+
+    el.btnPrint?.addEventListener?.("click", () => {
+      void saveReportToOneDrive().catch((e) => {
+        alert(e instanceof Error ? e.message : "No se pudo guardar el PDF");
+      });
+    });
+
+    el.btnPdf?.addEventListener?.("click", () => {
+      void saveReportToOneDrive().catch((e) => {
+        alert(e instanceof Error ? e.message : "No se pudo guardar el PDF");
+      });
     });
 
     // Allow parent to request a PDF for bulk-export (returns ArrayBuffer)
