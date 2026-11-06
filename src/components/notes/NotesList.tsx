@@ -2788,6 +2788,7 @@ function CompanyCard({
   const feeMethodRaw = pickField(reportFields, ["feePaymentMethod", "fee_payment_method"]);
   const checkMethodRaw = pickField(reportFields, ["checkPaymentMethod", "check_payment_method"]);
 
+  const checkNo = normText(pickField(reportFields, ["checkNumber", "check_number"])).replace(/^#/, "");
   const checkFeeStatus = statusFromPaymentMethod(feeMethodRaw, { allowRedeposited: true });
   const checkAmountStatus = statusFromPaymentMethod(checkMethodRaw, { allowRedeposited: true });
 
@@ -2839,6 +2840,9 @@ function CompanyCard({
             <b className={anyPending ? "due" : "paid"}>{totalDueText}</b>
             <span className={anyPending ? "pend" : "ok"}>{anyPending ? "Pending" : "Paid"}</span>
           </div>
+          {checkNo ? (
+            <em className="ck" title="Número de cheque (del reporte)"><small>Cheque</small>#{checkNo}</em>
+          ) : null}
           <button type="button" onClick={onOpenReport}>{reportPayload ? "Editar" : "Llenar"}</button>
         </div>
       </article>

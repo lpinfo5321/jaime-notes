@@ -1026,3 +1026,6 @@ html.dash-on { scrollbar-gutter: stable; }
 .kg.kg-hide, .kg.kg-hide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr)); justify-content: stretch; justify-items: center; gap: 56px 26px; padding-left: clamp(12px, 1.5vw, 28px); padding-right: clamp(12px, 1.5vw, 28px); }
 .kg.kg-hide .kc { width: 100%; max-width: 340px; }
 @media (min-width: 1280px) { .kg.kg-hide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr)); } }
+
+.report-shot-foot em.ck { flex: 1; min-width: 0; text-align: center; font-style: normal; font-weight: 900; font-size: 15px; letter-spacing: -.01em; color: #0f172a; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-shot-foot em.ck small { display: block; font-size: 9px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; opacity: .5; margin-bottom: 2px; }
