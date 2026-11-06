@@ -33,8 +33,9 @@ import { noticeOrAlert } from "@/lib/exportNotice";
 import {
   NSF_FOLDER_NAME,
   connectNsfFolder,
-  deliverOnDevice,
   isMobileExport,
+  OutboxPendingError,
+  sendToOneDriveViaPc,
   csvExportName,
   exportPdfName,
   exportRow,
@@ -1452,10 +1453,29 @@ export default function NotesList({
       const z = new JSZip();
       for (const file of loose) z.file(file.filename, file.buffer);
       if (isMobileExport()) {
-        notice.close();
-        const how = await deliverOnDevice(loose.map((f) => ({ filename: f.filename, blob: new Blob([f.buffer], { type: "application/pdf" }) })));
-        if (how === "shared") notice.success("PDF listos", "Elige dónde guardarlos (OneDrive, Archivos, Drive…)");
-        else if (how === "downloaded") notice.success("PDF descargados en este dispositivo", `${loose.length} archivo(s)`);
+        let savedN = 0;
+        let waiting = false;
+        for (const file of loose) {
+          notice.update("Exportando…", `${savedN} de ${loose.length}`);
+          try {
+            await sendToOneDriveViaPc(file.filename, new Blob([file.buffer], { type: "application/pdf" }), (msg) => notice.update("Exportando…", msg), waiting ? 0 : 28000);
+            savedN += 1;
+          } catch (e) {
+            if (e instanceof OutboxPendingError) {
+              waiting = true;
+              continue;
+            }
+            throw e;
+          }
+        }
+        if (waiting) {
+          notice.error(
+            "TODAVÍA NO están todos en OneDrive",
+            `${savedN} de ${loose.length} quedaron confirmados en la carpeta. El resto quedó en espera y se guardará cuando enciendas la computadora. Hasta entonces no los tomes como guardados.`,
+          );
+        } else {
+          notice.success(`${savedN} PDF exportado${savedN === 1 ? "" : "s"}`, `${NSF_FOLDER_NAME}\\${exportYear()}`);
+        }
         return;
       }
       downloadBlob(`PDFs-${exportYear()}.zip`, await z.generateAsync({ type: "blob" }));
@@ -1490,11 +1510,25 @@ export default function NotesList({
           return;
         }
       }
-      downloadText(filename, csv, "text/csv");
       if (isMobileExport()) {
-        notice.success("Exportación descargada en este dispositivo", filename);
+        try {
+          const csvBlob = new Blob(["\uFEFF" + csv], { type: "text/csv" });
+          const saved = await sendToOneDriveViaPc(filename, csvBlob, (msg) => notice.update("Exportando…", msg));
+          notice.success("Exportado a OneDrive", saved.file);
+        } catch (e) {
+          if (e instanceof OutboxPendingError) {
+            notice.error(
+              "TODAVÍA NO está en OneDrive",
+              "Tu computadora está apagada o el ayudante no está activo. La lista quedó en espera y se guardará en la carpeta del año cuando la enciendas.",
+            );
+          } else {
+            downloadText(filename, csv, "text/csv");
+            notice.error("NO se guardó en OneDrive", `${e instanceof Error ? e.message : ""} Se descargó el archivo en este celular.`);
+          }
+        }
         return;
       }
+      downloadText(filename, csv, "text/csv");
       notice.error("NO se guardó en OneDrive", "No hay carpeta de OneDrive conectada. Se descargó el archivo en esta computadora.");
     } catch (e) {
       notice.error("NO se exportó", e instanceof Error ? e.message : "No se pudo exportar");

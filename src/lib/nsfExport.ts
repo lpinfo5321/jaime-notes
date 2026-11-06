@@ -272,6 +272,63 @@ export async function writeExportFile(dir: FileSystemDirectoryHandle, filename: 
   if (saved.size !== data.size) throw new Error("El archivo se guardó incompleto en la carpeta. Vuelve a exportar.");
 }
 
+export class OutboxPendingError extends Error {
+  constructor() {
+    super("PENDING_PC");
+    this.name = "OutboxPendingError";
+  }
+}
+
+/**
+ * Desde el celular no hay carpeta de OneDrive. El archivo se sube a la nube y
+ * la computadora (con el ayudante activo) lo copia a la carpeta del año.
+ * No resuelve hasta que el archivo está en esa carpeta.
+ */
+export async function sendToOneDriveViaPc(
+  filename: string,
+  data: Blob,
+  onTick?: (msg: string) => void,
+  waitMs = 28000,
+): Promise<{ file: string }> {
+  onTick?.("Enviando a tu computadora…");
+  const start = await fetch("/api/nsf-outbox", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: filename, size: data.size }),
+  });
+  const created = (await start.json().catch(() => null)) as { id?: string; signedUrl?: string; error?: string } | null;
+  if (!start.ok || !created?.id || !created.signedUrl) {
+    throw new Error(created?.error || "No se pudo preparar el envío a OneDrive");
+  }
+  const up = await fetch(created.signedUrl, {
+    method: "PUT",
+    headers: { "content-type": data.type || "application/octet-stream" },
+    body: data,
+  });
+  if (!up.ok) throw new Error("No se pudo enviar el archivo");
+  const ready = await fetch("/api/nsf-outbox/ready", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: created.id }),
+  });
+  const readyBody = (await ready.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+  if (!ready.ok || !readyBody?.ok) throw new Error(readyBody?.error || "El archivo no llegó completo");
+
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline) {
+    onTick?.("Guardando en la carpeta de OneDrive de tu computadora…");
+    await new Promise((r) => setTimeout(r, 2000));
+    const g = await fetch(`/api/nsf-outbox?id=${encodeURIComponent(created.id)}`);
+    const j = (await g.json().catch(() => null)) as { status?: string; file?: string; size?: number; error?: string } | null;
+    if (j?.status === "saved") {
+      if (j.size !== data.size) throw new Error("El archivo se guardó incompleto en OneDrive. Vuelve a exportar.");
+      return { file: j.file || filename };
+    }
+    if (j?.status === "error") throw new Error(j.error || "La computadora no pudo guardarlo en OneDrive");
+  }
+  throw new OutboxPendingError();
+}
+
 /** Celular o tablet: sin ayudante ni selector de carpetas. */
 export function isMobileExport() {
   return typeof window !== "undefined" && typeof (window as PickerWindow).showDirectoryPicker !== "function";

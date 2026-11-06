@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createClient } from "@supabase/supabase-js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -78,3 +79,81 @@ http
     send(404, { ok: false });
   })
   .listen(PORT, "127.0.0.1", () => console.log("Ayudante OneDrive activo en", PORT, "->", BASE));
+
+/* El celular deja el PDF en la nube. Aquí se copia a la carpeta del año y se confirma. */
+const OUTBOX = "nsf-outbox";
+let outboxAdmin = null;
+
+function outboxClient() {
+  if (outboxAdmin) return outboxAdmin;
+  try {
+    const secrets = JSON.parse(fs.readFileSync(path.join(HERE, "secrets.local.json"), "utf8"));
+    if (!secrets.url || !secrets.key) return null;
+    outboxAdmin = createClient(secrets.url, secrets.key, { auth: { persistSession: false } });
+    return outboxAdmin;
+  } catch {
+    return null;
+  }
+}
+
+async function putMeta(admin, id, meta) {
+  await admin.storage.from(OUTBOX).upload(`${id}/meta.json`, JSON.stringify(meta), {
+    contentType: "application/json",
+    upsert: true,
+  });
+}
+
+async function drainOutbox() {
+  const admin = outboxClient();
+  if (!admin) return;
+  const listed = await admin.storage.from(OUTBOX).list("", { limit: 100 });
+  for (const item of listed.data || []) {
+    if (item.id) continue;
+    const id = item.name;
+    const metaRes = await admin.storage.from(OUTBOX).download(`${id}/meta.json`);
+    if (metaRes.error || !metaRes.data) continue;
+    const meta = JSON.parse(await metaRes.data.text());
+    if (meta.status === "uploading" && Date.now() - Number(meta.createdAt || 0) > 60 * 60 * 1000) {
+      await admin.storage.from(OUTBOX).remove([`${id}/file`, `${id}/meta.json`]);
+      continue;
+    }
+    if (meta.status === "saved" && Date.now() - Number(meta.createdAt || 0) > 2 * 60 * 60 * 1000) {
+      await admin.storage.from(OUTBOX).remove([`${id}/meta.json`]);
+      continue;
+    }
+    if (meta.status !== "pending") continue;
+    const fileRes = await admin.storage.from(OUTBOX).download(`${id}/file`);
+    if (fileRes.error || !fileRes.data) continue;
+    const buf = Buffer.from(await fileRes.data.arrayBuffer());
+    if (buf.length !== Number(meta.size)) {
+      meta.status = "error";
+      meta.error = "El archivo llegó incompleto y no se guardó.";
+      await putMeta(admin, id, meta);
+      continue;
+    }
+    try {
+      const dir = path.join(BASE, String(meta.year || new Date().getFullYear()));
+      fs.mkdirSync(dir, { recursive: true });
+      const dest = path.join(dir, path.basename(String(meta.name || "reporte.pdf")));
+      fs.writeFileSync(dest, buf);
+      const written = fs.statSync(dest).size;
+      if (written !== buf.length) throw new Error("escritura incompleta");
+      meta.status = "saved";
+      meta.file = dest;
+      meta.size = written;
+      await admin.storage.from(OUTBOX).remove([`${id}/file`]);
+      await putMeta(admin, id, meta);
+      console.log("OneDrive <-", dest);
+    } catch (e) {
+      meta.status = "error";
+      meta.error = "No se pudo escribir en la carpeta de OneDrive.";
+      await putMeta(admin, id, meta);
+      console.log("Outbox error", e && e.message);
+    }
+  }
+}
+
+setInterval(() => {
+  drainOutbox().catch((e) => console.log("Outbox", e && e.message));
+}, 3000);
+drainOutbox().catch(() => {});

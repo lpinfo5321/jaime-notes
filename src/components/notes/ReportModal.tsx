@@ -11,7 +11,7 @@ import { useDashPrefs } from "@/components/dashboard/dashPrefs";
 import type { NoteListItem } from "./NotesList";
 import { APPREPORTE_V, isoToday, toEntryArray, sortEntriesDesc, formatUsMmDdYy, parseMoneyToCents, formatUsd, getTotalDueFromValues, normText, pickField, getTotalDueCentsFromValues, isBucket, normalizePaymentToken, statusFromPaymentMethod, getLatestEntry, getLatestEntryDateIso, getLatestEntryDateTime, getLatestAgent, getCheckPaymentStatusText, getPayText, fitTextToSingleLineInput, type Entry } from "./notesUtils";
 import { noticeOrAlert } from "@/lib/exportNotice";
-import { deliverOnDevice, isMobileExport, NSF_FOLDER_NAME, connectNsfFolder, exportPdfName, exportRow, exportYear, writeExportFile, yearFolderForExport } from "@/lib/nsfExport";
+import { isMobileExport, NSF_FOLDER_NAME, OutboxPendingError, connectNsfFolder, exportPdfName, exportRow, exportYear, sendToOneDriveViaPc, writeExportFile, yearFolderForExport } from "@/lib/nsfExport";
 
 export default function ReportModal({
   noteId,
@@ -638,15 +638,24 @@ export default function ReportModal({
     }
 
     const blob = new Blob([buffer], { type: "application/pdf" });
-    if (mobile || !dir) {
+    if (mobile) {
       try {
-        notice.close();
-        const how = await deliverOnDevice([{ filename, blob }]);
-        if (how === "shared") notice.success("PDF listo", "Elige dónde guardarlo (OneDrive, Archivos, Drive…)");
-        else if (how === "downloaded") notice.success("PDF descargado en este dispositivo", filename);
+        const saved = await sendToOneDriveViaPc(filename, blob, (msg) => notice.update("Exportando…", msg));
+        notice.success("Exportado a OneDrive", saved.file);
       } catch (e) {
-        notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo compartir el PDF");
+        if (e instanceof OutboxPendingError) {
+          notice.error(
+            "TODAVÍA NO está en OneDrive",
+            "Tu computadora está apagada o el ayudante no está activo. El PDF quedó en espera y se guardará solo en la carpeta del año cuando la enciendas. Hasta ese momento no lo tomes como guardado.",
+          );
+        } else {
+          notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo enviar a OneDrive");
+        }
       }
+      return;
+    }
+    if (!dir) {
+      notice.error("NO se guardó el PDF", "No hay carpeta de OneDrive conectada.");
       return;
     }
     notice.update("Exportando…", "Guardando en OneDrive");

@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+tools/onedrive-helper/secrets.local.json
 
 # pwa/workbox (no los usamos en este proyecto)
 public/sw.js
@@ -43,3 +44,5 @@ public/workbox-*.js
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel

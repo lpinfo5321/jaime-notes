@@ -2539,35 +2539,54 @@
         const viaHelper = await nsfHelperUp();
         const noDesktop = !viaHelper && typeof window.showDirectoryPicker !== "function";
         if (noDesktop) {
-          /* Celular / tablet: no hay OneDrive local. Se comparte con la hoja nativa (Archivos, OneDrive, Drive, WhatsApp…) o se descarga. */
+          /* Celular: no hay carpeta local. Se envía a la nube y la computadora lo copia a OneDrive. */
           try {
             await waitForImagesReady();
           } catch {}
           const mblob = await exportPdfBlob();
           if (!mblob || !mblob.size) throw new Error("El PDF salió vacío.");
           const mname = nsfPdfName(report?.fields || {});
-          const mfile = new File([mblob], mname, { type: "application/pdf" });
-          let shared = false;
-          if (navigator.canShare && navigator.canShare({ files: [mfile] })) {
-            notice.close();
-            try {
-              await navigator.share({ files: [mfile], title: mname });
-              notice.success("PDF listo", "Elige dónde guardarlo (OneDrive, Archivos, Drive…)");
-              shared = true;
-            } catch (e) {
-              if (e && e.name === "AbortError") return;
-              /* sin permiso de compartir (pasó mucho tiempo): se descarga */
+          notice.update("Exportando…", "Enviando a tu computadora…");
+          const start = await fetch("/api/nsf-outbox", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name: mname, size: mblob.size }),
+          });
+          const created = await start.json().catch(() => null);
+          if (!start.ok || !created || !created.id || !created.signedUrl) {
+            throw new Error((created && created.error) || "No se pudo preparar el envío a OneDrive");
+          }
+          const up = await fetch(created.signedUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: mblob });
+          if (!up.ok) throw new Error("No se pudo enviar el PDF");
+          const ready = await fetch("/api/nsf-outbox/ready", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ id: created.id }),
+          });
+          const readyBody = await ready.json().catch(() => null);
+          if (!ready.ok || !readyBody || !readyBody.ok) throw new Error((readyBody && readyBody.error) || "El PDF no llegó completo");
+          const deadline = Date.now() + 28000;
+          let savedFile = "";
+          while (Date.now() < deadline) {
+            notice.update("Exportando…", "Guardando en la carpeta de OneDrive de tu computadora…");
+            await new Promise((r) => setTimeout(r, 2000));
+            const g = await fetch("/api/nsf-outbox?id=" + encodeURIComponent(created.id));
+            const j = await g.json().catch(() => null);
+            if (j && j.status === "saved") {
+              if (j.size !== mblob.size) throw new Error("El archivo se guardó incompleto en OneDrive. Vuelve a exportar.");
+              savedFile = j.file || mname;
+              break;
             }
+            if (j && j.status === "error") throw new Error(j.error || "La computadora no pudo guardarlo");
           }
-          if (!shared) {
-            const url = URL.createObjectURL(mblob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = mname;
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
-            notice.success("PDF descargado en este dispositivo", mname);
+          if (!savedFile) {
+            notice.error(
+              "TODAVÍA NO está en OneDrive",
+              "Tu computadora está apagada o el ayudante no está activo. El PDF quedó en espera y se guardará solo en la carpeta del año cuando la enciendas. Hasta ese momento no lo tomes como guardado.",
+            );
+            return;
           }
+          notice.success("Exportado a OneDrive", savedFile);
           return;
         }
         if (!viaHelper) {
