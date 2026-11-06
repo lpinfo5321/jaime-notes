@@ -2592,8 +2592,15 @@
           notice.close();
           let handle;
           try {
+            let startIn;
+            try {
+              if (nsfParentHandle && nsfParentHandle.queryPermission && (await nsfParentHandle.queryPermission({ mode: "readwrite" })) === "granted") {
+                startIn = await nsfParentHandle.getDirectoryHandle(String(new Date().getFullYear()), { create: true });
+              }
+            } catch {}
             handle = await window.showSaveFilePicker({
               id: "nsf-manual-save",
+              ...(startIn ? { startIn } : {}),
               suggestedName: filename,
               types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
             });
