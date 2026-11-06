@@ -3,6 +3,10 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = 47321;
 const BASE = path.join(os.homedir(), "OneDrive", "LA PRIMAVERA SUPERMARKET INC", "CHECK CASHING SERVICES", "RETURNED CHECKS", "NSF CHECKS PDF FILES");
@@ -39,6 +43,35 @@ http
         } catch (e) {
           send(500, { ok: false, error: String(e && e.message) });
         }
+      });
+      return;
+    }
+    if (url.pathname === "/save-as" && req.method === "POST") {
+      const name = path.basename(url.searchParams.get("name") || "reporte.pdf").replace(/[\\/:*?"<>|]/g, " ").trim() || "reporte.pdf";
+      const chunks = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        const dir = path.join(BASE, String(new Date().getFullYear()));
+        try {
+          fs.mkdirSync(dir, { recursive: true });
+        } catch {}
+        execFile(
+          "powershell",
+          ["-STA", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(HERE, "save-dialog.ps1")],
+          { env: { ...process.env, RC_DIR: dir, RC_NAME: name }, windowsHide: false, maxBuffer: 1 << 20 },
+          (err, stdout) => {
+            if (err) return send(500, { ok: false, error: String(err.message) });
+            const chosen = String(stdout || "").trim().split(/\r?\n/).pop();
+            if (!chosen || chosen === "CANCEL") return send(200, { ok: false, cancelled: true });
+            try {
+              const buf = Buffer.concat(chunks);
+              fs.writeFileSync(chosen, buf);
+              send(200, { ok: true, file: chosen, size: fs.statSync(chosen).size });
+            } catch (e) {
+              send(500, { ok: false, error: String(e && e.message) });
+            }
+          },
+        );
       });
       return;
     }

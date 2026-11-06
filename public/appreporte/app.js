@@ -2588,7 +2588,18 @@
         const blob = await exportPdfBlob();
         if (!blob || !blob.size) throw new Error("El PDF salió vacío.");
         const filename = nsfPdfName(report?.fields || {});
-        if (typeof window.showSaveFilePicker === "function") {
+        if (await nsfHelperUp()) {
+          notice.update("Elige dónde guardar", "Se abrió la ventana de guardado");
+          const r = await fetch(`http://127.0.0.1:47321/save-as?name=${encodeURIComponent(filename)}`, { method: "POST", body: blob });
+          const j = await r.json().catch(() => null);
+          if (j && j.cancelled) {
+            notice.close();
+            return;
+          }
+          if (!r.ok || !j || !j.ok) throw new Error(`No se pudo guardar${j && j.error ? ": " + j.error : ""}.`);
+          if (j.size !== blob.size) throw new Error("El archivo se guardó incompleto. Vuelve a intentarlo.");
+          notice.success("PDF guardado", j.file);
+        } else if (typeof window.showSaveFilePicker === "function") {
           notice.close();
           let handle;
           try {
