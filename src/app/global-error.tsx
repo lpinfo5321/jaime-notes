@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect } from "react";
 import { isStaleBuildError, recoverApp } from "@/lib/recoverApp";
@@ -6,9 +6,9 @@ import { isStaleBuildError, recoverApp } from "@/lib/recoverApp";
 /** Última red de seguridad: si algo revienta al cargar, se limpia y se recarga solo una vez. */
 export default function GlobalError({ error, reset }: { error: Error; reset: () => void }) {
   useEffect(() => {
-    void recoverApp();
+    /* Solo se recarga solo si parece una versión vieja; cualquier otro error se muestra para poder arreglarlo. */
+    if (isStaleBuildError(error)) void recoverApp();
   }, [error]);
-  void isStaleBuildError;
   return (
     <html lang="es">
       <body style={{ margin: 0, fontFamily: "system-ui, sans-serif", background: "#fafafa", color: "#18181b" }}>
@@ -23,6 +23,7 @@ export default function GlobalError({ error, reset }: { error: Error; reset: () 
             >
               Reintentar
             </button>
+            <pre style={{ marginTop: 14, textAlign: "left", fontSize: 11, color: "#b91c1c", whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 160, overflow: "auto" }}>{String(error?.message || "")}{"\n"}{String(error?.stack || "").split("\n").slice(0, 4).join("\n")}</pre>
             <div style={{ marginTop: 10 }}>
               <button type="button" onClick={reset} style={{ background: "none", border: 0, color: "#71717a", fontSize: 12, cursor: "pointer" }}>Probar sin recargar</button>
             </div>
