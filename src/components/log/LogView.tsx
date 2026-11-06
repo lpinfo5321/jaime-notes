@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Clock, FileSpreadsheet, RefreshCw, Search, TriangleAlert } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, FileSpreadsheet, RefreshCw, Search, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
 import {
   buildLogXlsx,
   fmtDate,
@@ -47,6 +47,8 @@ function Badge({ s }: { s: LogState }) {
   );
 }
 
+const effDate = (r: LogRow) => r.D || r.B || r.C || "";
+
 function ago(iso?: string | null) {
   if (!iso) return "—";
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -63,6 +65,10 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
   const [q, setQ] = useState("");
   const [state, setState] = useState<"all" | LogState>("all");
   const [year, setYear] = useState<number | "all">("all");
+  const [showMore, setShowMore] = useState(false);
+  const [f, setF] = useState({ company: "", reason: "", agent: "", feePay: "", chkPay: "", from: "", to: "", min: "", sort: "recent" });
+  const setFv = (k: keyof typeof f, v: string) => setF((o) => ({ ...o, [k]: v }));
+  const activeExtra = Object.entries(f).filter(([k, v]) => k !== "sort" && v).length;
   const [helper, setHelper] = useState<HelperStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -87,6 +93,18 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
     return () => window.clearInterval(id);
   }, [loadHelper]);
 
+  const opts = useMemo(() => {
+    const uniq = (get: (r: LogRow) => string | null | undefined) =>
+      Array.from(new Set(rows.map((r) => String(get(r) ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    return {
+      company: uniq((r) => r.H),
+      reason: uniq((r) => r.I),
+      agent: uniq((r) => r.T),
+      feePay: uniq((r) => r.Q),
+      chkPay: uniq((r) => (r.S || "").replace(/\s*#.*$/, "")),
+    };
+  }, [rows]);
+
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows
@@ -96,8 +114,21 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
         if (!needle) return true;
         return [r.H, r.E, r.F, r.I, r.T, r.U].some((v) => String(v ?? "").toLowerCase().includes(needle));
       })
-      .sort((a, b) => (b.D || "").localeCompare(a.D || "") || b.r - a.r);
-  }, [rows, q, state, year]);
+      .filter((r) => !f.company || (r.H || "") === f.company)
+      .filter((r) => !f.reason || (r.I || "") === f.reason)
+      .filter((r) => !f.agent || (r.T || "") === f.agent)
+      .filter((r) => !f.feePay || (r.Q || "") === f.feePay)
+      .filter((r) => !f.chkPay || (r.S || "").replace(/\s*#.*$/, "") === f.chkPay)
+      .filter((r) => !f.from || effDate(r) >= f.from)
+      .filter((r) => !f.to || (effDate(r) !== "" && effDate(r) <= f.to))
+      .filter((r) => !f.min || rowTotal(r) >= Number(f.min))
+      .sort((a, b) => {
+        if (f.sort === "old") return effDate(a).localeCompare(effDate(b)) || a.r - b.r;
+        if (f.sort === "amount") return rowTotal(b) - rowTotal(a);
+        if (f.sort === "company") return String(a.H || "").localeCompare(String(b.H || ""));
+        return effDate(b).localeCompare(effDate(a)) || b.r - a.r;
+      });
+  }, [rows, q, state, year, f]);
 
   const kpi = useMemo(() => {
     const k = { total: rows.length, open: 0, partial: 0, done: 0, loss: 0, pendingAmt: 0, fees: 0 };
@@ -295,8 +326,81 @@ export default function LogView({ snapshot, loadError }: { snapshot: LogSnapshot
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
+            <select
+              value={f.sort}
+              onChange={(e) => setFv("sort", e.target.value)}
+              className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              <option value="recent">Más recientes primero</option>
+              <option value="old">Más antiguos primero</option>
+              <option value="amount">Mayor monto</option>
+              <option value="company">Compañía A-Z</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowMore((v) => !v)}
+              className={`inline-flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold ${
+                showMore || activeExtra ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              }`}
+            >
+              <SlidersHorizontal className="h-4 w-4" /> Filtros{activeExtra ? ` (${activeExtra})` : ""}
+            </button>
+            {q || state !== "all" || year !== "all" || activeExtra ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQ("");
+                  setState("all");
+                  setYear("all");
+                  setF((o) => ({ company: "", reason: "", agent: "", feePay: "", chkPay: "", from: "", to: "", min: "", sort: o.sort }));
+                }}
+                className="inline-flex h-10 items-center gap-1 rounded-xl px-2 text-sm font-semibold text-rose-600 hover:bg-rose-50"
+              >
+                <X className="h-4 w-4" /> Limpiar
+              </button>
+            ) : null}
             <span className="text-xs text-zinc-500">{list.length} de {rows.length}</span>
           </div>
+
+          {showMore ? (
+            <div className="grid shrink-0 grid-cols-2 gap-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm sm:grid-cols-3 lg:grid-cols-4 dark:border-zinc-800 dark:bg-zinc-900">
+              {(
+                [
+                  ["company", "Compañía", opts.company],
+                  ["reason", "Motivo", opts.reason],
+                  ["agent", "Agente", opts.agent],
+                  ["feePay", "Pago comisión", opts.feePay],
+                  ["chkPay", "Pago cheque", opts.chkPay],
+                ] as const
+              ).map(([k, label, list2]) => (
+                <label key={k} className="block text-[11px] font-semibold text-zinc-500">
+                  {label}
+                  <select
+                    value={f[k]}
+                    onChange={(e) => setFv(k, e.target.value)}
+                    className="mt-1 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm font-normal text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  >
+                    <option value="">Todos</option>
+                    {list2.map((o) => (
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <label className="block text-[11px] font-semibold text-zinc-500">
+                Desde
+                <input type="date" value={f.from} onChange={(e) => setFv("from", e.target.value)} className="mt-1 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm font-normal dark:border-zinc-700 dark:bg-zinc-800" />
+              </label>
+              <label className="block text-[11px] font-semibold text-zinc-500">
+                Hasta
+                <input type="date" value={f.to} onChange={(e) => setFv("to", e.target.value)} className="mt-1 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm font-normal dark:border-zinc-700 dark:bg-zinc-800" />
+              </label>
+              <label className="block text-[11px] font-semibold text-zinc-500">
+                Total mínimo ($)
+                <input type="number" inputMode="decimal" value={f.min} onChange={(e) => setFv("min", e.target.value)} placeholder="0" className="mt-1 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm font-normal dark:border-zinc-700 dark:bg-zinc-800" />
+              </label>
+            </div>
+          ) : null}
 
           {/* Escritorio: tabla */}
           <div className="hidden min-h-0 flex-1 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm md:block dark:border-zinc-800 dark:bg-zinc-900">
