@@ -844,7 +844,7 @@ html.dash-on [data-bar="buckets"] button[class*="bg-zinc-900"] {
 .report-shot-foot > button { border: 0; height: 36px; padding: 0 14px; border-radius: 12px; background: var(--dash-bar, #0a84ff); color: var(--dash-bar-fg, #fff); font-weight: 800; font-size: 13px; cursor: pointer; }
 
 /* Encabezado del detalle, igual que la vista aprobada */
-.co-hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 420px); gap: 16px; margin-bottom: 22px; align-items: stretch; width: 100%; }
+.co-hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; margin-bottom: 22px; align-items: stretch; width: 100%; }
 .co-folder { background: var(--dash-bar, #0a84ff); color: #fff; border-radius: 26px; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; min-height: 168px; }
 .co-folder-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .co-folder .co-back { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border: 0; border-radius: 12px; background: rgba(255,255,255,.18); color: #fff; font-weight: 800; font-size: 13px; cursor: pointer; }
@@ -1029,3 +1029,12 @@ html.dash-on { scrollbar-gutter: stable; }
 
 .report-shot-foot em.ck { flex: 1; min-width: 0; text-align: center; font-style: normal; font-weight: 900; font-size: 15px; letter-spacing: -.01em; color: #0f172a; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-shot-foot em.ck small { display: block; font-size: 9px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; opacity: .5; margin-bottom: 2px; }
+
+/* Detalle de compañía: barra de nombre y nota amarilla alineadas entre sí y con el encabezado, en cualquier pantalla */
+.co-hero > * { min-width: 0; }
+.co-folder, .co-note .co-contacts { box-sizing: border-box; }
+.co-note .co-contacts { padding: 16px 20px !important; }
+.co-folder h2 { overflow-wrap: anywhere; }
+@media (max-width: 900px) { .co-hero { gap: 12px; margin-bottom: 16px; } .co-folder { min-height: 0; padding: 14px 16px; border-radius: 22px; } .co-note .co-contacts { height: auto; padding: 14px 16px !important; border-radius: 4px 22px 22px 22px !important; } .co-note .co-contacts > div:first-child > button { flex: 1 1 auto; justify-content: center; } .co-note .co-contacts > div:first-child > div { flex: 1 1 100%; } .co-folder-due b { font-size: 30px; } }
+@media (max-width: 420px) { .co-folder .co-back { height: 34px; } .co-folder-due b { font-size: 28px; } }
+html.dash-on .co-detail .co-folder .co-count { background: rgba(255,255,255,.18) !important; color: #fff !important; padding: 5px 12px; border-radius: 99px; }

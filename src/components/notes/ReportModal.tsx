@@ -11,7 +11,7 @@ import { useDashPrefs } from "@/components/dashboard/dashPrefs";
 import type { NoteListItem } from "./NotesList";
 import { APPREPORTE_V, isoToday, toEntryArray, sortEntriesDesc, formatUsMmDdYy, parseMoneyToCents, formatUsd, getTotalDueFromValues, normText, pickField, getTotalDueCentsFromValues, isBucket, normalizePaymentToken, statusFromPaymentMethod, getLatestEntry, getLatestEntryDateIso, getLatestEntryDateTime, getLatestAgent, getCheckPaymentStatusText, getPayText, fitTextToSingleLineInput, type Entry } from "./notesUtils";
 import { noticeOrAlert } from "@/lib/exportNotice";
-import { NSF_FOLDER_NAME, connectNsfFolder, exportPdfName, exportRow, exportYear, writeExportFile, yearFolderForExport } from "@/lib/nsfExport";
+import { deliverOnDevice, isMobileExport, NSF_FOLDER_NAME, connectNsfFolder, exportPdfName, exportRow, exportYear, writeExportFile, yearFolderForExport } from "@/lib/nsfExport";
 
 export default function ReportModal({
   noteId,
@@ -562,9 +562,14 @@ export default function ReportModal({
     notice.start("Exportando…", "Preparando el PDF");
 
     let dir: FileSystemDirectoryHandle | null = null;
+    const mobile = isMobileExport();
     try {
+      if (mobile) {
+        dir = null;
+      } else {
       dir = await yearFolderForExport();
-      if (!dir) {
+      }
+      if (!dir && !mobile) {
         notice.close();
         const ok = await connectNsfFolder();
         if (ok) dir = await yearFolderForExport();
@@ -575,7 +580,7 @@ export default function ReportModal({
       return;
     }
 
-    if (!dir) {
+    if (!dir && !mobile) {
       notice.error("NO se guardó el PDF", "No hay carpeta de OneDrive conectada. Activa el ayudante (INSTALAR.bat) o elige la carpeta NSF CHECKS PDF FILES.");
       return;
     }
@@ -632,8 +637,19 @@ export default function ReportModal({
       return;
     }
 
-    notice.update("Exportando…", "Guardando en OneDrive");
     const blob = new Blob([buffer], { type: "application/pdf" });
+    if (mobile || !dir) {
+      try {
+        notice.close();
+        const how = await deliverOnDevice([{ filename, blob }]);
+        if (how === "shared") notice.success("PDF listo", "Elige dónde guardarlo (OneDrive, Archivos, Drive…)");
+        else if (how === "downloaded") notice.success("PDF descargado en este dispositivo", filename);
+      } catch (e) {
+        notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo compartir el PDF");
+      }
+      return;
+    }
+    notice.update("Exportando…", "Guardando en OneDrive");
     try {
       await writeExportFile(dir, filename, blob);
       notice.success("Exportado a OneDrive", `${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);

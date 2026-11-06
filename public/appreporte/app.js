@@ -2537,6 +2537,39 @@
         notice.start("Exportando…", "Preparando el PDF");
         let dir = null;
         const viaHelper = await nsfHelperUp();
+        const noDesktop = !viaHelper && typeof window.showDirectoryPicker !== "function";
+        if (noDesktop) {
+          /* Celular / tablet: no hay OneDrive local. Se comparte con la hoja nativa (Archivos, OneDrive, Drive, WhatsApp…) o se descarga. */
+          try {
+            await waitForImagesReady();
+          } catch {}
+          const mblob = await exportPdfBlob();
+          if (!mblob || !mblob.size) throw new Error("El PDF salió vacío.");
+          const mname = nsfPdfName(report?.fields || {});
+          const mfile = new File([mblob], mname, { type: "application/pdf" });
+          let shared = false;
+          if (navigator.canShare && navigator.canShare({ files: [mfile] })) {
+            notice.close();
+            try {
+              await navigator.share({ files: [mfile], title: mname });
+              notice.success("PDF listo", "Elige dónde guardarlo (OneDrive, Archivos, Drive…)");
+              shared = true;
+            } catch (e) {
+              if (e && e.name === "AbortError") return;
+              /* sin permiso de compartir (pasó mucho tiempo): se descarga */
+            }
+          }
+          if (!shared) {
+            const url = URL.createObjectURL(mblob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = mname;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            notice.success("PDF descargado en este dispositivo", mname);
+          }
+          return;
+        }
         if (!viaHelper) {
           notice.close();
           dir = await nsfYearDir();

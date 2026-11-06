@@ -33,6 +33,8 @@ import { noticeOrAlert } from "@/lib/exportNotice";
 import {
   NSF_FOLDER_NAME,
   connectNsfFolder,
+  deliverOnDevice,
+  isMobileExport,
   csvExportName,
   exportPdfName,
   exportRow,
@@ -1307,6 +1309,7 @@ export default function NotesList({
   }
 
   async function destinationYearDir() {
+    if (isMobileExport()) return null;
     let dir = await yearFolderForExport();
     if (dir) return dir;
     const ok = await connectNsfFolder();
@@ -1448,6 +1451,13 @@ export default function NotesList({
 
       const z = new JSZip();
       for (const file of loose) z.file(file.filename, file.buffer);
+      if (isMobileExport()) {
+        notice.close();
+        const how = await deliverOnDevice(loose.map((f) => ({ filename: f.filename, blob: new Blob([f.buffer], { type: "application/pdf" }) })));
+        if (how === "shared") notice.success("PDF listos", "Elige dónde guardarlos (OneDrive, Archivos, Drive…)");
+        else if (how === "downloaded") notice.success("PDF descargados en este dispositivo", `${loose.length} archivo(s)`);
+        return;
+      }
       downloadBlob(`PDFs-${exportYear()}.zip`, await z.generateAsync({ type: "blob" }));
       notice.error("NO se guardó en OneDrive", "No hay carpeta de OneDrive conectada. Los PDF se descargaron en un ZIP.");
     } catch (e) {
@@ -1481,6 +1491,10 @@ export default function NotesList({
         }
       }
       downloadText(filename, csv, "text/csv");
+      if (isMobileExport()) {
+        notice.success("Exportación descargada en este dispositivo", filename);
+        return;
+      }
       notice.error("NO se guardó en OneDrive", "No hay carpeta de OneDrive conectada. Se descargó el archivo en esta computadora.");
     } catch (e) {
       notice.error("NO se exportó", e instanceof Error ? e.message : "No se pudo exportar");

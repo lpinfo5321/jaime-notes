@@ -272,6 +272,36 @@ export async function writeExportFile(dir: FileSystemDirectoryHandle, filename: 
   if (saved.size !== data.size) throw new Error("El archivo se guardó incompleto en la carpeta. Vuelve a exportar.");
 }
 
+/** Celular o tablet: sin ayudante ni selector de carpetas. */
+export function isMobileExport() {
+  return typeof window !== "undefined" && typeof (window as PickerWindow).showDirectoryPicker !== "function";
+}
+
+/** Entrega los archivos con la hoja nativa de compartir (Archivos, OneDrive, Drive…). Devuelve false si se canceló. */
+export async function deliverOnDevice(files: { filename: string; blob: Blob }[]): Promise<"shared" | "downloaded" | "cancelled"> {
+  const list = files.map((f) => new File([f.blob], f.filename, { type: f.blob.type || "application/pdf" }));
+  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+  if (nav.canShare && nav.canShare({ files: list })) {
+    try {
+      await nav.share({ files: list, title: list.length === 1 ? list[0].name : `${list.length} archivos` });
+      return "shared";
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return "cancelled";
+      /* sin permiso de compartir (pasó mucho tiempo): se descarga abajo */
+    }
+  }
+  for (const f of list) {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = f.name;
+    a.click();
+    await new Promise((r) => setTimeout(r, 400));
+    URL.revokeObjectURL(url);
+  }
+  return "downloaded";
+}
+
 export function exportYear() {
   return new Date().getFullYear();
 }
