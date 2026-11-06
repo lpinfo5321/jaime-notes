@@ -60,6 +60,18 @@ function ago(iso?: string | null) {
 
 const CACHE_KEY = "rc:log:v1";
 
+/** El Excel a veces trae números donde esperamos texto: se normaliza para que nada truene. */
+function normRow(r: LogRow): LogRow {
+  const s = (v: unknown) => (v === null || v === undefined || v === "" ? null : String(v));
+  const n = (v: unknown) => (typeof v === "number" ? v : v === null || v === undefined || v === "" ? null : Number(v) || null);
+  return {
+    ...r,
+    B: s(r.B), C: s(r.C), D: s(r.D), G: s(r.G), P: s(r.P), R: s(r.R),
+    E: s(r.E), H: s(r.H), I: s(r.I), Q: s(r.Q), S: s(r.S), T: s(r.T), U: s(r.U),
+    M: n(r.M), N: n(r.N), O: n(r.O),
+  };
+}
+
 export default function LogView() {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState<LogSnapshot | null>(null);
@@ -92,7 +104,10 @@ export default function LogView() {
   useEffect(() => { router.prefetch("/app"); }, [router]);
 
   const openReport = useCallback((id: string) => router.push(`/app?openReport=${encodeURIComponent(id)}`), [router]);
-  const rows = useMemo(() => (snapshot?.rows ?? []).filter((r) => r.H || r.F), [snapshot]);
+  const rows = useMemo(
+    () => (snapshot?.rows ?? []).map(normRow).filter((r) => r.H || r.F),
+    [snapshot],
+  );
 
   const [q, setQ] = useState("");
   const [state, setState] = useState<"all" | LogState>("all");
