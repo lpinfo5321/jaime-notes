@@ -10,6 +10,7 @@ import { setSyncSnapshot } from "@/lib/syncStatus";
 import { useDashPrefs } from "@/components/dashboard/dashPrefs";
 import type { NoteListItem } from "./NotesList";
 import { APPREPORTE_V, isoToday, toEntryArray, sortEntriesDesc, formatUsMmDdYy, parseMoneyToCents, formatUsd, getTotalDueFromValues, normText, pickField, getTotalDueCentsFromValues, isBucket, normalizePaymentToken, statusFromPaymentMethod, getLatestEntry, getLatestEntryDateIso, getLatestEntryDateTime, getLatestAgent, getCheckPaymentStatusText, getPayText, fitTextToSingleLineInput, type Entry } from "./notesUtils";
+import { noticeOrAlert } from "@/lib/exportNotice";
 import { NSF_FOLDER_NAME, connectNsfFolder, exportPdfName, exportRow, exportYear, writeExportFile, yearFolderForExport } from "@/lib/nsfExport";
 
 export default function ReportModal({
@@ -557,20 +558,25 @@ export default function ReportModal({
   async function shareReport() {
     const iframe = iframeRef.current;
     if (!iframe) return;
+    const notice = await noticeOrAlert();
+    notice.start("Exportando…", "Preparando el PDF");
 
     let dir: FileSystemDirectoryHandle | null = null;
     try {
       dir = await yearFolderForExport();
       if (!dir) {
+        notice.close();
         const ok = await connectNsfFolder();
         if (ok) dir = await yearFolderForExport();
+        notice.start("Exportando…", "Preparando el PDF");
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : "No se pudo abrir la carpeta de OneDrive");
+      notice.error("No se pudo abrir la carpeta de OneDrive", e instanceof Error ? e.message : "");
+      return;
     }
 
     if (!dir) {
-      alert("Para guardarlo solo, elige la carpeta NSF CHECKS PDF FILES (la que contiene 2026).");
+      notice.error("NO se guardó el PDF", "No hay carpeta de OneDrive conectada. Activa el ayudante (INSTALAR.bat) o elige la carpeta NSF CHECKS PDF FILES.");
       return;
     }
 
@@ -617,18 +623,22 @@ export default function ReportModal({
         }
       });
     } catch (err) {
-      alert(`No se pudo generar el PDF: ${err instanceof Error ? err.message : err}`);
+      notice.error("NO se guardó el PDF", `No se pudo generar el PDF: ${err instanceof Error ? err.message : err}`);
       return;
     }
 
-    if (!buffer) return;
+    if (!buffer) {
+      notice.error("NO se guardó el PDF", "El PDF salió vacío.");
+      return;
+    }
 
+    notice.update("Exportando…", "Guardando en OneDrive");
     const blob = new Blob([buffer], { type: "application/pdf" });
     try {
       await writeExportFile(dir, filename, blob);
-      alert(`PDF guardado en OneDrive:\n${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
+      notice.success("Exportado a OneDrive", `${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "No se pudo guardar en OneDrive");
+      notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo guardar en OneDrive");
     }
   }
 
@@ -724,14 +734,15 @@ export default function ReportModal({
 
           {/* Actions */}
           <div className="flex shrink-0 items-center gap-1">
-            {/* Compartir */}
+            {/* Exportar manual a OneDrive */}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); void shareReport(); }}
-              title="Guardar PDF en OneDrive"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              title="Exportar este reporte a OneDrive"
+              className="flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-700"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Exportar
             </button>
 
             {/* Imprimir */}

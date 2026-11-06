@@ -253,14 +253,23 @@ export async function yearFolderForExport(): Promise<FileSystemDirectoryHandle |
 
 export async function writeExportFile(dir: FileSystemDirectoryHandle, filename: string, data: Blob) {
   if ((dir as unknown as Record<string, unknown>)[HELPER_MARK]) {
-    const r = await fetch(`${HELPER}/save?name=${encodeURIComponent(filename)}`, { method: "POST", body: data });
-    if (!r.ok) throw new Error("El ayudante de OneDrive no pudo guardar el archivo");
+    let r: Response;
+    try {
+      r = await fetch(`${HELPER}/save?name=${encodeURIComponent(filename)}`, { method: "POST", body: data });
+    } catch {
+      throw new Error("No se pudo comunicar con el ayudante de OneDrive. Revisa que esté activo.");
+    }
+    const j = (await r.json().catch(() => null)) as { ok?: boolean; size?: number; error?: string } | null;
+    if (!r.ok || !j?.ok) throw new Error(`OneDrive no recibió el archivo${j?.error ? `: ${j.error}` : ""}.`);
+    if (j.size !== data.size) throw new Error("El archivo se guardó incompleto en OneDrive. Vuelve a exportar.");
     return;
   }
   const file = await dir.getFileHandle(filename, { create: true });
   const writer = await file.createWritable();
   await writer.write(data);
   await writer.close();
+  const saved = await file.getFile();
+  if (saved.size !== data.size) throw new Error("El archivo se guardó incompleto en la carpeta. Vuelve a exportar.");
 }
 
 export function exportYear() {

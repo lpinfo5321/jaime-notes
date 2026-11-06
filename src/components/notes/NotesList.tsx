@@ -29,6 +29,7 @@ import DocumentsView from "@/components/documents/DocumentsView";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { onCoverError } from "@/lib/coverRetry";
+import { noticeOrAlert } from "@/lib/exportNotice";
 import {
   NSF_FOLDER_NAME,
   connectNsfFolder,
@@ -1319,8 +1320,11 @@ export default function NotesList({
     if (!ids.length) return;
 
     setBulkBusy(true);
+    const notice = await noticeOrAlert();
+    notice.start("Exportando…", `0 de ${ids.length}`);
     try {
       const dir = await destinationYearDir();
+      notice.start("Exportando…", `0 de ${ids.length}`);
       const { default: JSZip } = await import("jszip");
 
       const exportOne = (noteId: string) =>
@@ -1402,7 +1406,10 @@ export default function NotesList({
       const loose: { filename: string; buffer: ArrayBuffer }[] = [];
 
       // Uno por uno para no cargar todos los PDF en memoria a la vez.
+      let n = 0;
       for (const id of ids) {
+        notice.update("Exportando…", `${n} de ${ids.length}`);
+        n += 1;
         const note = items.find((n) => String(n.id) === String(id)) ?? null;
         const { buffer } = await exportOne(String(id));
         const filename = uniqueExportName(used, note ? exportPdfName(rowFor(note)) : `cheque-${id}.pdf`);
@@ -1411,23 +1418,30 @@ export default function NotesList({
 
       if (dir) {
         const failed: { filename: string; buffer: ArrayBuffer }[] = [];
+        let lastErr = "";
+        let w = 0;
         for (const file of loose) {
+          notice.update("Guardando en OneDrive…", `${w} de ${loose.length}`);
+          w += 1;
           try {
             await writeExportFile(dir, file.filename, new Blob([file.buffer], { type: "application/pdf" }));
-          } catch {
+          } catch (e) {
+            lastErr = e instanceof Error ? e.message : "";
             failed.push(file);
           }
         }
         const year = exportYear();
         const saved = loose.length - failed.length;
-        if (saved > 0) {
-          alert(`Se guardaron ${saved} PDF en OneDrive:\n${NSF_FOLDER_NAME}\\${year}`);
-        }
         if (failed.length) {
           const z = new JSZip();
           for (const file of failed) z.file(file.filename, file.buffer);
           downloadBlob(`PDFs-${year}.zip`, await z.generateAsync({ type: "blob" }));
-          alert(`No se pudieron guardar ${failed.length} PDF en OneDrive. Esos se descargaron.`);
+          notice.error(
+            `NO se guardaron ${failed.length} de ${loose.length} PDF`,
+            `${saved > 0 ? `Sí se guardaron ${saved}. ` : ""}Los ${failed.length} que fallaron se descargaron en un ZIP. ${lastErr}`,
+          );
+        } else {
+          notice.success(`${saved} PDF exportado${saved === 1 ? "" : "s"}`, `${NSF_FOLDER_NAME}\\${year}`);
         }
         return;
       }
@@ -1435,9 +1449,9 @@ export default function NotesList({
       const z = new JSZip();
       for (const file of loose) z.file(file.filename, file.buffer);
       downloadBlob(`PDFs-${exportYear()}.zip`, await z.generateAsync({ type: "blob" }));
-      alert("No se eligió la carpeta de OneDrive. Los PDF se descargaron en un ZIP.");
+      notice.error("NO se guardó en OneDrive", "No hay carpeta de OneDrive conectada. Los PDF se descargaron en un ZIP.");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Error exportando PDFs");
+      notice.error("NO se exportó", e instanceof Error ? e.message : "Error exportando PDFs");
     } finally {
       setBulkBusy(false);
     }
@@ -1446,24 +1460,30 @@ export default function NotesList({
   async function exportSelectedCsv() {
     const ids = selectedInBucket;
     if (!ids.length) return;
+    const notice = await noticeOrAlert();
+    notice.start("Exportando…", "Preparando la lista");
     try {
       const idSet = new Set(ids.map(String));
       const rows = items.filter((n) => idSet.has(String(n.id))).map((n) => rowFor(n));
       const csv = rowsToCsv(rows);
       const filename = csvExportName();
       const dir = await destinationYearDir();
+      notice.start("Exportando…", "Guardando en OneDrive");
       if (dir) {
         try {
           await writeExportFile(dir, filename, new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
-          alert(`Exportación guardada en OneDrive:\n${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
+          notice.success("Exportado a OneDrive", `${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
           return;
         } catch (e) {
-          alert(e instanceof Error ? e.message : "No se pudo guardar en OneDrive. Se descargará el archivo.");
+          downloadText(filename, csv, "text/csv");
+          notice.error("NO se guardó en OneDrive", `${e instanceof Error ? e.message : ""} Se descargó el archivo en esta computadora.`);
+          return;
         }
       }
       downloadText(filename, csv, "text/csv");
+      notice.error("NO se guardó en OneDrive", "No hay carpeta de OneDrive conectada. Se descargó el archivo en esta computadora.");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "No se pudo exportar");
+      notice.error("NO se exportó", e instanceof Error ? e.message : "No se pudo exportar");
     }
   }
 

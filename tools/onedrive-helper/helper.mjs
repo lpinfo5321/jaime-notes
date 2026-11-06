@@ -1,4 +1,4 @@
-﻿// Ayudante local: recibe los PDF/CSV de la app y los guarda solo en OneDrive, dentro de la carpeta del anio.
+// Ayudante local: recibe los PDF/CSV de la app y los guarda solo en OneDrive, dentro de la carpeta del anio.
 import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
@@ -34,7 +34,8 @@ http
           fs.mkdirSync(dir, { recursive: true });
           const file = path.join(dir, name);
           fs.writeFileSync(file, Buffer.concat(chunks));
-          send(200, { ok: true, file });
+          const size = fs.statSync(file).size;
+          send(200, { ok: true, file, size });
         } catch (e) {
           send(500, { ok: false, error: String(e && e.message) });
         }

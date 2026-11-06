@@ -2514,45 +2514,72 @@
       }
     };
 
+    if (!window.rcNotice) {
+      const ns = document.createElement("script");
+      ns.src = "/export-notice.js?v=1";
+      document.head.appendChild(ns);
+    }
+    const rcNotice = () =>
+      window.rcNotice || {
+        start() {},
+        update() {},
+        success: (t, d) => alert(`${t}\n${d || ""}`),
+        error: (t, d) => alert(`ERROR: ${t}\n${d || ""}`),
+        close() {},
+      };
+
+    let nsfSaving = false;
     const saveReportToOneDrive = async () => {
-      if (await nsfHelperUp()) {
+      if (nsfSaving) return;
+      nsfSaving = true;
+      const notice = rcNotice();
+      try {
+        notice.start("Exportando…", "Preparando el PDF");
+        let dir = null;
+        const viaHelper = await nsfHelperUp();
+        if (!viaHelper) {
+          notice.close();
+          dir = await nsfYearDir();
+          if (!dir) {
+            notice.error("NO se guardó el PDF", "No hay carpeta de OneDrive conectada. Activa el ayudante (INSTALAR.bat) o elige la carpeta NSF CHECKS PDF FILES.");
+            return;
+          }
+          notice.start("Exportando…", "Preparando el PDF");
+        }
         try {
           await waitForImagesReady();
         } catch {}
         const blob = await exportPdfBlob();
+        if (!blob || !blob.size) throw new Error("El PDF salió vacío.");
         const filename = nsfPdfName(report?.fields || {});
-        const r = await fetch(`http://127.0.0.1:47321/save?name=${encodeURIComponent(filename)}`, { method: "POST", body: blob });
-        if (!r.ok) throw new Error("El ayudante de OneDrive no pudo guardar el PDF");
-        alert(`PDF guardado en OneDrive:\n${NSF_FOLDER_NAME}\\${new Date().getFullYear()}\\${filename}`);
-        return;
+        notice.update("Exportando…", "Guardando en OneDrive");
+        if (viaHelper) {
+          const r = await fetch(`http://127.0.0.1:47321/save?name=${encodeURIComponent(filename)}`, { method: "POST", body: blob });
+          const j = await r.json().catch(() => null);
+          if (!r.ok || !j || !j.ok) throw new Error(`OneDrive no recibió el archivo${j && j.error ? ": " + j.error : ""}.`);
+          if (j.size !== blob.size) throw new Error("El archivo se guardó incompleto en OneDrive. Vuelve a exportar.");
+        } else {
+          const file = await dir.getFileHandle(filename, { create: true });
+          const writer = await file.createWritable();
+          await writer.write(blob);
+          await writer.close();
+          const saved = await file.getFile();
+          if (saved.size !== blob.size) throw new Error("El archivo se guardó incompleto en la carpeta. Vuelve a exportar.");
+        }
+        notice.success("Exportado a OneDrive", `${NSF_FOLDER_NAME}\\${new Date().getFullYear()}\\${filename}`);
+      } catch (e) {
+        notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo guardar el PDF");
+      } finally {
+        nsfSaving = false;
       }
-      const dir = await nsfYearDir();
-      if (!dir) {
-        alert(`No se guardó solo.\n\nCuando aparezca el selector, elige esta carpeta (no la del año):\n${NSF_FOLDER_HINT}`);
-        return;
-      }
-      try {
-        await waitForImagesReady();
-      } catch {}
-      const blob = await exportPdfBlob();
-      const filename = nsfPdfName(report?.fields || {});
-      const file = await dir.getFileHandle(filename, { create: true });
-      const writer = await file.createWritable();
-      await writer.write(blob);
-      await writer.close();
-      alert(`PDF guardado en OneDrive:\n${NSF_FOLDER_NAME}\\${new Date().getFullYear()}\\${filename}`);
     };
 
     el.btnPrint?.addEventListener?.("click", () => {
-      void saveReportToOneDrive().catch((e) => {
-        alert(e instanceof Error ? e.message : "No se pudo guardar el PDF");
-      });
+      void saveReportToOneDrive();
     });
 
     el.btnPdf?.addEventListener?.("click", () => {
-      void saveReportToOneDrive().catch((e) => {
-        alert(e instanceof Error ? e.message : "No se pudo guardar el PDF");
-      });
+      void saveReportToOneDrive();
     });
 
     // Allow parent to request a PDF for bulk-export (returns ArrayBuffer)
