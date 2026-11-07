@@ -259,17 +259,17 @@ export default function LogView() {
   ];
 
   return (
-    <div className="flex h-[calc(100dvh-5.75rem)] min-h-[420px] flex-col gap-3">
+    <div className="flex flex-col gap-3 md:h-[calc(100dvh-5.75rem)] md:min-h-[420px]">
       {/* Encabezado */}
-      <div className="flex shrink-0 flex-wrap items-center gap-3">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2">
         <button
           type="button"
           onClick={() => router.push("/app")}
           className="inline-flex h-9 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
         >
-          <ArrowLeft className="h-4 w-4" /> Return Checks
+          <ArrowLeft className="h-4 w-4" /> <span>Return Checks</span>
         </button>
-        <div className="min-w-0 flex-1">
+        <div className="order-last min-w-0 basis-full md:order-none md:basis-0 md:flex-1">
           <h1 className="truncate text-xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">Registro de cheques devueltos</h1>
           <p className="text-xs text-zinc-500">Igual que tu Excel RETURNED CHECK LOG, siempre al día con tus reportes.</p>
         </div>
@@ -277,7 +277,7 @@ export default function LogView() {
           type="button"
           onClick={exportXlsx}
           disabled={exporting || !rows.length}
-          className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+          className="ml-auto inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-4 md:ml-0 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
         >
           <FileSpreadsheet className="h-4 w-4" /> {exporting ? "Exportando…" : "Exportar Excel"}
         </button>
@@ -336,7 +336,7 @@ export default function LogView() {
         </div>
       ) : (
         <>
-          <div className="grid shrink-0 grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
             {kpis.map((k) => (
               <button
                 key={k.label}
@@ -346,14 +346,14 @@ export default function LogView() {
                   k.key && state === k.key ? "border-emerald-400 ring-2 ring-emerald-200" : "border-zinc-200 dark:border-zinc-800"
                 }`}
               >
-                <div className="truncate text-[9px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[11px]">{k.label}</div>
-                <div className={`mt-0.5 truncate text-base font-extrabold tabular-nums sm:text-2xl ${k.tone}`}>{k.value}</div>
+                <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[11px]">{k.label}</div>
+                <div className={`mt-0.5 truncate text-lg font-extrabold tabular-nums sm:text-2xl ${k.tone}`}>{k.value}</div>
               </button>
             ))}
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <div className="relative min-w-[160px] flex-1">
+            <div className="relative min-w-0 basis-full sm:basis-auto sm:min-w-[160px] sm:flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <input
                 value={q}
@@ -365,7 +365,7 @@ export default function LogView() {
             <select
               value={state}
               onChange={(e) => setState(e.target.value as "all" | LogState)}
-              className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="h-10 min-w-0 flex-1 basis-[46%] rounded-xl border border-zinc-200 bg-white px-3 text-sm sm:flex-none dark:border-zinc-700 dark:bg-zinc-900"
             >
               <option value="all">Todos los estados</option>
               {(Object.keys(STATE_LABEL) as LogState[]).map((s) => (
@@ -375,7 +375,7 @@ export default function LogView() {
             <select
               value={String(year)}
               onChange={(e) => setYear(e.target.value === "all" ? "all" : Number(e.target.value))}
-              className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="h-10 min-w-0 flex-1 basis-[46%] rounded-xl border border-zinc-200 bg-white px-3 text-sm sm:flex-none dark:border-zinc-700 dark:bg-zinc-900"
             >
               <option value="all">Todos los años</option>
               {years.map((y) => (
@@ -385,7 +385,7 @@ export default function LogView() {
             <select
               value={f.sort}
               onChange={(e) => setFv("sort", e.target.value)}
-              className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="h-10 min-w-0 flex-1 basis-[46%] rounded-xl border border-zinc-200 bg-white px-3 text-sm sm:flex-none dark:border-zinc-700 dark:bg-zinc-900"
             >
               <option value="recent">Más recientes primero</option>
               <option value="old">Más antiguos primero</option>
@@ -480,7 +480,7 @@ export default function LogView() {
           </div>
 
           {/* Celular: tarjetas */}
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto md:hidden">
+          <div className="space-y-2 md:hidden">
             {list.map((r) => (
               <Card key={r.r} r={r} onOpen={openReport} />
             ))}

@@ -171,6 +171,7 @@ const LOG_STATE = path.join(HERE, "log-state.json");
 let logBusy = false;
 let logLast = { at: null, ok: null, locked: false, pending: 0, adoptable: 0, written: 0, errors: [], rowsInExcel: 0, file: LOG_FILE };
 let logHash = "";
+let logUploadedAt = 0;
 
 function logPublic() {
   return { ...logLast, running: logBusy };
@@ -203,9 +204,13 @@ async function logTick(adoptAll = false) {
     if (res.snapshot) {
       const body = JSON.stringify({ at: logLast.at, status: { locked: logLast.locked, pending: logLast.pending, adoptable: logLast.adoptable, errors: logLast.errors }, ...res.snapshot });
       const h = String(body.length) + ":" + JSON.stringify(res.snapshot.rows).split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7) + JSON.stringify(logLast.pending + "|" + logLast.locked);
-      if (h !== logHash) {
+      /* También se sube cada pocos minutos aunque no haya cambios: así la app sabe que la computadora sigue activa. */
+      if (h !== logHash || Date.now() - logUploadedAt > 4 * 60 * 1000) {
         const up = await admin.storage.from(OUTBOX).upload("_log/snapshot.json", body, { contentType: "application/json", upsert: true });
-        if (!up.error) logHash = h;
+        if (!up.error) {
+          logHash = h;
+          logUploadedAt = Date.now();
+        }
       }
     }
   } catch (e) {
