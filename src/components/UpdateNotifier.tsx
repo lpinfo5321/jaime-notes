@@ -44,7 +44,22 @@ export default function UpdateNotifier() {
     const first = setTimeout(check, 10_000);
     // Then every 4 minutes
     const interval = setInterval(check, POLL_INTERVAL);
-    return () => { clearTimeout(first); clearInterval(interval); };
+    // También al volver a la app (cambiar de pestaña / ventana), máx. 1 vez cada 20 s.
+    let lastFocusCheck = 0;
+    const onReturn = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFocusCheck < 20_000) return;
+      lastFocusCheck = Date.now();
+      void check();
+    };
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      clearTimeout(first);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
   }, []);
 
   // ── Animated update then reload ──────────────────────────────────────────
