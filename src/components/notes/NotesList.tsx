@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { onCoverError } from "@/lib/coverRetry";
 import { noticeOrAlert } from "@/lib/exportNotice";
+import { requestLogRemoval } from "@/lib/checkLog";
 import {
   NSF_FOLDER_NAME,
   connectNsfFolder,
@@ -178,6 +179,27 @@ export default function NotesList({
   const [confirmBulkDel, setConfirmBulkDel] = useState<{ ids: string[]; count: number } | null>(
     null,
   );
+  // Tras eliminar definitivamente: preguntar si también se quita del Registro (Excel).
+  const [askLogRemove, setAskLogRemove] = useState<{ notes: { check: string; payor: string }[] } | null>(null);
+  function logKeysFor(ids: string[]) {
+    const set = new Set(ids.map(String));
+    const out: { check: string; payor: string }[] = [];
+    for (const n of itemsRaw) {
+      if (!set.has(String(n.id))) continue;
+      const f = ((n.values as any)?._report?.payload?.fields ?? {}) as Record<string, unknown>;
+      const check = String(f.checkNumber ?? "").trim();
+      const payor = String(f.makerPayor || f.companyName || n.title || "").trim();
+      if (check && payor) out.push({ check, payor });
+    }
+    return out;
+  }
+  // Solo se pregunta si de verdad hay filas de la app en el Registro para esos cheques.
+  function offerLogRemoval(keys: { check: string; payor: string }[]) {
+    if (!keys.length) return;
+    void requestLogRemoval({ notes: keys, dryRun: true })
+      .then(({ count }) => { if (count) setAskLogRemove({ notes: keys }); })
+      .catch(() => {});
+  }
   const [confirmMoveComplete, setConfirmMoveComplete] = useState<{
     id: string;
     title: string;
@@ -638,11 +660,13 @@ export default function NotesList({
     suppressRemoteUntilRef.current = Date.now() + 1500;
     setBusyId(id);
     setConfirmDel(null);
+    const logKeys = logKeysFor([id]);
     // Optimista: quitar de UI al instante
     removeCompany(id);
     try {
       const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("No se pudo eliminar");
+      offerLogRemoval(logKeys);
     } catch {
       // Si falla, recargar para restaurar el estado real
       router.refresh();
@@ -1146,6 +1170,7 @@ export default function NotesList({
     suppressRemoteUntilRef.current = Date.now() + 1500;
     markLocalWrite();
     setBulkBusy(true);
+    const keyById = new Map(noteIds.map((id) => [String(id), logKeysFor([id])]));
     setItems((prev) => prev.filter((n) => !idSet.has(String(n.id))));
     const results = await Promise.allSettled(
       noteIds.map(async (id) => {
@@ -1155,6 +1180,8 @@ export default function NotesList({
         if (!res.ok) throw new Error("DELETE failed");
       }),
     );
+    const logKeys = noteIds.flatMap((id, i) => (results[i].status === "fulfilled" ? keyById.get(String(id)) ?? [] : []));
+    offerLogRemoval(logKeys);
     const anyFail = results.some((r) => r.status === "rejected");
     if (anyFail) router.refresh();
     setBulkBusy(false);
@@ -2000,6 +2027,29 @@ export default function NotesList({
             clearSelection();
             setSelectMode(false);
             void deleteMany(ids);
+          }}
+        />
+      ) : null}
+
+      {askLogRemove ? (
+        <ConfirmDialog
+          title="¿Quitarlo también del Registro?"
+          message={
+            askLogRemove.notes.length === 1
+              ? `El cheque #${askLogRemove.notes[0].check} de "${askLogRemove.notes[0].payor}" sigue en el Registro (Excel). ¿Quieres quitarlo también de ahí?`
+              : `Algunos de estos cheques siguen en el Registro (Excel). ¿Quieres quitarlos también de ahí?`
+          }
+          confirmText="Sí, quitar del Registro"
+          cancelText="No, dejarlo"
+          onCancel={() => setAskLogRemove(null)}
+          onConfirm={() => {
+            const notesToRemove = askLogRemove.notes;
+            setAskLogRemove(null);
+            void requestLogRemoval({ notes: notesToRemove })
+              .then(({ count, blocked }) => {
+                if (!count) alert(blocked ? "No se quitó del Registro: esa fila se escribió a mano en el Excel o el reporte todavía existe." : "Ya no estaba en el Registro.");
+              })
+              .catch((e) => alert(e instanceof Error ? e.message : "No se pudo quitar del Registro"));
           }}
         />
       ) : null}

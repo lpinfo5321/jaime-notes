@@ -188,7 +188,30 @@ async function logTick(adoptAll = false) {
   try {
     const { data, error } = await admin.from("notes").select("id,title,tags,values,created_at,updated_at").limit(5000);
     if (error) throw new Error(error.message);
-    const res = await syncLog({ notes: data || [], stateFile: LOG_STATE, adoptAll });
+    // Solicitudes de "quitar del registro" que dejó la app (_log/del/*.json)
+    const delFiles = [];
+    const deletions = [];
+    try {
+      const listed = await admin.storage.from(OUTBOX).list("_log/del", { limit: 200 });
+      for (const it of listed.data || []) {
+        if (!it.id || !it.name.endsWith(".json")) continue;
+        const p = `_log/del/${it.name}`;
+        const dl = await admin.storage.from(OUTBOX).download(p);
+        if (dl.error || !dl.data) continue;
+        try {
+          const j = JSON.parse(await dl.data.text());
+          for (const r of j.rows || []) deletions.push({ r: Number(r.r), key: String(r.key || "") });
+          delFiles.push(p);
+        } catch {
+          delFiles.push(p); // archivo dañado: se descarta
+        }
+      }
+    } catch {}
+    const res = await syncLog({ notes: data || [], stateFile: LOG_STATE, adoptAll, deletions });
+    if (delFiles.length && res.deletionsDone) {
+      await admin.storage.from(OUTBOX).remove(delFiles);
+      if (res.deleted && res.deleted.length) console.log("Registro Excel - quitadas", res.deleted.length, "filas");
+    }
     logLast = {
       at: new Date().toISOString(),
       ok: res.ok,

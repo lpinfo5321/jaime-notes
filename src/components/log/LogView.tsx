@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Clock, FileSpreadsheet, ExternalLink, RefreshCw, Search, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, FileSpreadsheet, ExternalLink, RefreshCw, Search, SlidersHorizontal, Trash2, TriangleAlert, X } from "lucide-react";
 import {
   buildLogXlsx,
   fmtDate,
@@ -14,6 +14,7 @@ import {
   type LogRow,
   type LogSnapshot,
   type LogState,
+  requestLogRemoval,
 } from "@/lib/checkLog";
 import { noticeOrAlert } from "@/lib/exportNotice";
 import { deliverOnDevice, isMobileExport } from "@/lib/nsfExport";
@@ -106,6 +107,30 @@ export default function LogView() {
   useEffect(() => { router.prefetch("/app"); }, [router]);
 
   const openReport = useCallback((id: string) => router.push(`/app?openReport=${encodeURIComponent(id)}`), [router]);
+
+  // Quitar del registro (Excel) una fila que escribió la app y cuyo reporte ya se eliminó.
+  const removeRow = useCallback(async (r: LogRow) => {
+    const label = `cheque #${r.F ?? ""} de ${r.H ?? ""}`;
+    if (!window.confirm(`¿Quitar el ${label} del Registro (Excel)?
+
+Se guarda un respaldo del Excel antes de quitarlo.`)) return;
+    try {
+      const { count } = await requestLogRemoval({ rows: [r.r] });
+      if (!count) {
+        alert("No se puede quitar: esa fila se escribió a mano en el Excel o el reporte todavía existe en la app.");
+        return;
+      }
+      setSnapshot((s) => (s ? { ...s, rows: s.rows.map((x) => (x.r === r.r ? { ...x, x: true } : x)) } : s));
+      const rr = await fetch("/api/log", { cache: "no-store" });
+      const j = (await rr.json().catch(() => null)) as { snapshot?: LogSnapshot | null } | null;
+      if (rr.ok && j?.snapshot) {
+        setSnapshot(j.snapshot);
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(j.snapshot)); } catch {}
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo quitar del Registro");
+    }
+  }, []);
   const rows = useMemo(
     () => (snapshot?.rows ?? []).map(normRow).filter((r) => r.H || r.F),
     [snapshot],
@@ -471,7 +496,7 @@ export default function LogView() {
                 </thead>
                 <tbody>
                   {list.map((r) => (
-                    <Row key={r.r} r={r} onOpen={openReport} />
+                    <Row key={r.r} r={r} onOpen={openReport} onRemove={removeRow} />
                   ))}
                 </tbody>
               </table>
@@ -482,7 +507,7 @@ export default function LogView() {
           {/* Celular: tarjetas */}
           <div className="space-y-2 md:hidden">
             {list.map((r) => (
-              <Card key={r.r} r={r} onOpen={openReport} />
+              <Card key={r.r} r={r} onOpen={openReport} onRemove={removeRow} />
             ))}
             {!list.length ? <div className="p-8 text-center text-sm text-zinc-500">Sin resultados.</div> : null}
           </div>
@@ -497,7 +522,21 @@ function pay(date?: string | null, method?: string | null) {
   return `${fmtDate(date)}${method ? ` · ${method}` : ""}`;
 }
 
-function OpenBtn({ r, onOpen }: { r: LogRow; onOpen: (id: string) => void }) {
+function OpenBtn({ r, onOpen, onRemove }: { r: LogRow; onOpen: (id: string) => void; onRemove: (r: LogRow) => void }) {
+  if (!r.n && r.x) return <span className="text-[11px] font-semibold text-amber-600">Quitando del Excel…</span>;
+  if (!r.n && r.a)
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span className="text-[11px] text-zinc-400">Ya no está en la app</span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRemove(r); }}
+          className="inline-flex h-7 items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 text-[11px] font-bold text-rose-700 hover:bg-rose-100"
+        >
+          <Trash2 className="h-3 w-3" /> Quitar
+        </button>
+      </span>
+    );
   if (!r.n) return <span className="text-[11px] text-zinc-400">Ya no está en la app</span>;
   const id = r.n;
   return (
@@ -511,7 +550,7 @@ function OpenBtn({ r, onOpen }: { r: LogRow; onOpen: (id: string) => void }) {
   );
 }
 
-function Row({ r, onOpen }: { r: LogRow; onOpen: (id: string) => void }) {
+function Row({ r, onOpen, onRemove }: { r: LogRow; onOpen: (id: string) => void; onRemove: (r: LogRow) => void }) {
   return (
     <tr className="border-t border-zinc-100 hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
       <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fmtDate(r.D || r.B)}</td>
@@ -528,12 +567,12 @@ function Row({ r, onOpen }: { r: LogRow; onOpen: (id: string) => void }) {
       <td className="whitespace-nowrap px-3 py-2 text-zinc-600 dark:text-zinc-300">{pay(r.R, r.S)}</td>
       <td className="whitespace-nowrap px-3 py-2">{r.T}</td>
       <td className="px-3 py-2"><Badge s={rowState(r)} /></td>
-      <td className="px-3 py-2"><OpenBtn r={r} onOpen={onOpen} /></td>
+      <td className="px-3 py-2"><OpenBtn r={r} onOpen={onOpen} onRemove={onRemove} /></td>
     </tr>
   );
 }
 
-function Card({ r, onOpen }: { r: LogRow; onOpen: (id: string) => void }) {
+function Card({ r, onOpen, onRemove }: { r: LogRow; onOpen: (id: string) => void; onRemove: (r: LogRow) => void }) {
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-start justify-between gap-2">
@@ -555,7 +594,7 @@ function Card({ r, onOpen }: { r: LogRow; onOpen: (id: string) => void }) {
         {r.P || r.Q ? <span>Comisión: {pay(r.P, r.Q)}</span> : null}
         {r.R || r.S ? <span>Cheque: {pay(r.R, r.S)}</span> : null}
       </div>
-      {r.n ? <div className="mt-2"><OpenBtn r={r} onOpen={onOpen} /></div> : null}
+      {r.n || r.a || r.x ? <div className="mt-2"><OpenBtn r={r} onOpen={onOpen} onRemove={onRemove} /></div> : null}
     </div>
   );
 }

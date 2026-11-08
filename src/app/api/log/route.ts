@@ -36,10 +36,25 @@ export async function GET() {
       byKey.set(`${ck}|${payor}`, n.id);
       byCheck.set(ck, [...(byCheck.get(ck) ?? []), n.id]);
     }
+    // Filas con pedido de "quitar" que la computadora todavía no aplica
+    const pendingDel = new Set<number>();
+    try {
+      const listed = await admin.storage.from(OUTBOX_BUCKET).list("_log/del", { limit: 200 });
+      const files = (listed.data ?? []).filter((it) => it.id && it.name.endsWith(".json"));
+      await Promise.all(
+        files.map(async (it) => {
+          const dl = await admin.storage.from(OUTBOX_BUCKET).download(`_log/del/${it.name}`);
+          if (dl.error || !dl.data) return;
+          const j = JSON.parse(await dl.data.text()) as { rows?: { r: number }[] };
+          for (const r of j.rows ?? []) pendingDel.add(Number(r.r));
+        }),
+      );
+    } catch {}
     const rows: LogRow[] = snap.rows.map((r) => {
       const ck = digits(r.F);
       const id = byKey.get(`${ck}|${alnum(r.H)}`) ?? (byCheck.get(ck)?.length === 1 ? byCheck.get(ck)![0] : undefined);
-      return id ? { ...r, n: id } : r;
+      const out: LogRow = id ? { ...r, n: id } : r;
+      return pendingDel.has(r.r) ? { ...out, x: true } : out;
     });
     return NextResponse.json({ snapshot: { ...snap, rows } }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

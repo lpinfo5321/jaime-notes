@@ -19,7 +19,18 @@ export type LogRow = {
   T?: string | null; // agente
   U?: string | null; // notas / estado
   n?: string; // id del reporte en la app (si todavía existe)
+  a?: boolean; // fila escrita por la app (se puede quitar del registro)
+  x?: boolean; // pedido de quitar pendiente (la computadora lo aplicará)
 };
+
+/** Misma llave que usa el ayudante (logsync.mjs rowKey): "<cheque>|<COMPAÑIA>". */
+export function logRowKey(check: unknown, payor: unknown) {
+  const s = String(check ?? "").trim().replace(/^#/, "");
+  const digits = s.replace(/\D/g, "");
+  const ck = digits || s.toUpperCase();
+  const p = String(payor ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return `${ck}|${p}`;
+}
 
 export type LogSnapshot = {
   at: string;
@@ -164,4 +175,26 @@ export async function buildLogXlsx(rows: LogRow[]): Promise<Blob> {
   ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
   const buf = await wb.xlsx.writeBuffer();
   return new Blob([buf as ArrayBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+/**
+ * Pide quitar filas del registro (Excel). La computadora con el ayudante lo aplica;
+ * si el ayudante está en esta computadora se le avisa para que lo haga al momento.
+ */
+export async function requestLogRemoval(body: { rows?: number[]; notes?: { check: string; payor: string }[]; dryRun?: boolean }) {
+  const r = await fetch("/api/log/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const j = (await r.json().catch(() => null)) as { ok?: boolean; count?: number; blocked?: number; error?: string } | null;
+  if (!r.ok || !j?.ok) throw new Error(j?.error || "No se pudo quitar del registro");
+  if (j.count && !body.dryRun) {
+    try {
+      await fetch("http://127.0.0.1:47321/log/sync?all=0", { method: "POST" });
+    } catch {
+      // el ayudante no está en esta computadora: lo hará la PC cuando esté prendida
+    }
+  }
+  return { count: j.count ?? 0, blocked: j.blocked ?? 0 };
 }

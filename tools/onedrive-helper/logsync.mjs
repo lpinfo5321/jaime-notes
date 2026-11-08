@@ -250,8 +250,59 @@ function lastDataRow(rowsMap) {
   return last;
 }
 
-export async function syncLog({ notes, stateFile, adoptAll = false }) {
-  const status = { ok: true, locked: false, file: LOG_FILE, written: [], pending: [], adoptable: 0, errors: [], rowsInExcel: 0, snapshot: null };
+/** Vacía una fila que escribió la app (deja el formato; quita valores y fórmulas de las columnas de la app). */
+const CLEAR_COLS = new Set([...COLS, "O"]);
+function clearRow(rowsMap, rowNum) {
+  const cur = rowsMap.get(rowNum);
+  if (!cur) return;
+  const cells = parseCells(cur.inner).map((c) => {
+    if (!CLEAR_COLS.has(c.col)) return { ...c };
+    const attrs = c.attrs.replace(/\s+t="[^"]*"/, "");
+    return { ...c, attrs, inner: "", xml: `<c r="${c.col}${rowNum}"${attrs}/>` };
+  });
+  const inner = cells.map((c) => c.xml ?? (c.inner ? `<c r="${c.col}${rowNum}"${c.attrs}>${c.inner}</c>` : `<c r="${c.col}${rowNum}"${c.attrs}/>`)).join("");
+  rowsMap.set(rowNum, { attrs: cur.attrs, inner });
+}
+
+/**
+ * Quita de xl/calcChain.xml las fórmulas de las celdas que se vaciaron (si no, Excel pide "reparar").
+ * En calcChain, una entrada sin i="" pertenece a la misma hoja que la anterior: se conserva eso.
+ */
+async function pruneCalcChain(zip, cellRefs) {
+  const f = zip.file("xl/calcChain.xml");
+  if (!f || !cellRefs.size) return;
+  const wb = await zip.file("xl/workbook.xml").async("string");
+  const rels = await zip.file("xl/_rels/workbook.xml.rels").async("string");
+  const relId = [...rels.matchAll(/<Relationship\b[^>]*>/g)].map((m) => m[0]).find((t) => /Target="(?:\/xl\/)?worksheets\/sheet1\.xml"/.test(t))?.match(/Id="([^"]+)"/)?.[1];
+  const sheetTag = [...wb.matchAll(/<sheet\b[^>]*>/g)].map((m) => m[0]).find((t) => relId && t.includes(`r:id="${relId}"`));
+  const sheetId = sheetTag?.match(/sheetId="(\d+)"/)?.[1];
+  if (!sheetId) return;
+  const xml = await f.async("string");
+  let cur = null;
+  let carry = null; // i="" de una entrada quitada que hay que pasar a la siguiente
+  let removed = 0;
+  const out = xml.replace(/<c\b[^>]*\/>/g, (tag) => {
+    const i = tag.match(/\bi="(\d+)"/)?.[1] ?? null;
+    if (i) cur = i;
+    const r = tag.match(/\br="([A-Z]+\d+)"/)?.[1];
+    if (cur === sheetId && r && cellRefs.has(r)) {
+      if (i) carry = i;
+      removed++;
+      return "";
+    }
+    if (carry && !i) {
+      const fixed = tag.replace(/<c\b/, `<c i="${carry}"`);
+      carry = null;
+      return fixed;
+    }
+    carry = null;
+    return tag;
+  });
+  if (removed) zip.file("xl/calcChain.xml", out);
+}
+
+export async function syncLog({ notes, stateFile, adoptAll = false, deletions = [] }) {
+  const status = { ok: true, locked: false, file: LOG_FILE, written: [], pending: [], adoptable: 0, errors: [], rowsInExcel: 0, snapshot: null, deleted: [], deletionsDone: false };
   const state = loadState(stateFile);
   if (!state.baselineAt) {
     state.baselineAt = new Date().toISOString();
@@ -273,6 +324,33 @@ export async function syncLog({ notes, stateFile, adoptAll = false }) {
   const parts = splitRows(sheetXml);
   const rowsMap = parts.rows;
 
+  // Filas que el usuario pidió quitar del registro. Solo filas que escribió la app (state.owned)
+  // y solo si la fila sigue teniendo el mismo cheque y compañía. Nunca se mueven filas.
+  const ownedKeys = new Set(Object.values(state.owned || {}));
+  const toClear = [];
+  if (deletions.length && !excelOpen) {
+    for (const d of deletions) {
+      if (!d || !d.key || !ownedKeys.has(d.key)) continue;
+      let at = null;
+      const rn = Number(d.r);
+      if (rn >= FIRST_ROW && rowsMap.has(rn)) {
+        const v = readRow(rowsMap.get(rn), shared);
+        if (rowKey(v.F, v.H) === d.key) at = rn;
+      }
+      if (at == null) {
+        for (const [n, r] of rowsMap) {
+          if (n < FIRST_ROW) continue;
+          const v = readRow(r, shared);
+          if ((v.F != null || v.H != null) && rowKey(v.F, v.H) === d.key) { at = n; break; }
+        }
+      }
+      if (at != null && !toClear.some((x) => x.rowNum === at)) toClear.push({ rowNum: at, key: d.key });
+    }
+    for (const c of toClear) clearRow(rowsMap, c.rowNum);
+    if (!toClear.length) status.deletionsDone = true; // nada que quitar (ya no está o no es de la app)
+  }
+  if (deletions.length && excelOpen) status.locked = true;
+
   // Índice de lo que ya está en el Excel
   const index = new Map();
   const index2 = new Map();
@@ -290,6 +368,7 @@ export async function syncLog({ notes, stateFile, adoptAll = false }) {
       if (vals[c] === undefined) continue;
       o[c] = DATE_COLS.has(c) && typeof vals[c] === "number" ? serialToIso(vals[c]) : vals[c];
     }
+    if (ownedKeys.has(rowKey(vals.F, vals.H))) o.a = true; // fila escrita por la app (se puede quitar)
     snapshotRows.push(o);
   }
   status.rowsInExcel = snapshotRows.length;
@@ -313,7 +392,7 @@ export async function syncLog({ notes, stateFile, adoptAll = false }) {
     work.push({ row, at, owned, hash });
   }
 
-  if (!work.length) {
+  if (!work.length && !toClear.length) {
     status.snapshot = { rows: snapshotRows, lastRow };
     return status;
   }
@@ -342,13 +421,14 @@ export async function syncLog({ notes, stateFile, adoptAll = false }) {
     }
   }
 
-  if (!applied.length) {
+  if (!applied.length && !toClear.length) {
     saveState(stateFile, state);
     status.snapshot = { rows: snapshotRows, lastRow };
     return status;
   }
   const newSheet = assemble(parts, rowsMap);
   zip.file(SHEET_PATH, newSheet);
+  if (toClear.length) await pruneCalcChain(zip, new Set(toClear.map((c) => `O${c.rowNum}`)));
   const out = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
 
   // Verificación: se vuelve a leer lo escrito antes de reemplazar el archivo
@@ -368,13 +448,18 @@ export async function syncLog({ notes, stateFile, adoptAll = false }) {
       }
     }
   }
+  for (const c of toClear) {
+    const got = readRow(checkRows.get(c.rowNum) ?? { inner: "" }, shared);
+    for (const col of CLEAR_COLS) if (got[col] !== undefined) throw new Error(`Verificación falló al quitar la fila ${c.rowNum}`);
+  }
 
-  // Respaldo del día y reemplazo
+  // Respaldo del día y reemplazo (antes de quitar filas, siempre un respaldo nuevo)
   const today = new Date().toISOString().slice(0, 10);
-  if (state.lastBackup !== today) {
+  if (state.lastBackup !== today || toClear.length) {
     const bdir = path.join(path.dirname(LOG_FILE), "BACKUP AUTOMATICO");
     fs.mkdirSync(bdir, { recursive: true });
-    fs.copyFileSync(LOG_FILE, path.join(bdir, `RETURNED CHECK LOG ${today}.xlsm`));
+    const stamp = toClear.length ? ` antes de quitar ${new Date().toISOString().slice(11, 19).replace(/:/g, "")}` : "";
+    fs.copyFileSync(LOG_FILE, path.join(bdir, `RETURNED CHECK LOG ${today}${stamp}.xlsm`));
     state.lastBackup = today;
   }
   const tmp = `${LOG_FILE}.rc-tmp`;
@@ -391,6 +476,12 @@ export async function syncLog({ notes, stateFile, adoptAll = false }) {
     return status;
   }
 
+  if (toClear.length) {
+    const gone = new Set(toClear.map((c) => c.key));
+    for (const [id, k] of Object.entries(state.owned)) if (gone.has(k)) { delete state.owned[id]; delete state.hashes[id]; }
+    status.deleted = toClear.map((c) => ({ row: c.rowNum, key: c.key }));
+    status.deletionsDone = true;
+  }
   for (const a of applied) {
     state.hashes[a.row.noteId] = a.hash;
     if (a.created || a.owned) state.owned[a.row.noteId] = a.row.key;
@@ -399,6 +490,7 @@ export async function syncLog({ notes, stateFile, adoptAll = false }) {
     const vals = readRow(checkRows.get(a.rowNum), shared);
     const o = { r: a.rowNum };
     for (const c of COLS) if (vals[c] !== undefined) o[c] = DATE_COLS.has(c) && typeof vals[c] === "number" ? serialToIso(vals[c]) : vals[c];
+    if (a.created || a.owned) o.a = true;
     const i = snapshotRows.findIndex((x) => x.r === a.rowNum);
     if (i >= 0) snapshotRows[i] = o;
     else snapshotRows.push(o);
