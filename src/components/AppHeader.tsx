@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FileSpreadsheet, Gauge, FolderOpen, Home, LogOut, Moon, MoreHorizontal, Plus, RefreshCw, Search, Settings, Sun, Users } from "lucide-react";
+import { FileSpreadsheet, Gauge, FolderOpen, GraduationCap, Home, LogOut, Moon, MoreHorizontal, Plus, RefreshCw, Search, Settings, Sun, Users } from "lucide-react";
 import { useTheme } from "next-themes";
 import UsageModal, { USAGE_CACHE_KEY } from "@/components/UsageModal";
 import { DISABLE_RESUME_ONCE_KEY, LAST_ROUTE_KEY } from "@/components/ResumeGate";
@@ -358,6 +358,20 @@ export default function AppHeader() {
                   <button type="button" onClick={() => { setMenuOpen(false); setShowUsage(true); }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
                     <Gauge className="h-4 w-4 text-zinc-400" /> Herramientas y límites
+                  </button>
+
+                  <button type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      if (pathname === "/app") {
+                        try { window.dispatchEvent(new CustomEvent("rc:startTour")); } catch {}
+                      } else {
+                        try { sessionStorage.setItem("rc:tour:pending", "1"); } catch {}
+                        router.push("/app");
+                      }
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
+                    <GraduationCap className="h-4 w-4 text-zinc-400" /> Tutorial de la app
                     {usageWarn ? <span className={`ml-auto h-2 w-2 rounded-full ${usageWarn === "danger" ? "bg-red-500" : "bg-amber-500"}`} /> : null}
                   </button>
 

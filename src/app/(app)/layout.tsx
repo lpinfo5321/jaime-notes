@@ -4,6 +4,7 @@ import { tryGetPublicEnv } from "@/lib/env";
 import AppHeader from "@/components/AppHeader";
 import ResumeGate from "@/components/ResumeGate";
 import DashFrame from "@/components/dashboard/DashFrame";
+import AppTour from "@/components/AppTour";
 
 export default async function AppLayout({
   children,
@@ -25,6 +26,7 @@ export default async function AppLayout({
           <DashFrame>{children}</DashFrame>
         </ResumeGate>
       </main>
+      <AppTour />
     </div>
   );
 }
