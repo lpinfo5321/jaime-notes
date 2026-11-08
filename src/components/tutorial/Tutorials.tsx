@@ -12,6 +12,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
+import {
+  ArrowRight, Banknote, Check, Clock, Compass, Contact, FileDown, FilePlus2, FileSpreadsheet, Folder, FolderOpen,
+  ListChecks, NotebookPen, Search, Smartphone, Trash2, X, type LucideIcon,
+} from "lucide-react";
 import { CATEGORIES, TUTORIALS, type Step, type Target, type Tutorial } from "./tutorialData";
 
 const DONE_KEY = "rc:tut:done:v1";
@@ -392,56 +396,110 @@ export default function Tutorials() {
 
 /* ───────── Centro de tutoriales ───────── */
 
+const TUT_ICON: Record<string, LucideIcon> = {
+  tour: Compass,
+  search: Search,
+  create: FilePlus2,
+  open: FolderOpen,
+  payment: Banknote,
+  notes: NotebookPen,
+  contacts: Contact,
+  export: FileDown,
+  registro: FileSpreadsheet,
+  docs: Folder,
+  trash: Trash2,
+  select: ListChecks,
+  phone: Smartphone,
+};
+const CAT_TONE: Record<string, string> = { start: "ink", reports: "red", follow: "amber", files: "green", more: "violet" };
+
 function Center({ done, onClose, onStart }: { done: Set<string>; onClose: () => void; onStart: (t: Tutorial) => void }) {
+  const [cat, setCat] = useState<string>("all");
   const total = TUTORIALS.length;
   const n = TUTORIALS.filter((t) => done.has(t.id)).length;
   const next = TUTORIALS.find((t) => !done.has(t.id));
+  const pct = n / total;
+  const R = 34;
+  const C = 2 * Math.PI * R;
+  const cats = CATEGORIES.filter((c) => TUTORIALS.some((t) => t.category === c.id));
+  const shown = cats.filter((c) => cat === "all" || c.id === cat);
+
   return (
     <div className="rtc-back" onClick={onClose} role="dialog" aria-label="Centro de tutoriales">
       <div className="rtc" onClick={(e) => e.stopPropagation()}>
-        <div className="rtc-head">
-          <div>
-            <div className="rtc-eyebrow">Centro de tutoriales</div>
-            <h2>Aprende a usar Return Checks</h2>
-            <p>Tutoriales cortos donde tú haces cada paso. Los de <b>práctica</b> crean un reporte de prueba que se borra solo.</p>
-          </div>
-          <button type="button" className="rtc-x" onClick={onClose} aria-label="Cerrar">✕</button>
-        </div>
-        <div className="rtc-progress">
-          <div className="rtc-bar"><i style={{ width: `${(n / total) * 100}%` }} /></div>
-          <span>{n} de {total} completados</span>
-          {next ? (
-            <button type="button" className="rtc-cta" onClick={() => onStart(next)}>
-              {n ? "Seguir con el siguiente" : "Empezar desde el principio"} →
+        <div className="rtc-scroll">
+          {/* Bloque negro, como "Mis expedientes" */}
+          <header className="rtc-hero">
+            <button type="button" className="rtc-x" onClick={onClose} aria-label="Cerrar">
+              <X className="h-4 w-4" />
             </button>
-          ) : null}
-        </div>
-        <div className="rtc-body">
-          {CATEGORIES.map((c) => {
+            <div className="rtc-hero-txt">
+              <div className="rtc-eyebrow">Return Checks · Tutoriales</div>
+              <h2>Aprende<br />la app</h2>
+              <p>Tutoriales cortos donde <b>tú haces cada paso</b>. Los de práctica crean un reporte de prueba que se borra solo.</p>
+              <div className="rtc-chips">
+                <span>{total} tutoriales</span>
+                <span>{n} completados</span>
+              </div>
+            </div>
+            <div className="rtc-hero-side">
+              <div className="rtc-ring">
+                <svg viewBox="0 0 80 80" aria-hidden>
+                  <circle cx="40" cy="40" r={R} className="bg" />
+                  <circle cx="40" cy="40" r={R} className="fg" strokeDasharray={C} strokeDashoffset={C * (1 - pct)} />
+                </svg>
+                <div><b>{n}</b><small>de {total}</small></div>
+              </div>
+              {next ? (
+                <button type="button" className="rtc-cta" onClick={() => onStart(next)}>
+                  <span>{n ? "Seguir con" : "Empezar con"}</span>
+                  <b>{next.title}</b>
+                  <ArrowRight className="h-4 w-4 shrink-0" />
+                </button>
+              ) : (
+                <div className="rtc-alldone"><Check className="h-4 w-4" /> ¡Terminaste todos!</div>
+              )}
+            </div>
+          </header>
+
+          {/* Barra de categorías, como la barra de abajo de la app */}
+          <nav className="rtc-tabs" aria-label="Categorías">
+            {[{ id: "all", title: "Todos" }, ...cats].map((c) => (
+              <button key={c.id} type="button" className={cat === c.id ? "on" : ""} onClick={() => setCat(c.id)}>
+                {c.title}
+              </button>
+            ))}
+          </nav>
+
+          {shown.map((c) => {
             const list = TUTORIALS.filter((t) => t.category === c.id);
-            if (!list.length) return null;
+            const tone = CAT_TONE[c.id] ?? "ink";
             return (
-              <section key={c.id}>
+              <section key={c.id} className="rtc-sec">
                 <div className="rtc-cat">
-                  <b>{c.title}</b>
+                  <h3>{c.title}</h3>
                   <span>{c.desc}</span>
                 </div>
                 <div className="rtc-grid">
                   {list.map((t) => {
                     const ok = done.has(t.id);
+                    const Ico = TUT_ICON[t.id] ?? Compass;
                     return (
                       <button key={t.id} type="button" className={`rtc-card ${ok ? "ok" : ""}`} onClick={() => onStart(t)}>
-                        <span className="rtc-ico">{t.icon}</span>
-                        <span className="rtc-txt">
-                          <b>{t.title}</b>
-                          <small>{t.desc}</small>
-                          <span className="rtc-meta">
-                            <em>{t.minutes} min</em>
-                            {t.practice ? <em className="pr">Práctica</em> : null}
-                            {ok ? <em className="dn">✓ Hecho</em> : null}
-                          </span>
-                        </span>
-                        <span className="rtc-go">{ok ? "Repetir" : "Empezar"}</span>
+                        <div className="rtc-card-top">
+                          <span className={`rtc-ico t-${tone}`}><Ico className="h-5 w-5" strokeWidth={2.2} /></span>
+                          {ok ? (
+                            <span className="rtc-done"><Check className="h-3.5 w-3.5" strokeWidth={3} /> Hecho</span>
+                          ) : t.practice ? (
+                            <span className="rtc-prac">Práctica</span>
+                          ) : null}
+                        </div>
+                        <b className="rtc-title">{t.title}</b>
+                        <small className="rtc-desc">{t.desc}</small>
+                        <div className="rtc-card-foot">
+                          <span className="rtc-min"><Clock className="h-3.5 w-3.5" /> {t.minutes} min</span>
+                          <span className="rtc-go">{ok ? "Repetir" : "Empezar"} <ArrowRight className="h-3.5 w-3.5" /></span>
+                        </div>
                       </button>
                     );
                   })}
@@ -449,8 +507,9 @@ function Center({ done, onClose, onStart }: { done: Set<string>; onClose: () => 
               </section>
             );
           })}
+
+          <p className="rtc-foot">Vuelve aquí cuando quieras con el botón <b>?</b> de arriba.</p>
         </div>
-        <div className="rtc-foot">Puedes volver aquí cuando quieras con el botón <b>?</b> de arriba.</div>
       </div>
     </div>
   );
@@ -619,47 +678,98 @@ const CSS = `
 .rtr-btn.ghost:hover { background: rgba(255,255,255,.08); }
 
 .rtc-back { position: fixed; inset: 0; z-index: 999980; display: grid; place-items: center; padding: 12px;
-  background: rgba(9,9,11,.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); animation: rt-fade .2s ease both; }
-.rtc { width: min(860px, 100%); max-height: min(88dvh, 900px); display: flex; flex-direction: column; overflow: hidden;
-  border-radius: 28px; background: #0f1115; color: #f4f4f5; border: 1px solid rgba(255,255,255,.1);
-  box-shadow: 0 40px 100px -20px rgba(0,0,0,.8); animation: rt-in .35s cubic-bezier(.16,1,.3,1) both; }
-.rtc-head { display: flex; justify-content: space-between; gap: 16px; padding: 24px 24px 12px;
-  background: radial-gradient(120% 140% at 0% 0%, rgba(163,230,53,.16), transparent 55%); }
-.rtc-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: ${LIME}; }
-.rtc-head h2 { margin: 6px 0 6px; font-size: clamp(22px, 3vw, 28px); font-weight: 900; letter-spacing: -.02em; line-height: 1.1; }
-.rtc-head p { margin: 0; font-size: 13px; color: #a1a1aa; max-width: 560px; line-height: 1.5; }
-.rtc-head p b { color: ${LIME}; }
-.rtc-x { width: 36px; height: 36px; flex-shrink: 0; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: #a1a1aa; font-size: 15px; cursor: pointer; }
-.rtc-x:hover { background: rgba(255,255,255,.08); color: #fff; }
-.rtc-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 4px 24px 16px; font-size: 12px; color: #a1a1aa; font-weight: 700; }
-.rtc-bar { flex: 1; min-width: 120px; height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
-.rtc-bar i { display: block; height: 100%; background: ${LIME}; border-radius: 99px; transition: width .5s ease; }
-.rtc-cta { height: 36px; padding: 0 14px; border-radius: 12px; border: none; background: ${LIME}; color: #1a2e05; font-size: 13px; font-weight: 800; cursor: pointer; }
-.rtc-cta:hover { filter: brightness(1.07); }
-.rtc-body { overflow-y: auto; padding: 4px 24px 8px; display: flex; flex-direction: column; gap: 18px; }
-.rtc-cat { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.rtc-cat b { font-size: 14px; font-weight: 900; }
-.rtc-cat span { font-size: 12px; color: #71717a; }
-.rtc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
-.rtc-card { display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px; border-radius: 18px; cursor: pointer; color: inherit; font: inherit;
-  background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.08); transition: background .15s ease, border-color .15s ease, transform .15s ease; }
-.rtc-card:hover { background: rgba(163,230,53,.07); border-color: rgba(163,230,53,.35); transform: translateY(-1px); }
-.rtc-card.ok { border-color: rgba(163,230,53,.25); }
-.rtc-ico { width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; display: grid; place-items: center; font-size: 22px; background: rgba(255,255,255,.06); }
-.rtc-card.ok .rtc-ico { background: rgba(163,230,53,.14); }
-.rtc-txt { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.rtc-txt b { font-size: 14px; font-weight: 800; }
-.rtc-txt small { font-size: 12px; color: #a1a1aa; line-height: 1.4; }
-.rtc-meta { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
-.rtc-meta em { font-style: normal; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 99px; background: rgba(255,255,255,.08); color: #d4d4d8; }
-.rtc-meta em.pr { background: rgba(56,189,248,.15); color: #7dd3fc; }
-.rtc-meta em.dn { background: rgba(163,230,53,.16); color: ${LIME}; }
-.rtc-go { font-size: 12px; font-weight: 800; color: ${LIME}; flex-shrink: 0; }
-.rtc-foot { padding: 12px 24px 18px; font-size: 12px; color: #71717a; border-top: 1px solid rgba(255,255,255,.06); }
-.rtc-foot b { color: #f4f4f5; }
-@media (max-width: 640px) {
-  .rtc { border-radius: 22px; }
-  .rtc-head, .rtc-progress, .rtc-body, .rtc-foot { padding-left: 16px; padding-right: 16px; }
+  background: rgba(9,9,11,.45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: rt-fade .2s ease both; }
+.rtc { --s-bg: #f4f4f5; --s-card: #fff; --s-ink: #18181b; --s-mute: #71717a; --s-line: rgba(24,24,27,.07); --s-chip: #f4f4f5;
+  position: relative; width: min(980px, 100%); max-height: min(92dvh, 940px); display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 32px; background: var(--s-bg); color: var(--s-ink);
+  font-family: var(--font-geist-sans), -apple-system, "SF Pro Display", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  box-shadow: 0 50px 120px -30px rgba(0,0,0,.55); animation: rt-in .38s cubic-bezier(.16,1,.3,1) both; }
+html.dark .rtc { --s-bg: #0c0c0e; --s-card: #18181b; --s-ink: #f4f4f5; --s-mute: #a1a1aa; --s-line: rgba(255,255,255,.08); --s-chip: #27272a; }
+.rtc-scroll { overflow-y: auto; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 18px; }
+.rtc-x { position: absolute; top: 16px; right: 16px; z-index: 4; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 999px; border: 0; cursor: pointer;
+  background: rgba(255,255,255,.12); color: #fff; transition: background .15s ease, transform .15s ease; }
+.rtc-x:hover { background: rgba(255,255,255,.22); transform: rotate(90deg); }
+
+.rtc-hero { position: relative; overflow: hidden; display: flex; gap: 20px; align-items: stretch; justify-content: space-between;
+  padding: 26px 26px 24px; border-radius: 26px; background: #18181b; color: #fff; flex-shrink: 0; }
+.rtc-hero::after { content: ""; position: absolute; right: -60px; top: -80px; width: 320px; height: 320px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(163,230,53,.22), transparent 65%); pointer-events: none; }
+.rtc-hero-txt { position: relative; z-index: 1; min-width: 0; }
+.rtc-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.5); }
+.rtc-hero h2 { margin: 14px 0 10px; font-size: clamp(38px, 6.4vw, 64px); line-height: .92; font-weight: 900; letter-spacing: -.055em; }
+.rtc-hero p { margin: 0; max-width: 430px; font-size: 13.5px; line-height: 1.5; color: rgba(255,255,255,.62); }
+.rtc-hero p b { color: #fff; }
+.rtc-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 16px; }
+.rtc-chips span { padding: 6px 11px; border-radius: 999px; background: rgba(255,255,255,.1); font-size: 12px; font-weight: 800; }
+.rtc-hero-side { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 14px; padding-top: 40px; flex-shrink: 0; }
+.rtc-ring { position: relative; width: 92px; height: 92px; }
+.rtc-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.rtc-ring circle { fill: none; stroke-width: 8; }
+.rtc-ring .bg { stroke: rgba(255,255,255,.1); }
+.rtc-ring .fg { stroke: #a3e635; stroke-linecap: round; transition: stroke-dashoffset .8s cubic-bezier(.16,1,.3,1); }
+.rtc-ring div { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.rtc-ring b { font-size: 26px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+.rtc-ring small { font-size: 10px; font-weight: 700; color: rgba(255,255,255,.5); }
+.rtc-cta { display: flex; align-items: center; gap: 8px; max-width: 290px; height: 46px; padding: 0 16px 0 18px; border: 0; border-radius: 999px; cursor: pointer;
+  background: #a3e635; color: #1a2e05; font: inherit; font-size: 13px; box-shadow: 0 10px 30px -8px rgba(163,230,53,.55); transition: transform .15s ease, filter .15s ease; }
+.rtc-cta span { font-weight: 600; opacity: .75; white-space: nowrap; }
+.rtc-cta b { font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rtc-cta:hover { filter: brightness(1.05); transform: translateY(-1px); }
+.rtc-alldone { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 999px; background: rgba(163,230,53,.15); color: #a3e635; font-size: 13px; font-weight: 800; }
+
+.rtc-tabs { display: flex; gap: 4px; padding: 5px; border-radius: 999px; background: #18181b; overflow-x: auto; scrollbar-width: none; position: sticky; top: 0; z-index: 3; flex-shrink: 0;
+  box-shadow: 0 -14px 0 6px var(--s-bg), 0 12px 30px -14px rgba(0,0,0,.45); }
+html.dark .rtc-tabs { background: #27272a; }
+.rtc-tabs::-webkit-scrollbar { display: none; }
+.rtc-tabs button { flex-shrink: 0; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; cursor: pointer; background: transparent;
+  color: rgba(255,255,255,.6); font: inherit; font-size: 13px; font-weight: 800; transition: background .15s ease, color .15s ease; }
+.rtc-tabs button:hover { color: #fff; }
+.rtc-tabs button.on { background: #fff; color: #18181b; }
+
+.rtc-sec { display: flex; flex-direction: column; gap: 10px; }
+.rtc-cat { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 0 4px; }
+.rtc-cat h3 { margin: 0; font-size: 20px; font-weight: 900; letter-spacing: -.035em; }
+.rtc-cat span { font-size: 12.5px; color: var(--s-mute); font-weight: 600; }
+.rtc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.rtc-card { display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: left; padding: 16px; border-radius: 24px; cursor: pointer;
+  border: 1px solid var(--s-line); background: var(--s-card); color: inherit; font: inherit;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 10px 30px -18px rgba(0,0,0,.25); transition: transform .18s cubic-bezier(.16,1,.3,1), box-shadow .18s ease; }
+.rtc-card:hover { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(0,0,0,.05), 0 22px 40px -20px rgba(0,0,0,.35); }
+.rtc-card:hover .rtc-go { background: #a3e635; color: #1a2e05; }
+.rtc-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+.rtc-ico { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 15px; }
+.rtc-ico.t-ink { background: #18181b; color: #a3e635; }
+.rtc-ico.t-red { background: #fee2e2; color: #dc2626; }
+.rtc-ico.t-amber { background: #fef3c7; color: #b45309; }
+.rtc-ico.t-green { background: #dcfce7; color: #15803d; }
+.rtc-ico.t-violet { background: #ede9fe; color: #7c3aed; }
+html.dark .rtc-ico.t-ink { background: #27272a; }
+html.dark .rtc-ico.t-red { background: rgba(220,38,38,.18); color: #fca5a5; }
+html.dark .rtc-ico.t-amber { background: rgba(217,119,6,.18); color: #fcd34d; }
+html.dark .rtc-ico.t-green { background: rgba(22,163,74,.18); color: #86efac; }
+html.dark .rtc-ico.t-violet { background: rgba(124,58,237,.2); color: #c4b5fd; }
+.rtc-done, .rtc-prac { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+.rtc-done { background: #a3e635; color: #1a2e05; }
+.rtc-prac { background: #e0f2fe; color: #0369a1; }
+html.dark .rtc-prac { background: rgba(14,165,233,.16); color: #7dd3fc; }
+.rtc-title { font-size: 16px; font-weight: 900; letter-spacing: -.025em; line-height: 1.2; }
+.rtc-desc { font-size: 12.5px; line-height: 1.45; color: var(--s-mute); flex: 1; }
+.rtc-card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 12px; border-top: 1px dashed var(--s-line); }
+.rtc-min { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--s-mute); }
+.rtc-go { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 12px; border-radius: 999px; background: var(--s-ink); color: var(--s-card);
+  font-size: 12px; font-weight: 800; transition: background .15s ease, color .15s ease; }
+.rtc-card.ok .rtc-go { background: var(--s-chip); color: var(--s-ink); }
+.rtc-foot { margin: 4px 0 10px; text-align: center; font-size: 12px; color: var(--s-mute); }
+.rtc-foot b { color: var(--s-ink); }
+@media (max-width: 860px) { .rtc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .rtc { border-radius: 26px; }
+  .rtc-scroll { padding: 10px 10px 4px; }
+  .rtc-hero { flex-direction: column; padding: 22px 20px 20px; }
+  .rtc-hero-side { flex-direction: row; align-items: center; justify-content: space-between; padding-top: 0; }
+  .rtc-ring { width: 72px; height: 72px; }
+  .rtc-cta { max-width: 220px; }
+  .rtc-x { top: 12px; right: 12px; }
   .rtc-grid { grid-template-columns: 1fr; }
 }
 `;
