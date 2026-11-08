@@ -325,6 +325,7 @@ export default function CompanyNotesModal({
                 type="button"
                 onClick={() => requestLeave("close")}
                 disabled={busy}
+                data-tour="notes-close"
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 <X className="h-4 w-4" />

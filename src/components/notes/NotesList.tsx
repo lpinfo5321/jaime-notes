@@ -62,6 +62,7 @@ const ReportModal = dynamic(() => import("./ReportModal"), { ssr: false });
 const CompanyNotesModal = dynamic(() => import("./CompanyNotesModal"), { ssr: false });
 
 const DRAFT_TAG = "__draft";
+const PRACTICE_TAG = "__practice";
 
 export type NoteListItem = {
   id: string;
@@ -315,6 +316,40 @@ export default function NotesList({
       void finalizeDraft(n.id, false, old);
     }
   }, [notes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tutoriales de práctica: lo creado lleva "__practice" y se borra al terminar (o si quedó olvidado).
+  const purgePractice = useRef<(onlyOld: boolean) => Promise<void>>(async () => {});
+  purgePractice.current = async (onlyOld: boolean) => {
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.from("notes").select("id,created_at").contains("tags", [PRACTICE_TAG]);
+      const ids = (data ?? [])
+        .filter((n: any) => !onlyOld || Date.now() - new Date(n.created_at).getTime() > 30 * 60 * 1000)
+        .map((n: any) => String(n.id));
+      if (!ids.length) return;
+      for (const id of ids) {
+        removeQueuedReport(id);
+        await fetch(`/api/notes/${id}`, { method: "DELETE" }).catch(() => {});
+      }
+      setItems((prev) => prev.filter((n) => !ids.includes(String(n.id))));
+      resyncSoon();
+    } catch {}
+  };
+  useEffect(() => {
+    const onCleanup = () => {
+      const practiceIds = new Set(itemsRaw.filter((n) => (n.tags ?? []).includes(PRACTICE_TAG)).map((n) => n.id));
+      setReportForCompany((prev) => (prev && practiceIds.has(prev.id) ? null : prev));
+      setNotesModal((prev) => (prev && prev.notes.some((n) => practiceIds.has(n.id)) ? null : prev));
+      window.setTimeout(() => void purgePractice.current(false), 1500);
+    };
+    window.addEventListener("rc:practiceCleanup", onCleanup);
+    return () => window.removeEventListener("rc:practiceCleanup", onCleanup);
+  }, [itemsRaw]);
+  useEffect(() => {
+    let practicing = false;
+    try { practicing = sessionStorage.getItem("rc:practice") === "1"; } catch {}
+    if (!practicing) void purgePractice.current(true);
+  }, []);
 
   // Sync filters from URL (controlled by header UI)
   useEffect(() => {
@@ -992,10 +1027,11 @@ export default function NotesList({
     const publish = async () => {
       setItems((prev) => prev.map((n) => (n.id === noteId ? { ...n, tags: (n.tags ?? []).filter((t) => t !== DRAFT_TAG) } : n)));
       try {
+        const keep = (itemsRaw.find((n) => n.id === noteId)?.tags ?? []).filter((t) => t !== DRAFT_TAG);
         await fetch(`/api/notes/${noteId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ tags: [] }),
+          body: JSON.stringify({ tags: keep }),
         });
       } catch {}
     };
@@ -2164,10 +2200,11 @@ export default function NotesList({
               const isDraft = itemsRaw.some((n) => n.id === draftId && (n.tags ?? []).includes(DRAFT_TAG));
               if (isDraft && reportHasContent((reportForCompany.values as any)?._report?.payload)) {
                 setItems((prev) => prev.map((n) => (n.id === draftId ? { ...n, tags: (n.tags ?? []).filter((t) => t !== DRAFT_TAG) } : n)));
+                const keep = (itemsRaw.find((n) => n.id === draftId)?.tags ?? []).filter((t) => t !== DRAFT_TAG);
                 void fetch(`/api/notes/${draftId}`, {
                   method: "PATCH",
                   headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ tags: [] }),
+                  body: JSON.stringify({ tags: keep }),
                 }).catch(() => {});
               }
             } catch {}

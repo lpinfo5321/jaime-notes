@@ -75,7 +75,7 @@ function mapPayment(raw, extra) {
 export function logRowFromNote(n) {
   const v = n?.values;
   if (!v) return null;
-  if (Array.isArray(n.tags) && n.tags.includes("__draft")) return null;
+  if (Array.isArray(n.tags) && (n.tags.includes("__draft") || n.tags.includes("__practice"))) return null;
   if (v._bucket === "trash") return null;
   const f = v?._report?.payload?.fields;
   if (!f) return null;

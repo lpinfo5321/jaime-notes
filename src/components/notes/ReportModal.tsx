@@ -746,6 +746,7 @@ export default function ReportModal({
       <div
         role="dialog"
         aria-modal="true"
+        data-tour="report-modal"
         className="flex h-[calc(100dvh-16px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900 sm:h-[92dvh]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -764,6 +765,7 @@ export default function ReportModal({
               type="button"
               onClick={(e) => { e.stopPropagation(); void shareReport(); }}
               title="Exportar este reporte a OneDrive"
+              data-tour="report-export"
               className="flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-700"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -787,6 +789,7 @@ export default function ReportModal({
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
               title="Abrir en pestaña"
+              data-tour="report-newtab"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -801,6 +804,7 @@ export default function ReportModal({
               onClick={(e) => { e.stopPropagation(); requestClose(); }}
               disabled={closing || discarding}
               title="Cerrar"
+              data-tour="report-close"
               className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               <X className="h-4 w-4" />

@@ -209,7 +209,7 @@ function ContactModal({
         />
       ) : null}
 
-      <div className="animate-slide-up relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-zinc-950 sm:animate-scale-in sm:rounded-3xl">
+      <div data-tour="contact-form" className="animate-slide-up relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-zinc-950 sm:animate-scale-in sm:rounded-3xl">
         {/* header */}
         <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
           <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
@@ -549,6 +549,7 @@ export default function ContactsView({ onBack }: { onBack?: () => void } = {}) {
 
         {/* New contact button */}
         <button
+          data-tour="contact-new"
           onClick={() => { setEditTarget(null); setMode("new"); }}
           className="flex shrink-0 items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
         >

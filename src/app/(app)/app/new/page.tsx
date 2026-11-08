@@ -66,7 +66,11 @@ export default function NewNotePage() {
           body: "",
           // Si se abre el reporte al momento, nace como borrador: no aparece en la lista
           // hasta que se guarde con contenido (si se cierra vacío, se elimina).
-          tags: openReport ? ["__draft"] : [],
+          tags: [
+            ...(openReport ? ["__draft"] : []),
+            // Tutorial de práctica: se borra solo y nunca va al Excel ni a OneDrive
+            ...(typeof window !== "undefined" && sessionStorage.getItem("rc:practice") === "1" ? ["__practice"] : []),
+          ],
           favorite: false,
         }),
       });
@@ -103,6 +107,7 @@ export default function NewNotePage() {
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder="Ej. CPC CONCRETE LLC"
+              data-tour="new-company-input"
               autoFocus
               className="w-full rounded-2xl border border-zinc-200 bg-white py-3 pl-10 pr-4 text-sm font-semibold text-zinc-900 outline-none ring-zinc-300 focus:ring-2 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white dark:ring-zinc-700"
             />
@@ -180,6 +185,7 @@ export default function NewNotePage() {
             type="button"
             className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
             onClick={() => void create()}
+            data-tour="new-company-create"
             disabled={!canCreate || busy}
           >
             {busy ? "Creando…" : exact ? "Agregar reporte a esta compañía" : "Crear compañía"}

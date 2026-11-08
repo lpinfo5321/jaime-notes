@@ -278,6 +278,11 @@ export default function AppHeader() {
 
           {/* Acciones de la derecha, en la fila superior */}
           <div className="flex shrink-0 items-center gap-1.5">
+            <button type="button" title="Tutoriales: aprende a usar la app" data-hd="help" aria-label="Tutoriales"
+              onClick={() => { try { window.dispatchEvent(new CustomEvent("rc:openTutorials")); } catch {} }}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200/80 bg-white/80 text-sm font-black sm:h-10 sm:w-10 sm:rounded-2xl text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/60 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900">
+              ?
+            </button>
             {isNotesHome ? (
               <button type="button" title="Seleccionar varias" data-hd="select"
                 className="hidden h-10 items-center gap-1.5 rounded-2xl border border-zinc-200/80 bg-white/80 px-3 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 md:flex dark:border-zinc-800/60 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
@@ -361,17 +366,9 @@ export default function AppHeader() {
                   </button>
 
                   <button type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      if (pathname === "/app") {
-                        try { window.dispatchEvent(new CustomEvent("rc:startTour")); } catch {}
-                      } else {
-                        try { sessionStorage.setItem("rc:tour:pending", "1"); } catch {}
-                        router.push("/app");
-                      }
-                    }}
+                    onClick={() => { setMenuOpen(false); try { window.dispatchEvent(new CustomEvent("rc:openTutorials")); } catch {} }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
-                    <GraduationCap className="h-4 w-4 text-zinc-400" /> Tutorial de la app
+                    <GraduationCap className="h-4 w-4 text-zinc-400" /> Tutoriales
                     {usageWarn ? <span className={`ml-auto h-2 w-2 rounded-full ${usageWarn === "danger" ? "bg-red-500" : "bg-amber-500"}`} /> : null}
                   </button>
 

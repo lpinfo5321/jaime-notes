@@ -309,7 +309,7 @@ Se guarda un respaldo del Excel antes de quitarlo.`)) return;
       </div>
 
       {/* Estado de la sincronización con el Excel */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-2 text-xs shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div data-tour="log-status" className="flex shrink-0 flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-2 text-xs shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         {helper ? (
           helper.locked || (helper.pending ?? 0) > 0 ? (
             <span className="inline-flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300">
@@ -377,13 +377,14 @@ Se guarda un respaldo del Excel antes de quitarlo.`)) return;
             ))}
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div data-tour="log-filters" className="flex shrink-0 flex-wrap items-center gap-2">
             <div className="relative min-w-0 basis-full sm:basis-auto sm:min-w-[160px] sm:flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Buscar compañía, # cheque, agente…"
+                data-tour="log-search"
                 className="h-10 w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-emerald-400 dark:border-zinc-700 dark:bg-zinc-900"
               />
             </div>

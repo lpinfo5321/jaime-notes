@@ -508,6 +508,7 @@ function SideNote({
     <div
       ref={ref}
       className={`sn sn-${mode} ${open ? "on" : ""}`}
+      data-tour="notes"
       role="button"
       tabIndex={0}
       aria-label="Notas"
@@ -653,6 +654,7 @@ function Card({
       {notesMode === "big" ? (
       <aside
         className="kn"
+        data-tour="notes"
         role="button"
         tabIndex={0}
         onClick={onOpenNotes}

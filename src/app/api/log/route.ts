@@ -29,7 +29,7 @@ export async function GET() {
     const byKey = new Map<string, string>();
     const byCheck = new Map<string, string[]>();
     for (const n of (notesRes.data ?? []) as unknown as { id: string; title: string | null; tags: string[] | null; f: Record<string, unknown> | null; bucket: string | null }[]) {
-      if (!n.f || n.bucket === "trash" || (n.tags ?? []).includes("__draft")) continue;
+      if (!n.f || n.bucket === "trash" || (n.tags ?? []).includes("__draft") || (n.tags ?? []).includes("__practice")) continue;
       const ck = digits(n.f.checkNumber);
       if (!ck) continue;
       const payor = alnum(n.f.makerPayor || n.f.companyName || n.title);
