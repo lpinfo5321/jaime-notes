@@ -285,10 +285,13 @@ export default function NotesList({
   useEffect(() => {
     if (draftsSweptRef.current) return;
     draftsSweptRef.current = true;
-    const old = notes.filter(
-      (n) => (n.tags ?? []).includes(DRAFT_TAG) && Date.now() - new Date(n.created_at).getTime() > 15 * 60 * 1000,
-    );
-    for (const n of old) void finalizeDraft(n.id, false);
+    // Recientes (< 15 min): solo se publican si ya tienen contenido (p. ej. se recargó la página
+    // con el reporte abierto); nunca se eliminan. Viejos: con contenido se publican, vacíos se eliminan.
+    const drafts = notes.filter((n) => (n.tags ?? []).includes(DRAFT_TAG));
+    for (const n of drafts) {
+      const old = Date.now() - new Date(n.created_at).getTime() > 15 * 60 * 1000;
+      void finalizeDraft(n.id, false, old);
+    }
   }, [notes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync filters from URL (controlled by header UI)
@@ -958,7 +961,9 @@ export default function NotesList({
 
   // Al cerrar un reporte NUEVO: si el usuario descartó o no escribió nada → se elimina por completo;
   // si hay contenido → se "publica" (deja de ser borrador y aparece en la lista).
-  async function finalizeDraft(noteId: string, forceDelete: boolean) {
+  // allowDelete=false: solo se publica si tiene contenido; nunca se elimina (borradores recientes que
+  // pueden estar abiertos en otra pestaña o equipo).
+  async function finalizeDraft(noteId: string, forceDelete: boolean, allowDelete = true) {
     const removeLocal = () => setItems((prev) => prev.filter((n) => n.id !== noteId));
     const publish = async () => {
       setItems((prev) => prev.map((n) => (n.id === noteId ? { ...n, tags: (n.tags ?? []).filter((t) => t !== DRAFT_TAG) } : n)));
@@ -991,6 +996,7 @@ export default function NotesList({
         !!String(row.body ?? "").trim() ||
         reportHasContent(v._report?.payload);
       if (hasContent) return void (await publish());
+      if (!allowDelete) return;
       const del = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
       if (del.ok) {
         removeQueuedReport(noteId);
@@ -2101,6 +2107,20 @@ export default function NotesList({
             );
           }}
           onReportSynced={(meta) => {
+            // Reporte NUEVO: en cuanto se guarda con contenido, deja de ser borrador
+            // (así aparece en la lista aunque se recargue la página o se cierre la pestaña).
+            try {
+              const draftId = reportForCompany.id;
+              const isDraft = itemsRaw.some((n) => n.id === draftId && (n.tags ?? []).includes(DRAFT_TAG));
+              if (isDraft && reportHasContent((reportForCompany.values as any)?._report?.payload)) {
+                setItems((prev) => prev.map((n) => (n.id === draftId ? { ...n, tags: (n.tags ?? []).filter((t) => t !== DRAFT_TAG) } : n)));
+                void fetch(`/api/notes/${draftId}`, {
+                  method: "PATCH",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ tags: [] }),
+                }).catch(() => {});
+              }
+            } catch {}
             try {
               const prevValues = ((reportForCompany.values ?? {}) as Record<string, unknown>) ?? {};
               const prevReport = (prevValues as any)?._report ?? null;
