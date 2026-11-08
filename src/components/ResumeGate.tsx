@@ -33,6 +33,7 @@ function normalizeStoredUrl(url: string) {
   try {
     const u = new URL(url, window.location.origin);
     u.searchParams.delete("openReport");
+    u.searchParams.delete("v"); // ?v=<hora> solo sirve para recargar tras una actualización
     const q = u.searchParams.toString();
     return q ? `${u.pathname}?${q}` : u.pathname;
   } catch {
@@ -42,6 +43,7 @@ function normalizeStoredUrl(url: string) {
       if (!qs) return url;
       const params = new URLSearchParams(qs);
       params.delete("openReport");
+      params.delete("v");
       const q = params.toString();
       return q ? `${p}?${q}` : p;
     } catch {
@@ -127,7 +129,7 @@ export default function ResumeGate({ children }: { children: React.ReactNode }) 
 
     const last = readLastRoute();
     const isLandingHome = storedUrl === "/app" || storedUrl.startsWith("/app?");
-    const canRedirect = isLandingHome && last?.url && isRestorableUrl(last.url) && last.url !== url;
+    const canRedirect = isLandingHome && last?.url && isRestorableUrl(last.url) && last.url !== storedUrl;
 
     // If user opened /app (login redirect / bookmark), resume last route.
     if (canRedirect) {
@@ -141,6 +143,18 @@ export default function ResumeGate({ children }: { children: React.ReactNode }) 
     setReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Tras redirigir a la última pantalla, mostrar el contenido al llegar (antes se quedaba en blanco).
+  // Respaldo: si la redirección no termina, se muestra igual a los 1.5 s.
+  useEffect(() => {
+    if (ready) return;
+    if (didInitRef.current && readLastRoute()?.url === storedUrl) {
+      setReady(true);
+      return;
+    }
+    const t = window.setTimeout(() => setReady(true), 1500);
+    return () => window.clearTimeout(t);
+  }, [ready, storedUrl]);
 
   // Track current route
   useEffect(() => {
