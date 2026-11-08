@@ -990,7 +990,9 @@
       try {
         const amt = Math.max(0, moneyToNumber(report?.fields?.checkAmount));
         let fee = 0;
-        if (amt <= 50) fee = 25;
+        // Sin monto del cheque todavía => sin cuota (antes salía $25 en reportes vacíos).
+        if (amt <= 0) fee = 0;
+        else if (amt <= 50) fee = 25;
         else if (amt <= 300) fee = 30;
         else if (amt <= 800) fee = 40;
         else fee = amt * 0.05;

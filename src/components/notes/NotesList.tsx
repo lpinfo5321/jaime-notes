@@ -305,7 +305,9 @@ export default function NotesList({
     const id = (sp.get("openReport") ?? "").trim();
     if (!id) return;
     if (handledOpenReportRef.current === id) return;
-    const note = items.find((n) => String(n.id) === id) ?? null;
+    // Se busca también entre los borradores: /app/new crea el reporte como borrador
+    // (no aparece en la lista hasta que se guarde con contenido).
+    const note = itemsRaw.find((n) => String(n.id) === id) ?? null;
     if (!note) return;
 
     handledOpenReportRef.current = id;
@@ -314,6 +316,7 @@ export default function NotesList({
       title: (note.title ?? "").trim() || "Sin nombre",
       values: (note.values ?? null) as any,
       coverUrl: localCoverUrls?.[note.id] ?? null,
+      isNew: (note.tags ?? []).includes(DRAFT_TAG),
     });
 
     // Limpia el parámetro para que no se vuelva a disparar en refresh
@@ -323,7 +326,7 @@ export default function NotesList({
       const next = params.toString();
       router.replace(next ? `/app?${next}` : "/app");
     } catch {}
-  }, [sp, items, localCoverUrls, router]);
+  }, [sp, itemsRaw, localCoverUrls, router]);
 
   const empty = items.length === 0;
   const sorted = useMemo(() => items, [items]);

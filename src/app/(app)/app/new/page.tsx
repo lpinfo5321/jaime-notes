@@ -64,7 +64,9 @@ export default function NewNotePage() {
         body: JSON.stringify({
           title: name,
           body: "",
-          tags: [],
+          // Si se abre el reporte al momento, nace como borrador: no aparece en la lista
+          // hasta que se guarde con contenido (si se cierra vacío, se elimina).
+          tags: openReport ? ["__draft"] : [],
           favorite: false,
         }),
       });
