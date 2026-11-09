@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, CheckCircle2, Copy, Download, ImageOff, MoreHorizontal, Paperclip, Pencil, Phone, Plus, SquarePen, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, FolderOpen, CheckCircle2, Copy, Download, ImageOff, MoreHorizontal, Paperclip, Pencil, Phone, Plus, SquarePen, Trash2, X } from "lucide-react";
 import UnsavedChangesDialog from "@/components/UnsavedChangesDialog";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -11,7 +11,8 @@ import { useDashPrefs } from "@/components/dashboard/dashPrefs";
 import type { NoteListItem } from "./NotesList";
 import { APPREPORTE_V, isoToday, toEntryArray, sortEntriesDesc, formatUsMmDdYy, parseMoneyToCents, formatUsd, getTotalDueFromValues, normText, pickField, getTotalDueCentsFromValues, isBucket, normalizePaymentToken, statusFromPaymentMethod, getLatestEntry, getLatestEntryDateIso, getLatestEntryDateTime, getLatestAgent, getCheckPaymentStatusText, getPayText, fitTextToSingleLineInput, type Entry } from "./notesUtils";
 import { noticeOrAlert } from "@/lib/exportNotice";
-import { isMobileExport, NSF_FOLDER_NAME, OutboxPendingError, connectNsfFolder, exportPdfName, exportRow, exportYear, sendToOneDriveViaPc, writeExportFile, yearFolderForExport } from "@/lib/nsfExport";
+import { isMobileExport, NSF_FOLDER_NAME, OutboxPendingError, exportPdfName, exportRow, exportYear, findSameCheck, listExportedPdfs, openExportFolder, sendToOneDriveViaPc, writeExportFile, yearFolderForExport, type ExportedFile } from "@/lib/nsfExport";
+import { askExportChoice } from "@/lib/exportDialog";
 
 export default function ReportModal({
   noteId,
@@ -555,44 +556,74 @@ export default function ReportModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyTitle]);
 
-  async function shareReport() {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    const notice = await noticeOrAlert();
-    notice.start("Exportando…", "Preparando el PDF");
-
-    let dir: FileSystemDirectoryHandle | null = null;
-    const mobile = isMobileExport();
-    try {
-      if (mobile) {
-        dir = null;
-      } else {
-      dir = await yearFolderForExport();
-      }
-      if (!dir && !mobile) {
-        notice.close();
-        const ok = await connectNsfFolder();
-        if (ok) dir = await yearFolderForExport();
-        notice.start("Exportando…", "Preparando el PDF");
-      }
-    } catch (e) {
-      notice.error("No se pudo abrir la carpeta de OneDrive", e instanceof Error ? e.message : "");
-      return;
-    }
-
-    if (!dir && !mobile) {
-      notice.error("NO se guardó el PDF", "No hay carpeta de OneDrive conectada. Activa el ayudante (INSTALAR.bat) o elige la carpeta NSF CHECKS PDF FILES.");
-      return;
-    }
-
-    const reqId = `share-${Date.now()}`;
+  function currentFilename() {
     const payload = lastPayloadRef.current ?? initReport;
-    const filename = exportPdfName(
+    return exportPdfName(
       exportRow({
         company: (liveTitle ?? titleRef.current ?? companyTitle).trim(),
         fields: payload?.fields ?? null,
       }),
     );
+  }
+
+  /** Si ya hay un PDF de este cheque, pregunta. Devuelve los que se reemplazan, o null si se canceló. */
+  async function checkDuplicates(dir: FileSystemDirectoryHandle | null, filename: string): Promise<ExportedFile[] | null> {
+    const { exact, others } = findSameCheck(filename, await listExportedPdfs(dir));
+    if (!exact.length && !others.length) return [];
+    const all = [...exact, ...others].sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0));
+    const choice = await askExportChoice({
+      title: exact.length ? "Este reporte ya se exportó" : "Ya hay un PDF de este cheque",
+      detail: exact.length
+        ? "Ya está en la carpeta de OneDrive. Si lo exportas otra vez, se reemplaza el mismo archivo (no se duplica)."
+        : "Está con otro nombre (otra fecha o PENDIENTE/PAGADO). Para no tener duplicados, el anterior se cambia por el nuevo.",
+      files: all,
+      buttons: [
+        { id: "cancel", label: "Cancelar", tone: "plain" },
+        ...(isMobileExport() ? [] : [{ id: "open", label: "Abrir carpeta", tone: "ghost" as const }]),
+        { id: "replace", label: exact.length ? "Exportar de nuevo" : "Reemplazar por el nuevo", tone: "primary" },
+      ],
+    });
+    if (choice === "open") {
+      await openFolder(all[0]);
+      return null;
+    }
+    return choice === "replace" ? all : null;
+  }
+
+  /** Abre la carpeta de los PDF en el Explorador, con el PDF de este reporte seleccionado. */
+  async function openFolder(target?: ExportedFile) {
+    let file = target;
+    if (!file) {
+      const list = await listExportedPdfs({ __rcHelper: true, name: String(exportYear()) } as unknown as FileSystemDirectoryHandle);
+      const { exact, others } = findSameCheck(currentFilename(), list);
+      file = [...exact, ...others].sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0))[0];
+    }
+    if (await openExportFolder(file?.name, file?.year)) return;
+    const notice = await noticeOrAlert();
+    notice.error(
+      "Aquí no se puede abrir la carpeta",
+      `Solo se abre en la computadora de la oficina (la que tiene el ayudante activo).\n\nLos PDF están en OneDrive:\nRETURNED CHECKS\${NSF_FOLDER_NAME}\${file?.year ?? exportYear()}${file ? `\n${file.name}` : ""}`,
+    );
+  }
+
+  async function shareReport() {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const notice = await noticeOrAlert();
+    notice.start("Exportando…", "Revisando la carpeta de OneDrive");
+
+    // Computadora con ayudante (o con carpeta conectada) => directo a OneDrive.
+    // Cualquier otra computadora o celular => por la nube a la computadora de la oficina.
+    let dir: FileSystemDirectoryHandle | null = null;
+    if (!isMobileExport()) dir = await yearFolderForExport().catch(() => null);
+
+    const filename = currentFilename();
+    notice.close();
+    const replace = await checkDuplicates(dir, filename);
+    if (!replace) return;
+    notice.start("Exportando…", "Preparando el PDF");
+
+    const reqId = `share-${Date.now()}`;
 
     let buffer: ArrayBuffer | null = null;
 
@@ -638,32 +669,28 @@ export default function ReportModal({
     }
 
     const blob = new Blob([buffer], { type: "application/pdf" });
-    if (mobile) {
+    if (dir) {
+      notice.update("Exportando…", "Guardando en OneDrive");
       try {
-        const saved = await sendToOneDriveViaPc(filename, blob, (msg) => notice.update("Exportando…", msg));
-        notice.success("Exportado a OneDrive", saved.file);
+        await writeExportFile(dir, filename, blob, replace);
+        notice.success(replace.length ? "Reemplazado en OneDrive" : "Exportado a OneDrive", `${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
       } catch (e) {
-        if (e instanceof OutboxPendingError) {
-          notice.error(
-            "TODAVÍA NO está en OneDrive",
-            "Tu computadora está apagada o el ayudante no está activo. El PDF quedó en espera y se guardará solo en la carpeta del año cuando la enciendas. Hasta ese momento no lo tomes como guardado.",
-          );
-        } else {
-          notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo enviar a OneDrive");
-        }
+        notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo guardar en OneDrive");
       }
       return;
     }
-    if (!dir) {
-      notice.error("NO se guardó el PDF", "No hay carpeta de OneDrive conectada.");
-      return;
-    }
-    notice.update("Exportando…", "Guardando en OneDrive");
     try {
-      await writeExportFile(dir, filename, blob);
-      notice.success("Exportado a OneDrive", `${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
+      const saved = await sendToOneDriveViaPc(filename, blob, (msg) => notice.update("Exportando…", msg), 28000, replace);
+      notice.success(replace.length ? "Reemplazado en OneDrive" : "Exportado a OneDrive", saved.file);
     } catch (e) {
-      notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo guardar en OneDrive");
+      if (e instanceof OutboxPendingError) {
+        notice.error(
+          "TODAVÍA NO está en OneDrive",
+          "La computadora de la oficina (la que tiene el ayudante) está apagada o el ayudante no está activo. El PDF quedó en espera y se guardará solo en la carpeta del año cuando la enciendas. Hasta ese momento no lo tomes como guardado.",
+        );
+      } else {
+        notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo enviar a OneDrive");
+      }
     }
   }
 
@@ -775,11 +802,24 @@ export default function ReportModal({
             {/* Imprimir */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); void shareReport(); }}
-              title="Guardar PDF en OneDrive"
+              onClick={(e) => { e.stopPropagation(); void printFromParent(); }}
+              title="Imprimir"
+              aria-label="Imprimir"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            </button>
+
+            {/* Abrir la carpeta de los PDF exportados */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); void openFolder(); }}
+              title="Abrir la carpeta de los PDF exportados"
+              aria-label="Abrir carpeta de los PDF"
+              data-tour="report-folder"
+              className="hidden h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 sm:flex"
+            >
+              <FolderOpen className="h-4 w-4" />
             </button>
 
             {/* Abrir en pestaña */}

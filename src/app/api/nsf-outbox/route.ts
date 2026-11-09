@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   const uid = await userId();
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => null)) as { name?: string; size?: number } | null;
+  const body = (await req.json().catch(() => null)) as { name?: string; size?: number; replace?: unknown } | null;
   const name = safeExportName(String(body?.name || ""));
   const size = Number(body?.size);
   if (!name || !Number.isFinite(size) || size <= 0 || size > 52_428_800) {
@@ -32,6 +32,11 @@ export async function POST(req: NextRequest) {
     status: "uploading",
     createdAt: Date.now(),
   };
+  const replace = (Array.isArray(body?.replace) ? body.replace : [])
+    .map((r) => String(r))
+    .filter((r) => /^\d{4}\/[^\/]+\.pdf$/i.test(r))
+    .slice(0, 20);
+  if (replace.length) meta.replace = replace;
   const metaUp = await admin.storage.from(OUTBOX_BUCKET).upload(`${id}/meta.json`, JSON.stringify(meta), {
     contentType: "application/json",
     upsert: true,

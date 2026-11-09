@@ -12,6 +12,8 @@ export type OutboxMeta = {
   createdAt: number;
   file?: string;
   error?: string;
+  /** PDF viejos del mismo cheque ("2026/NOMBRE.pdf") que la computadora borra al guardar este. */
+  replace?: string[];
 };
 
 export function outboxAdmin() {

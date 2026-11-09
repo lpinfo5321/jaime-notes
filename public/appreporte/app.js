@@ -2542,7 +2542,14 @@
         const isPhone =
           /Android|iPhone|iPad|iPod|Mobile|SM-|Tablet/i.test(navigator.userAgent || "") ||
           (navigator.maxTouchPoints > 1 && window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
-        const noDesktop = !viaHelper && (isPhone || typeof window.showDirectoryPicker !== "function");
+        /* Sin ayudante y sin carpeta ya conectada (otra computadora o celular): por la nube a la computadora de la oficina. */
+        let folderOk = false;
+        if (!viaHelper && !isPhone && nsfParentHandle && nsfParentHandle.queryPermission) {
+          try {
+            folderOk = (await nsfParentHandle.queryPermission({ mode: "readwrite" })) === "granted";
+          } catch {}
+        }
+        const noDesktop = !viaHelper && !folderOk;
         if (noDesktop) {
           /* Celular: no hay carpeta local. Se envía a la nube y la computadora lo copia a OneDrive. */
           try {
@@ -2587,7 +2594,7 @@
           if (!savedFile) {
             notice.error(
               "TODAVÍA NO está en OneDrive",
-              "Tu computadora está apagada o el ayudante no está activo. El PDF quedó en espera y se guardará solo en la carpeta del año cuando la enciendas. Hasta ese momento no lo tomes como guardado.",
+              "La computadora de la oficina (la del ayudante) está apagada o el ayudante no está activo. El PDF quedó en espera y se guardará solo en la carpeta del año cuando la enciendas. Hasta ese momento no lo tomes como guardado.",
             );
             return;
           }

@@ -251,11 +251,84 @@ export async function yearFolderForExport(): Promise<FileSystemDirectoryHandle |
   }
 }
 
-export async function writeExportFile(dir: FileSystemDirectoryHandle, filename: string, data: Blob) {
+export type ExportedFile = { name: string; year: number; mtime?: number; size?: number };
+
+const isHelperDir = (dir: FileSystemDirectoryHandle | null) => !!dir && !!(dir as unknown as Record<string, unknown>)[HELPER_MARK];
+
+/** "NOV 09, 2026 PAGADO ACME CK 123.pdf" -> "acme ck 123": el mismo cheque aunque cambie la fecha o si está pagado. */
+export function exportKey(name: string) {
+  const rest = String(name || "")
+    .replace(/\.pdf$/i, "")
+    .replace(/\s*\(\d+\)$/, "")
+    .replace(/^[A-Z]{3}\s+\d{1,2},?\s+\d{4}\s+/i, "")
+    .replace(/^(PAGADO|PENDIENTE)\s+/i, "")
+    .trim();
+  const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const m = rest.match(/^(.*?)\s*\bCK\s*#?\s*([A-Z0-9-]+)$/i);
+  if (!m) return alnum(rest).toLowerCase();
+  const ck = m[2].replace(/\D/g, "") || alnum(m[2]);
+  return `${alnum(m[1])}|${ck}`.toLowerCase();
+}
+
+/** PDF que ya están en la carpeta. null = no se pudo saber (la computadora del ayudante no ha dado la lista). */
+export async function listExportedPdfs(dir: FileSystemDirectoryHandle | null): Promise<ExportedFile[] | null> {
+  try {
+    if (isHelperDir(dir)) {
+      const r = await fetch(`${HELPER}/list`);
+      const j = (await r.json().catch(() => null)) as { files?: ExportedFile[] } | null;
+      return Array.isArray(j?.files) ? j.files : null;
+    }
+    if (dir) {
+      const out: ExportedFile[] = [];
+      const year = Number(dir.name) || new Date().getFullYear();
+      for await (const [name, h] of (dir as unknown as { entries: () => AsyncIterable<[string, FileSystemHandle]> }).entries()) {
+        if (h.kind !== "file" || !/\.pdf$/i.test(name)) continue;
+        const f = await (h as FileSystemFileHandle).getFile().catch(() => null);
+        out.push({ name, year, mtime: f?.lastModified, size: f?.size });
+      }
+      return out;
+    }
+    const r = await fetch("/api/nsf-outbox/index", { cache: "no-store" });
+    const j = (await r.json().catch(() => null)) as { files?: ExportedFile[] | null } | null;
+    return Array.isArray(j?.files) ? j.files : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Los PDF que ya existen para el mismo cheque (mismo nombre, o la versión vieja PENDIENTE / con otra fecha). */
+export function findSameCheck(filename: string, files: ExportedFile[] | null) {
+  const key = exportKey(filename);
+  if (!files || !key) return { exact: [] as ExportedFile[], others: [] as ExportedFile[] };
+  const year = new Date().getFullYear();
+  const same = files.filter((f) => exportKey(f.name) === key);
+  const exact = same.filter((f) => f.year === year && f.name.toLowerCase() === filename.toLowerCase());
+  return { exact, others: same.filter((f) => !exact.includes(f)) };
+}
+
+const replaceRef = (files?: ExportedFile[]) => (files ?? []).map((f) => `${f.year}/${f.name}`);
+
+/** Abre la carpeta de los PDF (y selecciona el archivo). Solo en la computadora que tiene el ayudante. */
+export async function openExportFolder(name?: string, year?: number) {
+  if (!(await helperUp())) return false;
+  try {
+    const q = new URLSearchParams();
+    if (name) q.set("name", name);
+    q.set("year", String(year || new Date().getFullYear()));
+    const r = await fetch(`${HELPER}/open?${q}`);
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function writeExportFile(dir: FileSystemDirectoryHandle, filename: string, data: Blob, replace?: ExportedFile[]) {
   if ((dir as unknown as Record<string, unknown>)[HELPER_MARK]) {
     let r: Response;
     try {
-      r = await fetch(`${HELPER}/save?name=${encodeURIComponent(filename)}`, { method: "POST", body: data });
+      const q = new URLSearchParams({ name: filename });
+      for (const ref of replaceRef(replace)) q.append("replace", ref);
+      r = await fetch(`${HELPER}/save?${q}`, { method: "POST", body: data });
     } catch {
       throw new Error("No se pudo comunicar con el ayudante de OneDrive. Revisa que esté activo.");
     }
@@ -270,6 +343,11 @@ export async function writeExportFile(dir: FileSystemDirectoryHandle, filename: 
   await writer.close();
   const saved = await file.getFile();
   if (saved.size !== data.size) throw new Error("El archivo se guardó incompleto en la carpeta. Vuelve a exportar.");
+  const year = Number(dir.name) || new Date().getFullYear();
+  for (const old of replace ?? []) {
+    if (old.year !== year || old.name.toLowerCase() === filename.toLowerCase()) continue;
+    await dir.removeEntry(old.name).catch(() => {});
+  }
 }
 
 export class OutboxPendingError extends Error {
@@ -289,12 +367,13 @@ export async function sendToOneDriveViaPc(
   data: Blob,
   onTick?: (msg: string) => void,
   waitMs = 28000,
+  replace?: ExportedFile[],
 ): Promise<{ file: string }> {
-  onTick?.("Enviando a tu computadora…");
+  onTick?.("Enviando a la computadora de la oficina…");
   const start = await fetch("/api/nsf-outbox", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: filename, size: data.size }),
+    body: JSON.stringify({ name: filename, size: data.size, replace: replaceRef(replace) }),
   });
   const created = (await start.json().catch(() => null)) as { id?: string; signedUrl?: string; error?: string } | null;
   if (!start.ok || !created?.id || !created.signedUrl) {
@@ -316,7 +395,7 @@ export async function sendToOneDriveViaPc(
 
   const deadline = Date.now() + waitMs;
   while (Date.now() < deadline) {
-    onTick?.("Guardando en la carpeta de OneDrive de tu computadora…");
+    onTick?.("Guardando en la carpeta de OneDrive (computadora de la oficina)…");
     await new Promise((r) => setTimeout(r, 2000));
     const g = await fetch(`/api/nsf-outbox?id=${encodeURIComponent(created.id)}`);
     const j = (await g.json().catch(() => null)) as { status?: string; file?: string; size?: number; error?: string } | null;

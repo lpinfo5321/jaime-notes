@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { onCoverError } from "@/lib/coverRetry";
 import { noticeOrAlert } from "@/lib/exportNotice";
+import { askExportChoice } from "@/lib/exportDialog";
 import { requestLogRemoval } from "@/lib/checkLog";
 import {
   NSF_FOLDER_NAME,
@@ -41,6 +42,9 @@ import {
   exportPdfName,
   exportRow,
   exportYear,
+  findSameCheck,
+  listExportedPdfs,
+  type ExportedFile,
   nsfFolderLinked,
   rowsToCsv,
   uniqueExportName,
@@ -1381,14 +1385,10 @@ export default function NotesList({
     });
   }
 
+  /** Ayudante o carpeta conectada => directo. Si no (otra computadora, celular) => null y va por la nube. */
   async function destinationYearDir() {
     if (isMobileExport()) return null;
-    let dir = await yearFolderForExport();
-    if (dir) return dir;
-    const ok = await connectNsfFolder();
-    if (!ok) return null;
-    setNsfLinked(true);
-    return yearFolderForExport();
+    return yearFolderForExport().catch(() => null);
   }
 
   async function exportSelectedPdfsZip() {
@@ -1478,29 +1478,57 @@ export default function NotesList({
           document.body.appendChild(iframe);
         });
 
+      // ¿Ya estaban exportados? (para no dejar duplicados en la carpeta)
+      notice.update("Exportando…", "Revisando la carpeta de OneDrive");
+      const existing = await listExportedPdfs(dir);
+      const plan = ids.map((id) => {
+        const note = items.find((n) => String(n.id) === String(id)) ?? null;
+        const filename = note ? exportPdfName(rowFor(note)) : `cheque-${id}.pdf`;
+        const dup = findSameCheck(filename, existing);
+        return { id: String(id), filename, replace: [...dup.exact, ...dup.others] };
+      });
+      const dups = plan.filter((p) => p.replace.length);
+      let skipDups = false;
+      if (dups.length) {
+        notice.close();
+        const all = dups.length === plan.length;
+        const choice = await askExportChoice({
+          title: all ? (plan.length === 1 ? "Este reporte ya se exportó" : "Estos reportes ya se exportaron") : `${dups.length} de ${plan.length} ya se exportaron`,
+          detail: "Ya hay un PDF de ese cheque en la carpeta de OneDrive. Para no tener duplicados, puedes saltarlos o cambiarlos por la versión nueva.",
+          files: dups.flatMap((d) => d.replace),
+          buttons: [
+            { id: "cancel", label: "Cancelar", tone: "plain" },
+            ...(all ? [] : [{ id: "skip", label: "Saltar esos", tone: "ghost" as const }]),
+            { id: "replace", label: "Reemplazar", tone: "primary" },
+          ],
+        });
+        if (choice === "cancel") return;
+        skipDups = choice === "skip";
+        notice.start("Exportando…", `0 de ${ids.length}`);
+      }
+      const todo = skipDups ? plan.filter((p) => !p.replace.length) : plan;
+
       const used = new Set<string>();
-      const loose: { filename: string; buffer: ArrayBuffer }[] = [];
+      const loose: { filename: string; buffer: ArrayBuffer; replace: ExportedFile[] }[] = [];
 
       // Uno por uno para no cargar todos los PDF en memoria a la vez.
       let n = 0;
-      for (const id of ids) {
-        notice.update("Exportando…", `${n} de ${ids.length}`);
+      for (const p of todo) {
+        notice.update("Exportando…", `${n} de ${todo.length}`);
         n += 1;
-        const note = items.find((n) => String(n.id) === String(id)) ?? null;
-        const { buffer } = await exportOne(String(id));
-        const filename = uniqueExportName(used, note ? exportPdfName(rowFor(note)) : `cheque-${id}.pdf`);
-        loose.push({ filename, buffer });
+        const { buffer } = await exportOne(p.id);
+        loose.push({ filename: uniqueExportName(used, p.filename), buffer, replace: p.replace });
       }
 
       if (dir) {
-        const failed: { filename: string; buffer: ArrayBuffer }[] = [];
+        const failed: { filename: string; buffer: ArrayBuffer; replace: ExportedFile[] }[] = [];
         let lastErr = "";
         let w = 0;
         for (const file of loose) {
           notice.update("Guardando en OneDrive…", `${w} de ${loose.length}`);
           w += 1;
           try {
-            await writeExportFile(dir, file.filename, new Blob([file.buffer], { type: "application/pdf" }));
+            await writeExportFile(dir, file.filename, new Blob([file.buffer], { type: "application/pdf" }), file.replace);
           } catch (e) {
             lastErr = e instanceof Error ? e.message : "";
             failed.push(file);
@@ -1522,15 +1550,14 @@ export default function NotesList({
         return;
       }
 
-      const z = new JSZip();
-      for (const file of loose) z.file(file.filename, file.buffer);
-      if (isMobileExport()) {
+      {
+        // Sin ayudante en esta computadora (o celular): por la nube a la computadora de la oficina.
         let savedN = 0;
         let waiting = false;
         for (const file of loose) {
           notice.update("Exportando…", `${savedN} de ${loose.length}`);
           try {
-            await sendToOneDriveViaPc(file.filename, new Blob([file.buffer], { type: "application/pdf" }), (msg) => notice.update("Exportando…", msg), waiting ? 0 : 28000);
+            await sendToOneDriveViaPc(file.filename, new Blob([file.buffer], { type: "application/pdf" }), (msg) => notice.update("Exportando…", msg), waiting ? 0 : 28000, file.replace);
             savedN += 1;
           } catch (e) {
             if (e instanceof OutboxPendingError) {
@@ -1543,15 +1570,13 @@ export default function NotesList({
         if (waiting) {
           notice.error(
             "TODAVÍA NO están todos en OneDrive",
-            `${savedN} de ${loose.length} quedaron confirmados en la carpeta. El resto quedó en espera y se guardará cuando enciendas la computadora. Hasta entonces no los tomes como guardados.`,
+            `${savedN} de ${loose.length} quedaron confirmados en la carpeta. El resto quedó en espera y se guardará cuando enciendas la computadora de la oficina (la del ayudante). Hasta entonces no los tomes como guardados.`,
           );
         } else {
           notice.success(`${savedN} PDF exportado${savedN === 1 ? "" : "s"}`, `${NSF_FOLDER_NAME}\\${exportYear()}`);
         }
         return;
       }
-      downloadBlob(`PDFs-${exportYear()}.zip`, await z.generateAsync({ type: "blob" }));
-      notice.error("NO se guardó en OneDrive", "No hay carpeta de OneDrive conectada. Los PDF se descargaron en un ZIP.");
     } catch (e) {
       notice.error("NO se exportó", e instanceof Error ? e.message : "Error exportando PDFs");
     } finally {
@@ -1582,7 +1607,7 @@ export default function NotesList({
           return;
         }
       }
-      if (isMobileExport()) {
+      {
         try {
           const csvBlob = new Blob(["\uFEFF" + csv], { type: "text/csv" });
           const saved = await sendToOneDriveViaPc(filename, csvBlob, (msg) => notice.update("Exportando…", msg));
@@ -1591,17 +1616,14 @@ export default function NotesList({
           if (e instanceof OutboxPendingError) {
             notice.error(
               "TODAVÍA NO está en OneDrive",
-              "Tu computadora está apagada o el ayudante no está activo. La lista quedó en espera y se guardará en la carpeta del año cuando la enciendas.",
+              "La computadora de la oficina (la del ayudante) está apagada o el ayudante no está activo. La lista quedó en espera y se guardará en la carpeta del año cuando la enciendas.",
             );
           } else {
             downloadText(filename, csv, "text/csv");
-            notice.error("NO se guardó en OneDrive", `${e instanceof Error ? e.message : ""} Se descargó el archivo en este celular.`);
+            notice.error("NO se guardó en OneDrive", `${e instanceof Error ? e.message : ""} Se descargó el archivo en este equipo.`);
           }
         }
-        return;
       }
-      downloadText(filename, csv, "text/csv");
-      notice.error("NO se guardó en OneDrive", "No hay carpeta de OneDrive conectada. Se descargó el archivo en esta computadora.");
     } catch (e) {
       notice.error("NO se exportó", e instanceof Error ? e.message : "No se pudo exportar");
     }

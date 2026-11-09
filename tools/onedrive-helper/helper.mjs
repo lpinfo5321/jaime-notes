@@ -13,6 +13,49 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 47321;
 const BASE = path.join(os.homedir(), "OneDrive", "LA PRIMAVERA SUPERMARKET INC", "CHECK CASHING SERVICES", "RETURNED CHECKS", "NSF CHECKS PDF FILES");
 
+const yearDir = (y) => path.join(BASE, String(y || new Date().getFullYear()));
+
+/** PDF ya exportados (este año y el anterior): para avisar de duplicados. */
+function listPdfs() {
+  const now = new Date().getFullYear();
+  const out = [];
+  for (const y of [now, now - 1]) {
+    let names = [];
+    try {
+      names = fs.readdirSync(yearDir(y));
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      if (!/\.pdf$/i.test(name)) continue;
+      try {
+        const st = fs.statSync(path.join(yearDir(y), name));
+        out.push({ name, year: y, mtime: Math.round(st.mtimeMs), size: st.size });
+      } catch {}
+    }
+  }
+  return out;
+}
+
+/** Quita los PDF viejos del mismo cheque ("2026/NOMBRE.pdf") para no dejar duplicados. */
+function removeOld(list, keepName) {
+  const now = new Date().getFullYear();
+  let n = 0;
+  for (const raw of Array.isArray(list) ? list : []) {
+    const m = String(raw).match(/^(\d{4})\/(.+)$/);
+    if (!m) continue;
+    const name = path.basename(m[2]);
+    if (!/\.pdf$/i.test(name)) continue;
+    if (Number(m[1]) === now && name.toLowerCase() === String(keepName || "").toLowerCase()) continue;
+    try {
+      fs.unlinkSync(path.join(yearDir(m[1]), name));
+      n += 1;
+      console.log("Reemplazado (borrado)", name);
+    } catch {}
+  }
+  return n;
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -29,6 +72,22 @@ http
     if (req.method === "OPTIONS") return send(204, {});
     const url = new URL(req.url, "http://localhost");
     if (url.pathname === "/ping") return send(200, { ok: true, dir: path.join(BASE, String(new Date().getFullYear())) });
+    if (url.pathname === "/list") return send(200, { ok: true, files: listPdfs() });
+    if (url.pathname === "/open") {
+      const y = /^\d{4}$/.test(url.searchParams.get("year") || "") ? url.searchParams.get("year") : String(new Date().getFullYear());
+      const dir = yearDir(y);
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch {}
+      const name = path.basename(url.searchParams.get("name") || "");
+      const file = name ? path.join(dir, name) : "";
+      if (file && fs.existsSync(file)) {
+        execFile("explorer.exe", [`/select,"${file}"`], { windowsVerbatimArguments: true }, () => {});
+      } else {
+        execFile("explorer.exe", [`"${dir}"`], { windowsVerbatimArguments: true }, () => {});
+      }
+      return send(200, { ok: true, dir, file: file && fs.existsSync(file) ? file : "" });
+    }
     if (url.pathname === "/log/status") return send(200, { ok: true, ...logPublic() });
     if (url.pathname === "/log/sync" && req.method === "POST") {
       logTick(url.searchParams.get("all") === "1")
@@ -48,7 +107,9 @@ http
           const file = path.join(dir, name);
           fs.writeFileSync(file, Buffer.concat(chunks));
           const size = fs.statSync(file).size;
-          send(200, { ok: true, file, size });
+          const replaced = url.searchParams.get("dir") === "logs" ? 0 : removeOld(url.searchParams.getAll("replace"), name);
+          send(200, { ok: true, file, size, replaced });
+          pushIndex(true).catch(() => {});
         } catch (e) {
           send(500, { ok: false, error: String(e && e.message) });
         }
@@ -146,12 +207,14 @@ async function drainOutbox() {
       fs.writeFileSync(dest, buf);
       const written = fs.statSync(dest).size;
       if (written !== buf.length) throw new Error("escritura incompleta");
+      removeOld(meta.replace, path.basename(dest));
       meta.status = "saved";
       meta.file = dest;
       meta.size = written;
       await admin.storage.from(OUTBOX).remove([`${id}/file`]);
       await putMeta(admin, id, meta);
       console.log("OneDrive <-", dest);
+      pushIndex(true).catch(() => {});
     } catch (e) {
       meta.status = "error";
       meta.error = "No se pudo escribir en la carpeta de OneDrive.";
@@ -160,6 +223,28 @@ async function drainOutbox() {
     }
   }
 }
+
+/* Lista de PDF exportados en la nube: así las otras computadoras y el celular saben si ya existe. */
+let indexHash = "";
+let indexAt = 0;
+async function pushIndex(force = false) {
+  const admin = outboxClient();
+  if (!admin) return;
+  const files = listPdfs();
+  const h = JSON.stringify(files);
+  if (!force && h === indexHash && Date.now() - indexAt < 10 * 60 * 1000) return;
+  const up = await admin.storage
+    .from(OUTBOX)
+    .upload("_pdf/index.json", JSON.stringify({ at: Date.now(), files }), { contentType: "application/json", upsert: true });
+  if (!up.error) {
+    indexHash = h;
+    indexAt = Date.now();
+  }
+}
+setInterval(() => {
+  pushIndex().catch(() => {});
+}, 20000);
+pushIndex().catch(() => {});
 
 setInterval(() => {
   drainOutbox().catch((e) => console.log("Outbox", e && e.message));
