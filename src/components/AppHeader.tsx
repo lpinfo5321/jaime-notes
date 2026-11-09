@@ -372,12 +372,6 @@ export default function AppHeader() {
                     <GraduationCap className="h-4 w-4 text-zinc-400" /> Tutoriales
                   </button>
 
-                  <button type="button"
-                    onClick={() => { setMenuOpen(false); void import("@/lib/localOpen").then((m) => m.askLocalSetup(true)); }}
-                    className="hidden w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900 sm:flex">
-                    <FolderOpen className="h-4 w-4 text-zinc-400" /> Abrir carpetas en esta PC
-                  </button>
-
                   <button type="button" onClick={() => void checkUpdate()} disabled={updState === "checking" || updState === "updating"}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:text-zinc-300 dark:hover:bg-zinc-900">
                     <RefreshCw className={`h-4 w-4 text-zinc-400 ${updState === "checking" || updState === "updating" ? "animate-spin" : ""}`} />
