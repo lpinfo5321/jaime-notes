@@ -1,6 +1,6 @@
 import type { ExportedFile } from "./nsfExport";
 
-type Btn = { id: string; label: string; tone?: "primary" | "ghost" | "plain" };
+export type Btn = { id: string; label: string; tone?: "primary" | "ghost" | "plain" };
 
 const CSS = `
 .rcx-bg{position:fixed;inset:0;z-index:2147483001;display:grid;place-items:center;padding:16px;background:rgba(9,9,11,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:rcx-fade .18s ease both;font-family:var(--font-geist-sans),system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -47,9 +47,12 @@ const FILE_ICO =
 const COPY_ICO =
   '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 
-/** Ventana para elegir qué hacer (ej. "ya se exportó"). Devuelve el id del botón, o "cancel". */
-export function askExportChoice(opts: { title: string; detail: string; files?: ExportedFile[]; buttons: Btn[] }): Promise<string> {
-  return new Promise((resolve) => {
+export type DialogOpts = { title: string; detail: string; files?: ExportedFile[]; buttons: Btn[]; icon?: string };
+
+/** Ventana con botones. result = id del botón (o "cancel"); close(id) la cierra desde afuera. */
+export function showDialog(opts: DialogOpts): { result: Promise<string>; close: (id: string) => void } {
+  let close: (id: string) => void = () => {};
+  const result = new Promise<string>((resolve) => {
     if (!document.getElementById("rcx-css")) {
       const st = document.createElement("style");
       st.id = "rcx-css";
@@ -63,18 +66,22 @@ export function askExportChoice(opts: { title: string; detail: string; files?: E
     bg.innerHTML = `
       <div class="rcx">
         <div class="rcx-top">
-          <span class="rcx-ico">${COPY_ICO}</span>
+          <span class="rcx-ico">${opts.icon ?? COPY_ICO}</span>
           <div><p class="rcx-t">${esc(opts.title)}</p><p class="rcx-d">${esc(opts.detail)}</p></div>
         </div>
         ${files.length ? `<div class="rcx-files">${files.map((f) => `<div class="rcx-f">${FILE_ICO}<div><b>${esc(f.name)}</b><small>${esc(when(f))}</small></div></div>`).join("")}</div>` : ""}
         <div class="rcx-acts">${opts.buttons.map((b) => `<button type="button" class="rcx-b ${b.tone ?? "ghost"}" data-id="${esc(b.id)}">${esc(b.label)}</button>`).join("")}</div>
       </div>`;
+    let closed = false;
     const done = (id: string) => {
+      if (closed) return;
+      closed = true;
       document.removeEventListener("keydown", onKey, true);
       bg.classList.add("rcx-out");
       window.setTimeout(() => bg.remove(), 200);
       resolve(id);
     };
+    close = done;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -90,4 +97,10 @@ export function askExportChoice(opts: { title: string; detail: string; files?: E
     document.body.appendChild(bg);
     bg.querySelector<HTMLButtonElement>(".rcx-b.primary")?.focus();
   });
+  return { result, close: (id) => close(id) };
+}
+
+/** Ventana para elegir qué hacer (ej. "ya se exportó"). Devuelve el id del botón, o "cancel". */
+export function askExportChoice(opts: DialogOpts): Promise<string> {
+  return showDialog(opts).result;
 }

@@ -29,6 +29,11 @@ export default function AppHeader() {
   const [showInstallBanner,setShowInstallBanner]= useState(false);
   const [showLogoutModal,  setShowLogoutModal]  = useState(false);
   const [menuOpen,         setMenuOpen]         = useState(false);
+  // "Abrir PDFs en esta PC" solo en computadoras con Windows (se calcula al montar para no romper el render del servidor)
+  const [isWinPc, setIsWinPc] = useState(false);
+  useEffect(() => {
+    void import("@/lib/localOpen").then((m) => setIsWinPc(m.isWindowsPc()));
+  }, []);
   const [mounted,          setMounted]          = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = mounted && resolvedTheme === "dark";
@@ -371,6 +376,14 @@ export default function AppHeader() {
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
                     <GraduationCap className="h-4 w-4 text-zinc-400" /> Tutoriales
                   </button>
+
+                  {isWinPc ? (
+                    <button type="button"
+                      onClick={() => { setMenuOpen(false); void import("@/lib/localOpen").then((m) => m.askLocalPermission(true)); }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
+                      <FolderOpen className="h-4 w-4 text-zinc-400" /> Abrir PDFs en esta PC
+                    </button>
+                  ) : null}
 
                   <button type="button" onClick={() => void checkUpdate()} disabled={updState === "checking" || updState === "updating"}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:text-zinc-300 dark:hover:bg-zinc-900">

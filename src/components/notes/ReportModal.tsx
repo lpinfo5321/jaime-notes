@@ -13,6 +13,7 @@ import { APPREPORTE_V, isoToday, toEntryArray, sortEntriesDesc, formatUsMmDdYy, 
 import { noticeOrAlert } from "@/lib/exportNotice";
 import { isMobileExport, NSF_FOLDER_NAME, OutboxPendingError, exportPdfName, exportRow, exportYear, cloudPdfUrl, oneDriveFileUrl, oneDriveFolderUrl, findSameCheck, helperDir, isHelperDir, listExportedPdfs, openExportFolder, sendToOneDriveViaPc, writeExportFile, yearFolderForExport, type ExportedFile } from "@/lib/nsfExport";
 import { askExportChoice } from "@/lib/exportDialog";
+import { askLocalPermission, hasLocalPermission, isWindowsPc, localPermissionAsked, openLocalFolder } from "@/lib/localOpen";
 
 export default function ReportModal({
   noteId,
@@ -579,7 +580,7 @@ export default function ReportModal({
       files: all,
       buttons: [
         { id: "cancel", label: "Cancelar", tone: "plain" },
-        { id: "open", label: isHelperDir(dir) ? "Abrir carpeta" : "Ver en OneDrive", tone: "ghost" },
+        { id: "open", label: isHelperDir(dir) || (isWindowsPc() && hasLocalPermission()) ? "Abrir carpeta" : "Ver en OneDrive", tone: "ghost" },
         { id: "replace", label: exact.length ? "Exportar de nuevo" : "Reemplazar por el nuevo", tone: "primary" },
       ],
     });
@@ -605,6 +606,17 @@ export default function ReportModal({
       file = [...exact, ...others].sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0))[0];
     }
     if (!pre && (await openExportFolder(file?.name, file?.year))) return;
+    // Otra PC con Windows: abrir en su propia carpeta de OneDrive (si dio permiso una vez).
+    if (!pre && isWindowsPc()) {
+      if (hasLocalPermission()) {
+        openLocalFolder(file);
+        return;
+      }
+      if (!localPermissionAsked() && (await askLocalPermission())) {
+        openLocalFolder(file);
+        return;
+      }
+    }
     if (file && !file.web) {
       // la lista local del ayudante no trae el enlace: buscarlo en la de la nube
       const cloud = await listExportedPdfs(null);
