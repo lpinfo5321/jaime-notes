@@ -111,7 +111,7 @@ http
     }
     if (url.pathname === "/log/status") return send(200, { ok: true, ...logPublic(), ...(url.searchParams.get("detail") ? { decisions: logDecisions } : {}) });
     if (url.pathname === "/log/sync" && req.method === "POST") {
-      logTick(url.searchParams.get("all") === "1")
+      logTick(url.searchParams.get("all") === "1", (url.searchParams.get("adopt") || "").split(",").filter(Boolean))
         .then(() => send(200, { ok: true, ...logPublic() }))
         .catch((e) => send(500, { ok: false, error: String(e && e.message) }));
       return;
@@ -418,7 +418,7 @@ function logPublic() {
   return { ...logLast, running: logBusy };
 }
 
-async function logTick(adoptAll = false) {
+async function logTick(adoptAll = false, adoptIds = []) {
   if (logBusy) return;
   const admin = outboxClient();
   if (!admin) {
@@ -448,7 +448,7 @@ async function logTick(adoptAll = false) {
         }
       }
     } catch {}
-    const res = await syncLog({ notes: data || [], stateFile: LOG_STATE, adoptAll, deletions });
+    const res = await syncLog({ notes: data || [], stateFile: LOG_STATE, adoptAll, deletions, adoptIds });
     if (delFiles.length && res.deletionsDone) {
       await admin.storage.from(OUTBOX).remove(delFiles);
       if (res.deleted && res.deleted.length) console.log("Registro Excel - quitadas", res.deleted.length, "filas");

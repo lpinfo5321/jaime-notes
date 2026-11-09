@@ -301,7 +301,9 @@ async function pruneCalcChain(zip, cellRefs) {
   if (removed) zip.file("xl/calcChain.xml", out);
 }
 
-export async function syncLog({ notes, stateFile, adoptAll = false, deletions = [] }) {
+export async function syncLog({ notes, stateFile, adoptAll = false, deletions = [], adoptIds = [] }) {
+  // adoptIds: reportes anteriores que el usuario pidió agregar (solo se agregan si NO están en el Excel)
+  const adoptSet = new Set((adoptIds || []).map(String));
   const status = { ok: true, locked: false, file: LOG_FILE, written: [], pending: [], adoptable: 0, errors: [], rowsInExcel: 0, snapshot: null, deleted: [], deletionsDone: false, decisions: [] };
   const state = loadState(stateFile);
   if (!state.baselineAt) {
@@ -393,7 +395,7 @@ export async function syncLog({ notes, stateFile, adoptAll = false, deletions = 
       say("ya al día", { at });
       continue;
     }
-    if (at == null && !fresh && !adoptAll) {
+    if (at == null && !fresh && !adoptAll && !adoptSet.has(row.noteId)) {
       status.adoptable += 1;
       say("anterior, no está en el Excel (no se agrega solo)");
       continue;
