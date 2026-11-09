@@ -2,6 +2,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
+import crypto from "node:crypto";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,20 @@ import { createClient } from "@supabase/supabase-js";
 import { syncLog, LOG_DIR, LOG_FILE } from "./logsync.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/* Registro del ayudante (helper.log, se recorta solo) para poder ver qué pasó. */
+const LOG = path.join(HERE, "helper.log");
+const _log = console.log;
+console.log = (...a) => {
+  _log(...a);
+  try {
+    const line = `${new Date().toISOString()} ${a.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(" ")}
+`;
+    fs.appendFileSync(LOG, line);
+    if (fs.statSync(LOG).size > 512 * 1024) fs.writeFileSync(LOG, fs.readFileSync(LOG, "utf8").slice(-256 * 1024));
+  } catch {}
+};
+const health = { outbox: "sin revisar", outboxAt: 0, indexAt: 0 };
 
 const PORT = 47321;
 const BASE = path.join(os.homedir(), "OneDrive", "LA PRIMAVERA SUPERMARKET INC", "CHECK CASHING SERVICES", "RETURNED CHECKS", "NSF CHECKS PDF FILES");
@@ -71,8 +86,14 @@ http
     };
     if (req.method === "OPTIONS") return send(204, {});
     const url = new URL(req.url, "http://localhost");
-    if (url.pathname === "/ping") return send(200, { ok: true, dir: path.join(BASE, String(new Date().getFullYear())) });
+    if (url.pathname === "/ping") return send(200, { ok: true, dir: path.join(BASE, String(new Date().getFullYear())), ...health });
     if (url.pathname === "/list") return send(200, { ok: true, files: listPdfs() });
+    if (url.pathname === "/outbox") {
+      outboxStatus()
+        .then((items) => send(200, { ok: true, items }))
+        .catch((e) => send(500, { ok: false, error: String(e && e.message) }));
+      return;
+    }
     if (url.pathname === "/open") {
       const y = /^\d{4}$/.test(url.searchParams.get("year") || "") ? url.searchParams.get("year") : String(new Date().getFullYear());
       const dir = yearDir(y);
@@ -172,10 +193,38 @@ async function putMeta(admin, id, meta) {
   });
 }
 
+/** Para revisar: qué hay en la cola de la nube (sin contenido de archivos). */
+async function outboxStatus() {
+  const admin = outboxClient();
+  if (!admin) return [];
+  const listed = await admin.storage.from(OUTBOX).list("", { limit: 1000 });
+  const out = [];
+  for (const item of listed.data || []) {
+    if (item.id) continue;
+    const m = await admin.storage.from(OUTBOX).download(`${item.name}/meta.json`);
+    let meta = null;
+    try {
+      meta = m.data ? JSON.parse(await m.data.text()) : null;
+    } catch {}
+    out.push({ folder: item.name, status: meta?.status ?? null, name: meta?.name ?? null, createdAt: meta?.createdAt ?? null, error: meta?.error ?? null });
+  }
+  return out;
+}
+
 async function drainOutbox() {
   const admin = outboxClient();
-  if (!admin) return;
-  const listed = await admin.storage.from(OUTBOX).list("", { limit: 100 });
+  if (!admin) {
+    health.outbox = "sin claves (secrets.local.json)";
+    return;
+  }
+  const listed = await admin.storage.from(OUTBOX).list("", { limit: 1000 });
+  if (listed.error) {
+    if (health.outbox !== `error: ${listed.error.message}`) console.log("Outbox list error", listed.error.message);
+    health.outbox = `error: ${listed.error.message}`;
+    return;
+  }
+  health.outbox = `ok (${(listed.data || []).length} carpetas)`;
+  health.outboxAt = Date.now();
   for (const item of listed.data || []) {
     if (item.id) continue;
     const id = item.name;
@@ -186,7 +235,7 @@ async function drainOutbox() {
       await admin.storage.from(OUTBOX).remove([`${id}/file`, `${id}/meta.json`]);
       continue;
     }
-    if (meta.status === "saved" && Date.now() - Number(meta.createdAt || 0) > 2 * 60 * 60 * 1000) {
+    if ((meta.status === "saved" || meta.status === "error") && Date.now() - Number(meta.createdAt || 0) > 2 * 60 * 60 * 1000) {
       await admin.storage.from(OUTBOX).remove([`${id}/meta.json`]);
       continue;
     }
@@ -227,23 +276,67 @@ async function drainOutbox() {
 /* Lista de PDF exportados en la nube: así las otras computadoras y el celular saben si ya existe. */
 let indexHash = "";
 let indexAt = 0;
+/* Copia de cada PDF en la nube (para abrirlo desde otra computadora o el celular). */
+const COPIES = path.join(HERE, "pdf-copies.json");
+let copies = {};
+try {
+  copies = JSON.parse(fs.readFileSync(COPIES, "utf8"));
+} catch {}
+const copyKey = (f) => `_pdf/files/${f.year}/${crypto.createHash("sha1").update(f.name.toLowerCase()).digest("hex")}.pdf`;
+const copySig = (f) => `${f.mtime}-${f.size}`;
+
+let indexBusy = false;
 async function pushIndex(force = false) {
   const admin = outboxClient();
-  if (!admin) return;
-  const files = listPdfs();
-  const h = JSON.stringify(files);
-  if (!force && h === indexHash && Date.now() - indexAt < 10 * 60 * 1000) return;
-  const up = await admin.storage
-    .from(OUTBOX)
-    .upload("_pdf/index.json", JSON.stringify({ at: Date.now(), files }), { contentType: "application/json", upsert: true });
-  if (!up.error) {
-    indexHash = h;
-    indexAt = Date.now();
+  if (!admin || indexBusy) return;
+  indexBusy = true;
+  try {
+    const files = listPdfs();
+    // Subir (pocas por vuelta) las copias nuevas o cambiadas
+    let uploaded = 0;
+    for (const f of files) {
+      const key = copyKey(f);
+      if (copies[key] === copySig(f)) continue;
+      if (uploaded >= 15) break;
+      try {
+        const buf = fs.readFileSync(path.join(yearDir(f.year), f.name));
+        const up = await admin.storage.from(OUTBOX).upload(key, buf, { contentType: "application/pdf", upsert: true });
+        if (up.error) throw new Error(up.error.message);
+        copies[key] = copySig(f);
+        uploaded += 1;
+      } catch (e) {
+        console.log("Copia PDF error", f.name, e && e.message);
+        break;
+      }
+    }
+    // Borrar de la nube las copias de PDF que ya no existen
+    const alive = new Set(files.map(copyKey));
+    const gone = Object.keys(copies).filter((k) => !alive.has(k));
+    if (gone.length) {
+      await admin.storage.from(OUTBOX).remove(gone).catch(() => {});
+      for (const k of gone) delete copies[k];
+    }
+    if (uploaded || gone.length) fs.writeFileSync(COPIES, JSON.stringify(copies));
+    const listed = files.map((f) => (copies[copyKey(f)] === copySig(f) ? { ...f, key: copyKey(f) } : f));
+    const h = JSON.stringify(listed);
+    if (!force && h === indexHash && Date.now() - indexAt < 10 * 60 * 1000) return;
+    const up = await admin.storage
+      .from(OUTBOX)
+      .upload("_pdf/index.json", JSON.stringify({ at: Date.now(), files: listed }), { contentType: "application/json", upsert: true });
+    if (up.error) console.log("Index error", up.error.message);
+    if (!up.error) {
+      health.indexAt = Date.now();
+      health.copies = listed.filter((f) => f.key).length;
+      indexHash = h;
+      indexAt = Date.now();
+    }
+  } finally {
+    indexBusy = false;
   }
 }
 setInterval(() => {
   pushIndex().catch(() => {});
-}, 20000);
+}, 15000);
 pushIndex().catch(() => {});
 
 setInterval(() => {

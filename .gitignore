@@ -47,3 +47,5 @@ next-env.d.ts
 
 .vercel
 tools/onedrive-helper/log-state.json
+tools/onedrive-helper/pdf-copies.json
+tools/onedrive-helper/helper.log

@@ -251,9 +251,13 @@ export async function yearFolderForExport(): Promise<FileSystemDirectoryHandle |
   }
 }
 
-export type ExportedFile = { name: string; year: number; mtime?: number; size?: number };
+export type ExportedFile = { name: string; year: number; mtime?: number; size?: number; key?: string };
 
-const isHelperDir = (dir: FileSystemDirectoryHandle | null) => !!dir && !!(dir as unknown as Record<string, unknown>)[HELPER_MARK];
+export const isHelperDir = (dir: FileSystemDirectoryHandle | null) => !!dir && !!(dir as unknown as Record<string, unknown>)[HELPER_MARK];
+/** "Carpeta" que apunta al ayudante de esta computadora (si no está activo, sus llamadas fallan). */
+export const helperDir = () => ({ [HELPER_MARK]: true, name: String(new Date().getFullYear()) }) as unknown as FileSystemDirectoryHandle;
+/** Copia en la nube del PDF: se abre desde cualquier computadora o celular. */
+export const cloudPdfUrl = (f: ExportedFile) => `/api/nsf-outbox/file?${new URLSearchParams({ year: String(f.year), name: f.name })}`;
 
 /** "NOV 09, 2026 PAGADO ACME CK 123.pdf" -> "acme ck 123": el mismo cheque aunque cambie la fecha o si está pagado. */
 export function exportKey(name: string) {

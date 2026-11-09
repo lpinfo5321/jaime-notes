@@ -11,7 +11,7 @@ import { useDashPrefs } from "@/components/dashboard/dashPrefs";
 import type { NoteListItem } from "./NotesList";
 import { APPREPORTE_V, isoToday, toEntryArray, sortEntriesDesc, formatUsMmDdYy, parseMoneyToCents, formatUsd, getTotalDueFromValues, normText, pickField, getTotalDueCentsFromValues, isBucket, normalizePaymentToken, statusFromPaymentMethod, getLatestEntry, getLatestEntryDateIso, getLatestEntryDateTime, getLatestAgent, getCheckPaymentStatusText, getPayText, fitTextToSingleLineInput, type Entry } from "./notesUtils";
 import { noticeOrAlert } from "@/lib/exportNotice";
-import { isMobileExport, NSF_FOLDER_NAME, OutboxPendingError, exportPdfName, exportRow, exportYear, findSameCheck, listExportedPdfs, openExportFolder, sendToOneDriveViaPc, writeExportFile, yearFolderForExport, type ExportedFile } from "@/lib/nsfExport";
+import { isMobileExport, NSF_FOLDER_NAME, OutboxPendingError, exportPdfName, exportRow, exportYear, cloudPdfUrl, findSameCheck, helperDir, isHelperDir, listExportedPdfs, openExportFolder, sendToOneDriveViaPc, writeExportFile, yearFolderForExport, type ExportedFile } from "@/lib/nsfExport";
 import { askExportChoice } from "@/lib/exportDialog";
 
 export default function ReportModal({
@@ -579,7 +579,7 @@ export default function ReportModal({
       files: all,
       buttons: [
         { id: "cancel", label: "Cancelar", tone: "plain" },
-        ...(isMobileExport() ? [] : [{ id: "open", label: "Abrir carpeta", tone: "ghost" as const }]),
+        { id: "open", label: isHelperDir(dir) ? "Abrir carpeta" : "Ver PDF", tone: "ghost" },
         { id: "replace", label: exact.length ? "Exportar de nuevo" : "Reemplazar por el nuevo", tone: "primary" },
       ],
     });
@@ -590,20 +590,29 @@ export default function ReportModal({
     return choice === "replace" ? all : null;
   }
 
-  /** Abre la carpeta de los PDF en el Explorador, con el PDF de este reporte seleccionado. */
+  /**
+   * En la computadora de la oficina abre el Explorador con el PDF seleccionado.
+   * En cualquier otra (o el celular) abre la copia del PDF que está en la nube.
+   */
   async function openFolder(target?: ExportedFile) {
+    // En el celular la pestaña se abre ya (si no, Safari la bloquea).
+    const pre = isMobileExport() ? window.open("about:blank", "_blank") : null;
     let file = target;
     if (!file) {
-      const list = await listExportedPdfs({ __rcHelper: true, name: String(exportYear()) } as unknown as FileSystemDirectoryHandle);
+      const list = (pre ? null : await listExportedPdfs(helperDir())) ?? (await listExportedPdfs(null));
       const { exact, others } = findSameCheck(currentFilename(), list);
       file = [...exact, ...others].sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0))[0];
     }
-    if (await openExportFolder(file?.name, file?.year)) return;
+    if (!pre && (await openExportFolder(file?.name, file?.year))) return;
+    if (file) {
+      const url = cloudPdfUrl(file);
+      if (pre) pre.location.href = url;
+      else if (!window.open(url, "_blank")) window.location.assign(url);
+      return;
+    }
+    pre?.close();
     const notice = await noticeOrAlert();
-    notice.error(
-      "Aquí no se puede abrir la carpeta",
-      `Solo se abre en la computadora de la oficina (la que tiene el ayudante activo).\n\nLos PDF están en OneDrive:\nRETURNED CHECKS\${NSF_FOLDER_NAME}\${file?.year ?? exportYear()}${file ? `\n${file.name}` : ""}`,
-    );
+    notice.error("Este reporte todavía no se ha exportado", "Usa el botón verde Exportar para guardarlo en OneDrive. Después lo puedes abrir desde aquí.");
   }
 
   async function shareReport() {
@@ -814,10 +823,10 @@ export default function ReportModal({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); void openFolder(); }}
-              title="Abrir la carpeta de los PDF exportados"
-              aria-label="Abrir carpeta de los PDF"
+              title="Abrir el PDF exportado (en la oficina abre la carpeta)"
+              aria-label="Abrir el PDF exportado"
               data-tour="report-folder"
-              className="hidden h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 sm:flex"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 sm:flex"
             >
               <FolderOpen className="h-4 w-4" />
             </button>
