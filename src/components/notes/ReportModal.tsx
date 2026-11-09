@@ -11,7 +11,7 @@ import { useDashPrefs } from "@/components/dashboard/dashPrefs";
 import type { NoteListItem } from "./NotesList";
 import { APPREPORTE_V, isoToday, toEntryArray, sortEntriesDesc, formatUsMmDdYy, parseMoneyToCents, formatUsd, getTotalDueFromValues, normText, pickField, getTotalDueCentsFromValues, isBucket, normalizePaymentToken, statusFromPaymentMethod, getLatestEntry, getLatestEntryDateIso, getLatestEntryDateTime, getLatestAgent, getCheckPaymentStatusText, getPayText, fitTextToSingleLineInput, type Entry } from "./notesUtils";
 import { noticeOrAlert } from "@/lib/exportNotice";
-import { isMobileExport, NSF_FOLDER_NAME, OutboxPendingError, exportPdfName, exportRow, exportYear, cloudPdfUrl, findSameCheck, helperDir, isHelperDir, listExportedPdfs, openExportFolder, sendToOneDriveViaPc, writeExportFile, yearFolderForExport, type ExportedFile } from "@/lib/nsfExport";
+import { isMobileExport, NSF_FOLDER_NAME, OutboxPendingError, exportPdfName, exportRow, exportYear, cloudPdfUrl, oneDriveFileUrl, oneDriveFolderUrl, findSameCheck, helperDir, isHelperDir, listExportedPdfs, openExportFolder, sendToOneDriveViaPc, writeExportFile, yearFolderForExport, type ExportedFile } from "@/lib/nsfExport";
 import { askExportChoice } from "@/lib/exportDialog";
 
 export default function ReportModal({
@@ -579,7 +579,7 @@ export default function ReportModal({
       files: all,
       buttons: [
         { id: "cancel", label: "Cancelar", tone: "plain" },
-        { id: "open", label: isHelperDir(dir) ? "Abrir carpeta" : "Ver PDF", tone: "ghost" },
+        { id: "open", label: isHelperDir(dir) ? "Abrir carpeta" : "Ver en OneDrive", tone: "ghost" },
         { id: "replace", label: exact.length ? "Exportar de nuevo" : "Reemplazar por el nuevo", tone: "primary" },
       ],
     });
@@ -592,7 +592,8 @@ export default function ReportModal({
 
   /**
    * En la computadora de la oficina abre el Explorador con el PDF seleccionado.
-   * En cualquier otra (o el celular) abre la copia del PDF que está en la nube.
+   * En cualquier otra (o el celular) abre lo mismo en OneDrive en línea, con la cuenta de OneDrive:
+   * el PDF si ya se exportó, o la carpeta del año. Si no hay enlace todavía, la copia en la nube.
    */
   async function openFolder(target?: ExportedFile) {
     // En el celular la pestaña se abre ya (si no, Safari la bloquea).
@@ -604,8 +605,13 @@ export default function ReportModal({
       file = [...exact, ...others].sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0))[0];
     }
     if (!pre && (await openExportFolder(file?.name, file?.year))) return;
-    if (file) {
-      const url = cloudPdfUrl(file);
+    if (file && !file.web) {
+      // la lista local del ayudante no trae el enlace: buscarlo en la de la nube
+      const cloud = await listExportedPdfs(null);
+      file = cloud?.find((f) => f.year === file!.year && f.name.toLowerCase() === file!.name.toLowerCase()) ?? file;
+    }
+    const url = oneDriveFileUrl(file) || (await oneDriveFolderUrl(file?.year)) || (file ? cloudPdfUrl(file) : "");
+    if (url) {
       if (pre) pre.location.href = url;
       else if (!window.open(url, "_blank")) window.location.assign(url);
       return;
@@ -823,7 +829,7 @@ export default function ReportModal({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); void openFolder(); }}
-              title="Abrir el PDF exportado (en la oficina abre la carpeta)"
+              title="Abrir en OneDrive (en la oficina abre la carpeta)"
               aria-label="Abrir el PDF exportado"
               data-tour="report-folder"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 sm:flex"

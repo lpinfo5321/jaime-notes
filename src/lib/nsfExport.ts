@@ -251,7 +251,18 @@ export async function yearFolderForExport(): Promise<FileSystemDirectoryHandle |
   }
 }
 
-export type ExportedFile = { name: string; year: number; mtime?: number; size?: number; key?: string };
+/** web = el mismo PDF en OneDrive en línea (onedrive.live.com), lo abre cualquiera con la cuenta. */
+export type ExportedFile = { name: string; year: number; mtime?: number; size?: number; key?: string; web?: string };
+
+/** Carpetas de OneDrive en línea ("root" y cada año), según la última lista del ayudante. */
+let cloudFolders: Record<string, string> = {};
+export async function oneDriveFolderUrl(year?: number) {
+  if (!Object.keys(cloudFolders).length) await listExportedPdfs(null);
+  const url = cloudFolders[String(year || new Date().getFullYear())] || cloudFolders.root || "";
+  return /^https:\/\/onedrive\.live\.com\//.test(url) ? url : "";
+}
+const safeWeb = (u?: string) => (u && /^https:\/\/onedrive\.live\.com\//.test(u) ? u : "");
+export const oneDriveFileUrl = (f?: ExportedFile) => safeWeb(f?.web);
 
 export const isHelperDir = (dir: FileSystemDirectoryHandle | null) => !!dir && !!(dir as unknown as Record<string, unknown>)[HELPER_MARK];
 /** "Carpeta" que apunta al ayudante de esta computadora (si no está activo, sus llamadas fallan). */
@@ -293,7 +304,8 @@ export async function listExportedPdfs(dir: FileSystemDirectoryHandle | null): P
       return out;
     }
     const r = await fetch("/api/nsf-outbox/index", { cache: "no-store" });
-    const j = (await r.json().catch(() => null)) as { files?: ExportedFile[] | null } | null;
+    const j = (await r.json().catch(() => null)) as { files?: ExportedFile[] | null; folders?: Record<string, string> } | null;
+    if (j?.folders && typeof j.folders === "object") cloudFolders = j.folders;
     return Array.isArray(j?.files) ? j.files : null;
   } catch {
     return null;

@@ -12,8 +12,9 @@ export async function GET() {
   try {
     const got = await outboxAdmin().storage.from(OUTBOX_BUCKET).download("_pdf/index.json");
     if (got.error || !got.data) return NextResponse.json({ files: null });
-    const j = JSON.parse(await got.data.text()) as { at?: number; files?: unknown };
-    return NextResponse.json({ at: j.at ?? null, files: Array.isArray(j.files) ? j.files : null }, { headers: { "Cache-Control": "no-store" } });
+    const j = JSON.parse(await got.data.text()) as { at?: number; files?: unknown; folders?: unknown };
+    const folders = j.folders && typeof j.folders === "object" ? j.folders : {};
+    return NextResponse.json({ at: j.at ?? null, files: Array.isArray(j.files) ? j.files : null, folders }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ files: null });
   }

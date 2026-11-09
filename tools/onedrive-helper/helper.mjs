@@ -285,6 +285,61 @@ try {
 const copyKey = (f) => `_pdf/files/${f.year}/${crypto.createHash("sha1").update(f.name.toLowerCase()).digest("hex")}.pdf`;
 const copySig = (f) => `${f.mtime}-${f.size}`;
 
+/* Enlaces de OneDrive en línea (onedrive.live.com) para cada carpeta del año y cada PDF:
+   así otra computadora o el celular abre la misma carpeta que aquí, con su cuenta de OneDrive. */
+const OD_SETTINGS = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Microsoft", "OneDrive", "settings", "Personal");
+let odCid = "";
+let odMap = { at: 0, folders: {}, files: {} };
+function readCid() {
+  return new Promise((resolve) => {
+    execFile("reg", ["query", "HKCU\\Software\\Microsoft\\OneDrive\\Accounts\\Personal", "/v", "cid"], { windowsHide: true }, (err, out) => {
+      const m = String(out || "").match(/cid\s+REG_SZ\s+([0-9a-f]+)/i);
+      resolve(m ? m[1].toUpperCase() : "");
+    });
+  });
+}
+async function refreshOdMap() {
+  if (Date.now() - odMap.at < 60 * 1000) return;
+  odMap.at = Date.now();
+  try {
+    if (!odCid) odCid = await readCid();
+    if (!odCid) return;
+    const { DatabaseSync } = await import("node:sqlite");
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "rc-od-"));
+    try {
+      for (const f of ["SyncEngineDatabase.db", "SyncEngineDatabase.db-wal", "SyncEngineDatabase.db-shm"]) {
+        try {
+          fs.copyFileSync(path.join(OD_SETTINGS, f), path.join(tmp, f));
+        } catch {}
+      }
+      const db = new DatabaseSync(path.join(tmp, "SyncEngineDatabase.db"), { readOnly: true });
+      const folders = db.prepare("select resourceID id, parentResourceID p, folderName n from od_ClientFolder_Records").all();
+      const byId = new Map(folders.map((r) => [r.id, r]));
+      const chainOk = (r, names) => names.every((n, i) => {
+        let x = r;
+        for (let k = 0; k < i; k++) x = x && byId.get(x.p);
+        return x && String(x.n).toUpperCase() === n;
+      });
+      const nsf = folders.find((r) => chainOk(r, ["NSF CHECKS PDF FILES", "RETURNED CHECKS", "CHECK CASHING SERVICES"]));
+      if (!nsf) return db.close();
+      const link = (id, parent) =>
+        `https://onedrive.live.com/?id=${odCid}%21s${id}&cid=${odCid}${parent ? `&parId=${odCid}%21s${parent}&o=OneUp` : ""}`;
+      const out = { at: odMap.at, folders: { root: link(nsf.id) }, files: {} };
+      const fileQ = db.prepare("select resourceID id, fileName n from od_ClientFile_Records where parentResourceID = ?");
+      for (const y of folders.filter((r) => r.p === nsf.id && /^\d{4}$/.test(String(r.n)))) {
+        out.folders[y.n] = link(y.id);
+        for (const f of fileQ.all(y.id)) out.files[`${y.n}/${String(f.n).toLowerCase()}`] = link(f.id, y.id);
+      }
+      db.close();
+      odMap = out;
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  } catch (e) {
+    console.log("OneDrive enlaces", e && e.message);
+  }
+}
+
 let indexBusy = false;
 async function pushIndex(force = false) {
   const admin = outboxClient();
@@ -317,16 +372,23 @@ async function pushIndex(force = false) {
       for (const k of gone) delete copies[k];
     }
     if (uploaded || gone.length) fs.writeFileSync(COPIES, JSON.stringify(copies));
-    const listed = files.map((f) => (copies[copyKey(f)] === copySig(f) ? { ...f, key: copyKey(f) } : f));
-    const h = JSON.stringify(listed);
+    await refreshOdMap();
+    const listed = files.map((f) => {
+      const web = odMap.files[`${f.year}/${f.name.toLowerCase()}`];
+      const key = copies[copyKey(f)] === copySig(f) ? copyKey(f) : undefined;
+      return { ...f, ...(key ? { key } : {}), ...(web ? { web } : {}) };
+    });
+    const h = JSON.stringify([listed, odMap.folders]);
     if (!force && h === indexHash && Date.now() - indexAt < 10 * 60 * 1000) return;
     const up = await admin.storage
       .from(OUTBOX)
-      .upload("_pdf/index.json", JSON.stringify({ at: Date.now(), files: listed }), { contentType: "application/json", upsert: true });
+      .upload("_pdf/index.json", JSON.stringify({ at: Date.now(), files: listed, folders: odMap.folders }), { contentType: "application/json", upsert: true });
     if (up.error) console.log("Index error", up.error.message);
     if (!up.error) {
       health.indexAt = Date.now();
       health.copies = listed.filter((f) => f.key).length;
+      health.webLinks = listed.filter((f) => f.web).length;
+      health.webFolders = Object.keys(odMap.folders).length;
       indexHash = h;
       indexAt = Date.now();
     }
