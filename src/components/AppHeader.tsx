@@ -363,13 +363,19 @@ export default function AppHeader() {
                   <button type="button" onClick={() => { setMenuOpen(false); setShowUsage(true); }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
                     <Gauge className="h-4 w-4 text-zinc-400" /> Herramientas y límites
+                    {usageWarn ? <span className={`ml-auto h-2 w-2 rounded-full ${usageWarn === "danger" ? "bg-red-500" : "bg-amber-500"}`} /> : null}
                   </button>
 
                   <button type="button"
                     onClick={() => { setMenuOpen(false); try { window.dispatchEvent(new CustomEvent("rc:openTutorials")); } catch {} }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900">
                     <GraduationCap className="h-4 w-4 text-zinc-400" /> Tutoriales
-                    {usageWarn ? <span className={`ml-auto h-2 w-2 rounded-full ${usageWarn === "danger" ? "bg-red-500" : "bg-amber-500"}`} /> : null}
+                  </button>
+
+                  <button type="button"
+                    onClick={() => { setMenuOpen(false); void import("@/lib/localOpen").then((m) => m.askLocalSetup(true)); }}
+                    className="hidden w-full items-center gap-2.5 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900 sm:flex">
+                    <FolderOpen className="h-4 w-4 text-zinc-400" /> Abrir carpetas en esta PC
                   </button>
 
                   <button type="button" onClick={() => void checkUpdate()} disabled={updState === "checking" || updState === "updating"}

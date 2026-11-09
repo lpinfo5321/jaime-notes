@@ -13,6 +13,7 @@ import { APPREPORTE_V, isoToday, toEntryArray, sortEntriesDesc, formatUsMmDdYy, 
 import { noticeOrAlert } from "@/lib/exportNotice";
 import { isMobileExport, NSF_FOLDER_NAME, OutboxPendingError, exportPdfName, exportRow, exportYear, cloudPdfUrl, oneDriveFileUrl, oneDriveFolderUrl, findSameCheck, helperDir, isHelperDir, listExportedPdfs, openExportFolder, sendToOneDriveViaPc, writeExportFile, yearFolderForExport, type ExportedFile } from "@/lib/nsfExport";
 import { askExportChoice } from "@/lib/exportDialog";
+import { askLocalSetup, localOpenChoice, openLocalFolder } from "@/lib/localOpen";
 
 export default function ReportModal({
   noteId,
@@ -579,7 +580,7 @@ export default function ReportModal({
       files: all,
       buttons: [
         { id: "cancel", label: "Cancelar", tone: "plain" },
-        { id: "open", label: isHelperDir(dir) ? "Abrir carpeta" : "Ver en OneDrive", tone: "ghost" },
+        { id: "open", label: isHelperDir(dir) || localOpenChoice() === "local" ? "Abrir carpeta" : "Ver en OneDrive", tone: "ghost" },
         { id: "replace", label: exact.length ? "Exportar de nuevo" : "Reemplazar por el nuevo", tone: "primary" },
       ],
     });
@@ -605,6 +606,19 @@ export default function ReportModal({
       file = [...exact, ...others].sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0))[0];
     }
     if (!pre && (await openExportFolder(file?.name, file?.year))) return;
+    // Otra computadora con OneDrive: abrir en su Explorador (si instaló el archivo una vez).
+    if (!pre) {
+      let how = localOpenChoice();
+      if (!how) {
+        const picked = await askLocalSetup();
+        if (picked !== "web") return;
+        how = "web";
+      }
+      if (how === "local") {
+        openLocalFolder(file);
+        return;
+      }
+    }
     if (file && !file.web) {
       // la lista local del ayudante no trae el enlace: buscarlo en la de la nube
       const cloud = await listExportedPdfs(null);
