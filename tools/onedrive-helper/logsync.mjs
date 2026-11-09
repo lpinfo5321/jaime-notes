@@ -53,10 +53,10 @@ function money(raw) {
 }
 const keyCheck = (v) => {
   const s = norm(v).replace(/^#/, "");
-  const digits = s.replace(/\D/g, "");
+  const digits = s.replace(/\D/g, "").replace(/^0+(?=\d)/, ""); // "000229" = "229"
   return digits || s.toUpperCase();
 };
-const keyPayor = (v) => norm(v).toUpperCase().replace(/[^A-Z0-9]/g, "");
+const keyPayor = (v) => norm(v).toUpperCase().replace(/&/g, " AND ").replace(/[^A-Z0-9]/g, ""); // "&" = "AND"
 export const rowKey = (check, payor) => `${keyCheck(check)}|${keyPayor(payor)}`;
 
 function mapPayment(raw, extra) {
@@ -302,7 +302,7 @@ async function pruneCalcChain(zip, cellRefs) {
 }
 
 export async function syncLog({ notes, stateFile, adoptAll = false, deletions = [] }) {
-  const status = { ok: true, locked: false, file: LOG_FILE, written: [], pending: [], adoptable: 0, errors: [], rowsInExcel: 0, snapshot: null, deleted: [], deletionsDone: false };
+  const status = { ok: true, locked: false, file: LOG_FILE, written: [], pending: [], adoptable: 0, errors: [], rowsInExcel: 0, snapshot: null, deleted: [], deletionsDone: false, decisions: [] };
   const state = loadState(stateFile);
   if (!state.baselineAt) {
     state.baselineAt = new Date().toISOString();
@@ -378,17 +378,31 @@ export async function syncLog({ notes, stateFile, adoptAll = false, deletions = 
   const work = [];
   for (const n of notes) {
     const row = logRowFromNote(n);
-    if (!row) continue;
+    const say = (reason, extra = {}) => status.decisions.push({ id: String(n.id), title: n.title, key: row?.key ?? null, reason, updated: n.updated_at, ...extra });
+    if (!row) {
+      const f = n?.values?._report?.payload?.fields;
+      if (!(Array.isArray(n.tags) && (n.tags.includes("__draft") || n.tags.includes("__practice"))) && n?.values?._bucket !== "trash")
+        say(!f ? "sin reporte" : "falta compañía o # de cheque", { check: f?.checkNumber ?? null });
+      continue;
+    }
     const hash = crypto.createHash("sha1").update(JSON.stringify(row.cells)).digest("hex");
     const at = index.get(row.key) ?? index2.get(`${row.key.split("|")[0]}|${row.cells.D}`) ?? null;
     const owned = state.owned[row.noteId] === row.key;
     const fresh = new Date(n.updated_at || n.created_at || 0).getTime() >= baseline;
-    if (state.hashes[row.noteId] === hash && (at || !fresh) && !(adoptAll && !at)) continue;
-    if (at == null && !fresh && !adoptAll) {
-      status.adoptable += 1;
+    if (state.hashes[row.noteId] === hash && (at || !fresh) && !(adoptAll && !at)) {
+      say("ya al día", { at });
       continue;
     }
-    if (at != null && !fresh && !owned && !adoptAll) continue;
+    if (at == null && !fresh && !adoptAll) {
+      status.adoptable += 1;
+      say("anterior, no está en el Excel (no se agrega solo)");
+      continue;
+    }
+    if (at != null && !fresh && !owned && !adoptAll) {
+      say("anterior, ya está en el Excel (no se toca)", { at });
+      continue;
+    }
+    say(at != null ? "actualizar fila" : "agregar fila", { at, owned });
     work.push({ row, at, owned, hash });
   }
 

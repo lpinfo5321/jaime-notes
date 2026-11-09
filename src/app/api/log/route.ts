@@ -5,8 +5,9 @@ import type { LogRow, LogSnapshot } from "@/lib/checkLog";
 
 export const dynamic = "force-dynamic";
 
-const digits = (v: unknown) => String(v ?? "").trim().replace(/^#/, "").replace(/\D/g, "") || String(v ?? "").trim().toUpperCase();
-const alnum = (v: unknown) => String(v ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const digits = (v: unknown) =>
+  String(v ?? "").trim().replace(/^#/, "").replace(/\D/g, "").replace(/^0+(?=\d)/, "") || String(v ?? "").trim().toUpperCase();
+const alnum = (v: unknown) => String(v ?? "").toUpperCase().replace(/&/g, " AND ").replace(/[^A-Z0-9]/g, "");
 
 /** Registro (copia del Excel) + enlace a cada reporte que todavía existe en la app. */
 export async function GET() {

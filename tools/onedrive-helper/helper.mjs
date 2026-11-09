@@ -109,7 +109,7 @@ http
       }
       return send(200, { ok: true, dir, file: file && fs.existsSync(file) ? file : "" });
     }
-    if (url.pathname === "/log/status") return send(200, { ok: true, ...logPublic() });
+    if (url.pathname === "/log/status") return send(200, { ok: true, ...logPublic(), ...(url.searchParams.get("detail") ? { decisions: logDecisions } : {}) });
     if (url.pathname === "/log/sync" && req.method === "POST") {
       logTick(url.searchParams.get("all") === "1")
         .then(() => send(200, { ok: true, ...logPublic() }))
@@ -409,6 +409,7 @@ drainOutbox().catch(() => {});
 /* Registro (Excel RETURNED CHECK LOG): cada cierto tiempo pasa los reportes al Excel y sube una copia para verla en la app. */
 const LOG_STATE = path.join(HERE, "log-state.json");
 let logBusy = false;
+let logDecisions = [];
 let logLast = { at: null, ok: null, locked: false, pending: 0, adoptable: 0, written: 0, errors: [], rowsInExcel: 0, file: LOG_FILE };
 let logHash = "";
 let logUploadedAt = 0;
@@ -452,6 +453,7 @@ async function logTick(adoptAll = false) {
       await admin.storage.from(OUTBOX).remove(delFiles);
       if (res.deleted && res.deleted.length) console.log("Registro Excel - quitadas", res.deleted.length, "filas");
     }
+    logDecisions = res.decisions || [];
     logLast = {
       at: new Date().toISOString(),
       ok: res.ok,

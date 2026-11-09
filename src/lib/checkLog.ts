@@ -26,9 +26,9 @@ export type LogRow = {
 /** Misma llave que usa el ayudante (logsync.mjs rowKey): "<cheque>|<COMPAÑIA>". */
 export function logRowKey(check: unknown, payor: unknown) {
   const s = String(check ?? "").trim().replace(/^#/, "");
-  const digits = s.replace(/\D/g, "");
+  const digits = s.replace(/\D/g, "").replace(/^0+(?=\d)/, ""); // "000229" = "229"
   const ck = digits || s.toUpperCase();
-  const p = String(payor ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const p = String(payor ?? "").trim().toUpperCase().replace(/&/g, " AND ").replace(/[^A-Z0-9]/g, ""); // "&" = "AND"
   return `${ck}|${p}`;
 }
 
