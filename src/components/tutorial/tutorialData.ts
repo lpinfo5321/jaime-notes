@@ -805,7 +805,7 @@ export const TUTORIALS: Tutorial[] = [
         target: { css: '[data-tour="report-export"]' },
         icon: "📤",
         title: "Exportar",
-        body: "Guarda el PDF del reporte directo en la carpeta de OneDrive: RETURNED CHECKS › NSF CHECKS PDF FILES › el año. Si ya existe, lo reemplaza con el nuevo.",
+        body: "Guarda el PDF del reporte directo en la carpeta de OneDrive: RETURNED CHECKS › NSF CHECKS PDF FILES › el año. Si ya existe, te avisa y te pregunta si quieres reemplazarlo.",
       },
       {
         target: { css: '[data-tour="report-newtab"]' },
@@ -815,11 +815,11 @@ export const TUTORIALS: Tutorial[] = [
         body: "Abre el reporte en una pestaña aparte, más grande.",
       },
       {
-        target: { css: "#btnPrint", frame: true },
+        target: { css: "#btnPdf", frame: true },
         optional: true,
         icon: "🗂️",
-        title: "Guardar como…",
-        body: "Si quieres elegir tú la carpeta o el nombre del archivo.",
+        title: "Exportar PDF manual",
+        body: "Por si falla el botón Exportar: aquí eliges tú la carpeta y el nombre del archivo.",
       },
       {
         icon: "📱",
