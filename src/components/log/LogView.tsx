@@ -140,7 +140,7 @@ Se guarda un respaldo del Excel antes de quitarlo.`)) return;
   const [state, setState] = useState<"all" | LogState>("all");
   const [year, setYear] = useState<number | "all">("all");
   const [showMore, setShowMore] = useState(false);
-  const [f, setF] = useState({ company: "", reason: "", agent: "", feePay: "", chkPay: "", from: "", to: "", min: "", sort: "recent" });
+  const [f, setF] = useState({ company: "", reason: "", agent: "", feePay: "", chkPay: "", from: "", to: "", min: "", sort: "added" });
   const setFv = (k: keyof typeof f, v: string) => setF((o) => ({ ...o, [k]: v }));
   const activeExtra = Object.entries(f).filter(([k, v]) => k !== "sort" && v).length;
   const [helper, setHelper] = useState<HelperStatus | null>(null);
@@ -200,6 +200,8 @@ Se guarda un respaldo del Excel antes de quitarlo.`)) return;
         if (f.sort === "old") return effDate(a).localeCompare(effDate(b)) || a.r - b.r;
         if (f.sort === "amount") return rowTotal(b) - rowTotal(a);
         if (f.sort === "company") return String(a.H || "").localeCompare(String(b.H || ""));
+        // Últimos agregados: el orden del Excel (las filas nuevas van al final), de abajo hacia arriba
+        if (f.sort === "added") return b.r - a.r;
         return effDate(b).localeCompare(effDate(a)) || b.r - a.r;
       });
   }, [rows, q, state, year, f]);
@@ -413,8 +415,9 @@ Se guarda un respaldo del Excel antes de quitarlo.`)) return;
               onChange={(e) => setFv("sort", e.target.value)}
               className="h-10 min-w-0 flex-1 basis-[46%] rounded-xl border border-zinc-200 bg-white px-3 text-sm sm:flex-none dark:border-zinc-700 dark:bg-zinc-900"
             >
-              <option value="recent">Más recientes primero</option>
-              <option value="old">Más antiguos primero</option>
+              <option value="added">Últimos agregados</option>
+              <option value="recent">Devueltos más recientes</option>
+              <option value="old">Devueltos más antiguos</option>
               <option value="amount">Mayor monto</option>
               <option value="company">Compañía A-Z</option>
             </select>
