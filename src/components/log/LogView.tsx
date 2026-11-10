@@ -50,6 +50,12 @@ function Badge({ s }: { s: LogState }) {
 
 /* Fechas con año raro (errores de captura en el Excel, ej. 0260) no deben ir arriba del orden. */
 const okDate = (d?: string | null) => (d && /^(20\d\d)-/.test(d) ? d : "");
+/** Último pago (comisión o cheque); "" si no tiene pagos. */
+// Fechas en el futuro (errores de captura, ej. 2029) no cuentan.
+const paidDate = (r: LogRow) => {
+  const today = new Date().toISOString().slice(0, 10);
+  return [okDate(r.P), okDate(r.R)].filter((d) => d && d <= today).sort().pop() || "";
+};
 const effDate = (r: LogRow) => okDate(r.D) || okDate(r.B) || okDate(r.C) || "";
 
 function ago(iso?: string | null) {
@@ -202,6 +208,8 @@ Se guarda un respaldo del Excel antes de quitarlo.`)) return;
         if (f.sort === "company") return String(a.H || "").localeCompare(String(b.H || ""));
         // Últimos agregados: el orden del Excel (las filas nuevas van al final), de abajo hacia arriba
         if (f.sort === "added") return b.r - a.r;
+        // Pagados más recientes: los que no tienen pago van al final
+        if (f.sort === "paid") return paidDate(b).localeCompare(paidDate(a)) || b.r - a.r;
         return effDate(b).localeCompare(effDate(a)) || b.r - a.r;
       });
   }, [rows, q, state, year, f]);
@@ -416,6 +424,7 @@ Se guarda un respaldo del Excel antes de quitarlo.`)) return;
               className="h-10 min-w-0 flex-1 basis-[46%] rounded-xl border border-zinc-200 bg-white px-3 text-sm sm:flex-none dark:border-zinc-700 dark:bg-zinc-900"
             >
               <option value="added">Últimos agregados</option>
+              <option value="paid">Pagados más recientes</option>
               <option value="recent">Devueltos más recientes</option>
               <option value="old">Devueltos más antiguos</option>
               <option value="amount">Mayor monto</option>
