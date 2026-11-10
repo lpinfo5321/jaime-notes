@@ -323,7 +323,7 @@ export const TUTORIALS: Tutorial[] = [
         target: FIELD("dateCashed"),
         icon: "📅",
         title: "Date cashed",
-        body: "La fecha en que el cliente cambió el cheque en la tienda. Formato MM/DD/YY (ej. 11/08/26), o usa el calendario de la derecha.",
+        body: "La fecha en que el cliente cambió el cheque en la tienda. Formato MM/DD/YY (ej. 11/08/26), o toca el ícono del calendario y elige el día. Cualquiera de las dos sirve.",
         hint: "Escribe o elige una fecha",
         do: "type",
       },

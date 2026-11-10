@@ -281,7 +281,18 @@ export default function Tutorials() {
               try { (f.el as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" }); } catch {}
             }
           }
-          setRect(new DOMRect(f.rect.left - PAD, f.rect.top - PAD, f.rect.width + PAD * 2, f.rect.height + PAD * 2));
+          let l = f.rect.left, t = f.rect.top, rr = f.rect.right, bb = f.rect.bottom;
+          // Si hay un calendario abierto, también se ilumina para poder tocarlo.
+          if (step.do === "type" && f.frame) {
+            const cal = f.frame.contentDocument?.getElementById("cp-days")?.parentElement as HTMLElement | null | undefined;
+            if (cal && visible(cal)) {
+              const c = cal.getBoundingClientRect();
+              const fr = f.frame.getBoundingClientRect();
+              l = Math.min(l, c.left + fr.left); t = Math.min(t, c.top + fr.top);
+              rr = Math.max(rr, c.right + fr.left); bb = Math.max(bb, c.bottom + fr.top);
+            }
+          }
+          setRect(new DOMRect(l - PAD, t - PAD, rr - l + PAD * 2, bb - t + PAD * 2));
         } else setRect(null);
       }
 
