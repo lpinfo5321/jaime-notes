@@ -399,12 +399,7 @@ export const TUTORIALS: Tutorial[] = [
         target: FIELD("returnedFee"),
         icon: "🧮",
         title: "Returned check fee (se calcula sola)",
-        body: "Es el cargo por cheque devuelto. No lo escribes: la app lo calcula en cuanto pones el Check Amount, según el monto del cheque:
-• Hasta $50 → $25
-• De $50.01 a $300 → $30
-• De $300.01 a $800 → $40
-• Más de $800 → 5% del cheque (ej. $1,000 → $50)
-Si cambias el monto, la comisión y el Total due se actualizan solos.",
+        body: "Es el cargo por cheque devuelto. No lo escribes: la app lo calcula en cuanto pones el Check Amount, según el monto del cheque:\n• Hasta $50 → $25\n• De $50.01 a $300 → $30\n• De $300.01 a $800 → $40\n• Más de $800 → 5% del cheque (ej. $1,000 → $50)\nSi cambias el monto, la comisión y el Total due se actualizan solos.",
       },
       {
         target: FIELD("totalDue"),
