@@ -1,6 +1,10 @@
 // Sincroniza los reportes de la app con RETURNED CHECK LOG.xlsm (hoja RETURNED ITEMS).
 // - Agrega cada reporte nuevo como una fila nueva (fecha, payee, cheque, payor, monto, fee…).
 // - Cuando el reporte cambia (pagos, agente, estado) actualiza esa misma fila.
+// - Filas que ya estaban en el Excel: la primera vez solo llena lo que falta; después, cuando el
+//   reporte cambia, también actualiza pagos/agente/estado (y los vacía si se quitaron en la app).
+// - Estado (columna U): sigue la pestaña de la app (Completados = COMPLETED; Pendientes = vacío).
+// - Papelera: no se agrega. Solo se quita una fila si la app lo pide (el usuario dijo que sí).
 // - Nunca borra filas ni toca otras hojas, macros o comentarios. Hace respaldo diario antes de escribir.
 // - Sube una copia del registro (snapshot) a la nube para verlo en la app, también desde el celular.
 import fs from "node:fs";
@@ -18,6 +22,8 @@ const SHEET_PATH = "xl/worksheets/sheet1.xml"; // RETURNED ITEMS
 const FIRST_ROW = 6;
 const DATE_COLS = new Set(["B", "C", "D", "G", "P", "R"]);
 const COLS = ["B", "C", "D", "E", "F", "G", "H", "I", "M", "N", "O", "P", "Q", "R", "S", "T", "U"];
+/** Columnas de pagos, agente y estado: la app las puede actualizar o vaciar. */
+const STATUS_COLS = new Set(["P", "Q", "R", "S", "T", "U"]);
 const NEW_ROW_STYLES = { A: 10, B: 5, C: 5, D: 5, E: 50, F: 10, H: 50, I: 5, M: 14, N: 44, O: 44, P: 5, Q: 5, R: 5, S: 5, T: 5, U: 5 };
 
 /* ───────── utilidades ───────── */
@@ -84,7 +90,8 @@ export function logRowFromNote(n) {
   if (!payor || !check) return null;
   const feePaid = mapPayment(f.feePaymentMethod);
   const checkPaid = mapPayment(f.checkPaymentMethod, f.checkPaidNumber);
-  const done = !!feePaid && !!checkPaid;
+  // Igual que la app: si el reporte está en una pestaña, manda la pestaña; si no, los pagos.
+  const done = v._bucket === "completed" ? true : v._bucket === "pending" ? false : !!feePaid && !!checkPaid;
   const asNum = /^\d+$/.test(check) && check.length < 15 ? Number(check) : check;
   const amount = money(f.checkAmount);
   const fee = money(f.returnedFee);
@@ -173,7 +180,12 @@ function buildRow(rowNum, attrs, cells) {
   return `<row r="${rowNum}"${attrs}>${body}</row>`;
 }
 
-/** Escribe valores en una fila (existente o nueva). `only`: solo estas columnas. */
+/**
+ * Escribe valores en una fila (existente o nueva).
+ * mode: "full" = la app manda en todo; "fill" = solo llena celdas vacías;
+ * "status" = llena vacías y además manda en pagos/agente/estado (STATUS_COLS).
+ * En "full" y "status" una columna de STATUS_COLS vacía en la app se vacía en el Excel.
+ */
 function writeRow(rowsMap, rowNum, values, mode, existing) {
   const cur = rowsMap.get(rowNum) ?? { attrs: ` spans="1:21" ht="18" customHeight="1"`, inner: "" };
   const cells = parseCells(cur.inner).map((c) => ({ ...c }));
@@ -182,10 +194,20 @@ function writeRow(rowsMap, rowNum, values, mode, existing) {
   for (const col of COLS) {
     if (col === "O") continue;
     const val = values[col];
-    if (val === null || val === undefined || val === "") continue;
     const old = existing?.[col];
     const has = old !== undefined && old !== null && old !== "";
-    if (mode === "fill" && has) continue;
+    const rules = mode === "full" || (mode === "status" && STATUS_COLS.has(col));
+    if (val === null || val === undefined || val === "") {
+      if (rules && has && STATUS_COLS.has(col)) {
+        const st = byCol.get(col)?.attrs.match(/s="(\d+)"/)?.[1] ?? NEW_ROW_STYLES[col];
+        const xml = `<c r="${col}${rowNum}"${st != null ? ` s="${st}"` : ""}/>`;
+        if (byCol.has(col)) byCol.get(col).xml = xml;
+        else byCol.set(col, { col, attrs: "", inner: "", xml });
+        changed = true;
+      }
+      continue;
+    }
+    if (!rules && has) continue;
     if (has && String(old).trim().toUpperCase() === String(val).trim().toUpperCase() && typeof old === typeof val) continue;
     if (has && typeof old === "number" && typeof val === "number" && Math.abs(old - val) < 1e-9) continue;
     const style = byCol.get(col)?.attrs.match(/s="(\d+)"/)?.[1] ?? NEW_ROW_STYLES[col];
@@ -332,7 +354,8 @@ export async function syncLog({ notes, stateFile, adoptAll = false, deletions = 
   const toClear = [];
   if (deletions.length && !excelOpen) {
     for (const d of deletions) {
-      if (!d || !d.key || !ownedKeys.has(d.key)) continue;
+      // force = el usuario mandó el reporte a la Papelera (o lo eliminó) y pidió quitarlo del registro
+      if (!d || !d.key || (!d.force && !ownedKeys.has(d.key))) continue;
       let at = null;
       const rn = Number(d.r);
       if (rn >= FIRST_ROW && rowsMap.has(rn)) {
@@ -400,12 +423,10 @@ export async function syncLog({ notes, stateFile, adoptAll = false, deletions = 
       say("anterior, no está en el Excel (no se agrega solo)");
       continue;
     }
-    if (at != null && !fresh && !owned && !adoptAll) {
-      say("anterior, ya está en el Excel (no se toca)", { at });
-      continue;
-    }
-    say(at != null ? "actualizar fila" : "agregar fila", { at, owned });
-    work.push({ row, at, owned, hash });
+    // Fila que ya estaba en el Excel: la 1a vez solo se llena lo que falta; si el reporte cambia después, manda la app en pagos/estado
+    const mode = owned ? "full" : state.hashes[row.noteId] ? "status" : "fill";
+    say(at != null ? (mode === "fill" ? "llenar lo que falta" : "actualizar fila") : "agregar fila", { at, owned });
+    work.push({ row, at, owned, hash, mode });
   }
 
   if (!work.length && !toClear.length) {
@@ -425,8 +446,7 @@ export async function syncLog({ notes, stateFile, adoptAll = false, deletions = 
   for (const w of work) {
     if (w.at != null) {
       const existing = readRow(rowsMap.get(w.at), shared);
-      const mode = w.owned ? "full" : "fill";
-      const changed = writeRow(rowsMap, w.at, w.row.cells, mode, existing);
+      const changed = writeRow(rowsMap, w.at, w.row.cells, w.mode, existing);
       if (changed) applied.push({ ...w, rowNum: w.at, created: false });
       else state.hashes[w.row.noteId] = w.hash;
     } else {
@@ -495,6 +515,10 @@ export async function syncLog({ notes, stateFile, adoptAll = false, deletions = 
   if (toClear.length) {
     const gone = new Set(toClear.map((c) => c.key));
     for (const [id, k] of Object.entries(state.owned)) if (gone.has(k)) { delete state.owned[id]; delete state.hashes[id]; }
+    for (const n of notes) {
+      const k = logRowFromNote({ ...n, values: { ...(n.values || {}), _bucket: undefined } })?.key;
+      if (k && gone.has(k)) delete state.hashes[String(n.id)];
+    }
     status.deleted = toClear.map((c) => ({ row: c.rowNum, key: c.key }));
     status.deletionsDone = true;
   }

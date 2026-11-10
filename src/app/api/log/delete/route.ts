@@ -17,7 +17,9 @@ const Body = z.object({
 
 /**
  * Pide al ayudante de la computadora que quite filas del Excel del registro.
- * Solo filas que escribió la app y cuyo reporte ya no existe en la app.
+ * - Por # de fila (desde el Registro): solo filas que escribió la app y cuyo reporte ya no existe.
+ * - Por reporte (al mandarlo a la Papelera o eliminarlo, y el usuario dijo que sí): la fila de ese
+ *   cheque, aunque se haya escrito a mano, mientras ningún reporte activo use ese cheque.
  */
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -32,31 +34,32 @@ export async function POST(req: Request) {
     const admin = outboxAdmin();
     const [snapRes, notesRes] = await Promise.all([
       admin.storage.from(OUTBOX_BUCKET).download("_log/snapshot.json"),
-      supabase.from("notes").select("id,title,tags,f:values->_report->payload->fields").limit(5000),
+      supabase.from("notes").select("id,title,tags,f:values->_report->payload->fields,bucket:values->>_bucket").limit(5000),
     ]);
     if (snapRes.error || !snapRes.data) return NextResponse.json({ error: "Todavía no hay registro" }, { status: 409 });
     const snap = JSON.parse(await snapRes.data.text()) as LogSnapshot;
 
-    // Reportes que todavía existen (cualquier pestaña, incluida la papelera): sus filas NO se quitan.
+    // Reportes activos (Pendientes o Completados): sus filas NO se quitan.
     const liveKeys = new Set<string>();
-    for (const n of (notesRes.data ?? []) as unknown as { title: string | null; tags: string[] | null; f: Record<string, unknown> | null }[]) {
-      if (!n.f || (n.tags ?? []).includes("__draft")) continue;
+    for (const n of (notesRes.data ?? []) as unknown as { title: string | null; tags: string[] | null; f: Record<string, unknown> | null; bucket: string | null }[]) {
+      if (!n.f || n.bucket === "trash" || (n.tags ?? []).includes("__draft") || (n.tags ?? []).includes("__practice")) continue;
       const k = logRowKey(n.f.checkNumber, n.f.makerPayor || n.f.companyName || n.title);
       if (!k.startsWith("|")) liveKeys.add(k);
     }
 
     const wantKeys = new Set(notes.map((n) => logRowKey(n.check, n.payor)).filter((k) => !k.startsWith("|")));
     const wantRows = new Set(rows);
-    const picked: { r: number; key: string }[] = [];
+    const picked: { r: number; key: string; f?: true }[] = [];
     let blocked = 0;
     for (const r of snap.rows) {
       const key = logRowKey(r.F, r.H);
-      if (!wantRows.has(r.r) && !wantKeys.has(key)) continue;
-      if (!r.a || liveKeys.has(key)) {
+      const byNote = wantKeys.has(key);
+      if (!wantRows.has(r.r) && !byNote) continue;
+      if (liveKeys.has(key) || (!byNote && !r.a)) {
         blocked += 1;
         continue;
       }
-      picked.push({ r: r.r, key });
+      picked.push(byNote ? { r: r.r, key, f: true } : { r: r.r, key });
     }
     if (!picked.length || dryRun) return NextResponse.json({ ok: true, count: picked.length, blocked });
 

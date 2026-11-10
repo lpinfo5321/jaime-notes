@@ -185,7 +185,7 @@ export default function NotesList({
     null,
   );
   // Tras eliminar definitivamente: preguntar si también se quita del Registro (Excel).
-  const [askLogRemove, setAskLogRemove] = useState<{ notes: { check: string; payor: string }[] } | null>(null);
+  const [askLogRemove, setAskLogRemove] = useState<{ notes: { check: string; payor: string }[]; trash?: boolean } | null>(null);
   function logKeysFor(ids: string[]) {
     const set = new Set(ids.map(String));
     const out: { check: string; payor: string }[] = [];
@@ -199,10 +199,10 @@ export default function NotesList({
     return out;
   }
   // Solo se pregunta si de verdad hay filas de la app en el Registro para esos cheques.
-  function offerLogRemoval(keys: { check: string; payor: string }[]) {
+  function offerLogRemoval(keys: { check: string; payor: string }[], trash = false) {
     if (!keys.length) return;
     void requestLogRemoval({ notes: keys, dryRun: true })
-      .then(({ count }) => { if (count) setAskLogRemove({ notes: keys }); })
+      .then(({ count }) => { if (count) setAskLogRemove({ notes: keys, trash }); })
       .catch(() => {});
   }
   const [confirmMoveComplete, setConfirmMoveComplete] = useState<{
@@ -1199,6 +1199,10 @@ export default function NotesList({
       }),
     );
     const anyFail = results.some((r) => r.status === "rejected");
+    if (nextBucket === "trash") {
+      const okIds = noteIds.filter((_, i) => results[i].status === "fulfilled");
+      offerLogRemoval(logKeysFor(okIds), true);
+    }
     if (anyFail) router.refresh();
     setBulkBusy(false);
     setSelectedIds(new Set());
@@ -1236,12 +1240,15 @@ export default function NotesList({
     suppressRemoteUntilRef.current = Date.now() + 1500;
     patchCompany(noteId, { values: nextValues });
     markLocalWrite();
+    const logKeys = nextBucket === "trash" ? logKeysFor([noteId]) : [];
     try {
-      await fetch(`/api/notes/${noteId}`, {
+      const res = await fetch(`/api/notes/${noteId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ values: nextValues }),
       });
+      // En la Papelera ya no se agrega al Registro; si ya estaba, se pregunta si se quita.
+      if (res.ok && logKeys.length) offerLogRemoval(logKeys, true);
     } catch {
       router.refresh();
     }
@@ -2093,9 +2100,12 @@ export default function NotesList({
         <ConfirmDialog
           title="¿Quitarlo también del Registro?"
           message={
-            askLogRemove.notes.length === 1
+            (askLogRemove.notes.length === 1
               ? `El cheque #${askLogRemove.notes[0].check} de "${askLogRemove.notes[0].payor}" sigue en el Registro (Excel). ¿Quieres quitarlo también de ahí?`
-              : `Algunos de estos cheques siguen en el Registro (Excel). ¿Quieres quitarlos también de ahí?`
+              : `Algunos de estos cheques siguen en el Registro (Excel). ¿Quieres quitarlos también de ahí?`) +
+            (askLogRemove.trash
+              ? " Si lo dejas, se queda como está y la app ya no lo cambia. Si después lo restauras, vuelve al Registro."
+              : "")
           }
           confirmText="Sí, quitar del Registro"
           cancelText="No, dejarlo"
@@ -2105,7 +2115,7 @@ export default function NotesList({
             setAskLogRemove(null);
             void requestLogRemoval({ notes: notesToRemove })
               .then(({ count, blocked }) => {
-                if (!count) alert(blocked ? "No se quitó del Registro: esa fila se escribió a mano en el Excel o el reporte todavía existe." : "Ya no estaba en el Registro.");
+                if (!count) alert(blocked ? "No se quitó del Registro: otro reporte activo usa ese mismo cheque." : "Ya no estaba en el Registro.");
               })
               .catch((e) => alert(e instanceof Error ? e.message : "No se pudo quitar del Registro"));
           }}

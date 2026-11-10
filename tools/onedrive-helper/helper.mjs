@@ -441,7 +441,7 @@ async function logTick(adoptAll = false, adoptIds = []) {
         if (dl.error || !dl.data) continue;
         try {
           const j = JSON.parse(await dl.data.text());
-          for (const r of j.rows || []) deletions.push({ r: Number(r.r), key: String(r.key || "") });
+          for (const r of j.rows || []) deletions.push({ r: Number(r.r), key: String(r.key || ""), force: r.f === true });
           delFiles.push(p);
         } catch {
           delFiles.push(p); // archivo dañado: se descarta
