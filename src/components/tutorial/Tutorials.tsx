@@ -677,7 +677,7 @@ const CSS = `
 .rtr-ico { width: 40px; height: 40px; flex-shrink: 0; border-radius: 13px; display: grid; place-items: center; font-size: 20px;
   background: rgba(163,230,53,.12); border: 1px solid rgba(163,230,53,.25); }
 .rtr-title { font-size: 16px; font-weight: 800; letter-spacing: -.01em; line-height: 1.25; }
-.rtr-body { margin: 6px 0 0; font-size: 13px; line-height: 1.55; color: #d4d4d8; }
+.rtr-body { margin: 6px 0 0; font-size: 13px; line-height: 1.55; white-space: pre-line; color: #d4d4d8; }
 .rtr-hint { margin-top: 12px; padding: 9px 12px; border-radius: 12px; font-size: 13px; font-weight: 800; color: ${LIME};
   background: rgba(163,230,53,.1); border: 1px solid rgba(163,230,53,.28); }
 .rtr-hint.ok { color: #1a2e05; background: ${LIME}; }
