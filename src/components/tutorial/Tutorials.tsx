@@ -297,6 +297,13 @@ export default function Tutorials() {
               if (ctl && visible(ctl)) {
                 const c = ctl.getBoundingClientRect();
                 l = c.left + fr.left; t = c.top + fr.top; rr = c.right + fr.left; bb = c.bottom + fr.top;
+                // El ícono del calendario también es parte de la casilla.
+                const cb = f.el.querySelector(".calBtn") as HTMLElement | null;
+                if (cb && visible(cb)) {
+                  const k = cb.getBoundingClientRect();
+                  l = Math.min(l, k.left + fr.left); rr = Math.max(rr, k.right + fr.left);
+                  t = Math.min(t, k.top + fr.top); bb = Math.max(bb, k.bottom + fr.top);
+                }
               }
             }
           }
