@@ -476,8 +476,22 @@
           list.style.top = (rect.bottom + 5) + 'px';
           list.style.minWidth = Math.max(rect.width, 200) + 'px';
 
+          list._btn = btn;
           document.body.appendChild(list);
           activeDropList = list;
+          if (!window.__dropScrollFix) {
+            window.__dropScrollFix = true;
+            // Si se hace scroll con la lista abierta, la lista sigue a su botón.
+            const follow = () => {
+              const l = activeDropList;
+              if (!l || !l.isConnected || !l._btn) return;
+              const r = l._btn.getBoundingClientRect();
+              l.style.left = r.left + 'px';
+              l.style.top = (r.bottom + 5) + 'px';
+            };
+            window.addEventListener('scroll', follow, true);
+            window.addEventListener('resize', follow);
+          }
         });
 
         // Sync button text when native select changes

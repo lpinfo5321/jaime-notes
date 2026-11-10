@@ -291,7 +291,7 @@ export default function Tutorials() {
               if (!cal || !visible(cal)) continue;
               const c = cal.getBoundingClientRect();
               l = Math.min(l, c.left + fr.left); t = Math.min(t, c.top + fr.top);
-              rr = Math.max(rr, c.right + fr.left); bb = Math.max(bb, c.bottom + fr.top);
+              rr = Math.max(rr, c.right + fr.left); bb = Math.min(Math.max(bb, c.bottom + fr.top), window.innerHeight - 8);
             }
           }
           setRect(new DOMRect(l - PAD, t - PAD, rr - l + PAD * 2, bb - t + PAD * 2));
@@ -313,12 +313,16 @@ export default function Tutorials() {
     };
 
     tick();
-    const iv = window.setInterval(tick, 220);
+    const iv = window.setInterval(tick, 80);
+    // El scroll dentro del reporte (iframe) no llega a la ventana: se escucha aparte.
+    let fw: Window | null = null;
+    try { fw = frameDoc()?.frame.contentWindow ?? null; fw?.addEventListener("scroll", tick, { passive: true, capture: true }); } catch {}
     window.addEventListener("resize", tick);
     window.addEventListener("scroll", tick, { passive: true, capture: true });
     return () => {
       alive = false;
       window.clearInterval(iv);
+      try { fw?.removeEventListener("scroll", tick, { capture: true } as EventListenerOptions); } catch {}
       window.removeEventListener("resize", tick);
       window.removeEventListener("scroll", tick, { capture: true } as EventListenerOptions);
     };
