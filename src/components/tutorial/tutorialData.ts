@@ -419,6 +419,12 @@ export const TUTORIALS: Tutorial[] = [
         title: "Fotos y documentos",
         body: "Con este botón agregas fotos del cheque, la ID del cliente, la carta del banco o PDFs. Aparecen al final del reporte y salen en el PDF. El de al lado sirve para ordenarlas.",
       },
+      {
+        target: { css: '[data-tour="report-export"]' },
+        icon: "✅",
+        title: "Terminar reporte",
+        body: "En un reporte nuevo de verdad, al final tocas “Terminar reporte”: guarda el PDF en OneDrive, guarda el reporte y lo cierra, todo de una vez. Si falta la compañía o el número de cheque, te avisa. En esta práctica NO lo toques: vamos a cerrar con el botón Cerrar.",
+      },
       ...CLOSE_REPORT,
       {
         icon: "🎉",
@@ -805,7 +811,7 @@ export const TUTORIALS: Tutorial[] = [
         target: { css: '[data-tour="report-export"]' },
         icon: "📤",
         title: "Exportar",
-        body: "Guarda el PDF del reporte directo en la carpeta de OneDrive: RETURNED CHECKS › NSF CHECKS PDF FILES › el año. Si ya existe, te avisa y te pregunta si quieres reemplazarlo.",
+        body: "Guarda el PDF del reporte directo en la carpeta de OneDrive: RETURNED CHECKS › NSF CHECKS PDF FILES › el año. Si ya existe, te avisa y te pregunta si quieres reemplazarlo. En un reporte nuevo este botón dice “Terminar reporte”: exporta, guarda y cierra de una vez.",
       },
       {
         target: { css: '[data-tour="report-newtab"]' },
@@ -882,7 +888,7 @@ export const TUTORIALS: Tutorial[] = [
       {
         icon: "📊",
         title: "¿Qué es el Registro?",
-        body: "Es el Excel RETURNED CHECK LOG que está en OneDrive. Cada reporte nuevo se agrega solo como una fila, y cuando cambia (pagos, agente) la fila se actualiza.",
+        body: "Es el Excel RETURNED CHECK LOG que está en OneDrive (RETURNED CHECKS › NSF CK LOGS). Cada reporte nuevo se agrega solo como una fila y se actualiza cuando cambia: pagos, agente y estado. Si lo pasas a Completados dice COMPLETED; si lo regresas a Pendientes, se quita.",
       },
       {
         target: { css: '[data-tour="log-status"]' },
@@ -905,7 +911,7 @@ export const TUTORIALS: Tutorial[] = [
         optional: true,
         icon: "🎛️",
         title: "Filtros",
-        body: "Por estado (pendiente, pago parcial, completado), año y orden. “Filtros” tiene más: agente, forma de pago, fechas y monto.",
+        body: "Por estado (pendiente, pago parcial, completado), año y orden. El orden abre en “Últimos agregados” (lo que se hizo hoy sale arriba); también hay “Pagados más recientes” y “Devueltos más recientes”. “Filtros” tiene más: agente, forma de pago, fechas y monto.",
       },
       {
         icon: "🔗",
@@ -917,7 +923,7 @@ export const TUTORIALS: Tutorial[] = [
         optional: true,
         icon: "⬇️",
         title: "Exportar Excel",
-        body: "Descarga una copia del Registro con los filtros que tengas puestos.",
+        body: "Guarda una copia del Registro con la fecha de hoy. En la computadora de la oficina va a la carpeta NSF CK LOGS de OneDrive; en otras, a Descargas.",
       },
       {
         target: { css: '[data-hd="nav"] button', text: "Inicio" },
@@ -1008,7 +1014,7 @@ export const TUTORIALS: Tutorial[] = [
         target: { css: "button", text: "Mover a Papelera" },
         icon: "🗑️",
         title: "Mover a la Papelera",
-        body: "No se borra para siempre: queda en la Papelera.",
+        body: "No se borra para siempre: queda en la Papelera. Lo que está en la Papelera no se agrega al Registro (Excel); si ya estaba ahí, la app te pregunta si también lo quitas.",
         hint: "Toca Mover a Papelera",
         do: "click",
       },

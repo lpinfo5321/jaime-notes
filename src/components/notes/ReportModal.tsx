@@ -23,9 +23,12 @@ export default function ReportModal({
   onReportSynced,
   onCompanyNameChange,
   onDiscarded,
+  isNew = false,
   onClose,
 }: {
   noteId: string;
+  /** Reporte recién creado: el botón verde dice "Terminar reporte" (exporta, guarda y cierra). */
+  isNew?: boolean;
   onDiscarded?: () => void;
   companyTitle: string;
   initialReport: any;
@@ -48,6 +51,7 @@ export default function ReportModal({
   dirtyRef.current = dirty;
   const iframeLoadedRef = useRef(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const baselineRef = useRef<{ sig: string; payload: any } | null>(null);
   const loadedAtRef = useRef<number>(0);
@@ -633,9 +637,10 @@ export default function ReportModal({
     notice.error("Este reporte todavía no se ha exportado", "Usa el botón verde Exportar para guardarlo en OneDrive. Después lo puedes abrir desde aquí.");
   }
 
-  async function shareReport() {
+  /** ok = guardado en OneDrive; pending = quedó en espera (se guarda solo después). */
+  async function shareReport(): Promise<"ok" | "pending" | "cancel" | "error"> {
     const iframe = iframeRef.current;
-    if (!iframe) return;
+    if (!iframe) return "error";
     const notice = await noticeOrAlert();
     notice.start("Exportando…", "Revisando la carpeta de OneDrive");
 
@@ -647,7 +652,7 @@ export default function ReportModal({
     const filename = currentFilename();
     notice.close();
     const replace = await checkDuplicates(dir, filename);
-    if (!replace) return;
+    if (!replace) return "cancel";
     notice.start("Exportando…", "Preparando el PDF");
 
     const reqId = `share-${Date.now()}`;
@@ -687,12 +692,12 @@ export default function ReportModal({
       });
     } catch (err) {
       notice.error("NO se guardó el PDF", `No se pudo generar el PDF: ${err instanceof Error ? err.message : err}`);
-      return;
+      return "error";
     }
 
     if (!buffer) {
       notice.error("NO se guardó el PDF", "El PDF salió vacío.");
-      return;
+      return "error";
     }
 
     const blob = new Blob([buffer], { type: "application/pdf" });
@@ -701,23 +706,45 @@ export default function ReportModal({
       try {
         await writeExportFile(dir, filename, blob, replace);
         notice.success(replace.length ? "Reemplazado en OneDrive" : "Exportado a OneDrive", `${NSF_FOLDER_NAME}\\${exportYear()}\\${filename}`);
+        return "ok";
       } catch (e) {
         notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo guardar en OneDrive");
+        return "error";
       }
-      return;
     }
     try {
       const saved = await sendToOneDriveViaPc(filename, blob, (msg) => notice.update("Exportando…", msg), 28000, replace);
       notice.success(replace.length ? "Reemplazado en OneDrive" : "Exportado a OneDrive", saved.file);
+      return "ok";
     } catch (e) {
       if (e instanceof OutboxPendingError) {
         notice.error(
           "TODAVÍA NO está en OneDrive",
           "La computadora de la oficina (la que tiene el ayudante) está apagada o el ayudante no está activo. El PDF quedó en espera y se guardará solo en la carpeta del año cuando la enciendas. Hasta ese momento no lo tomes como guardado.",
         );
-      } else {
-        notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo enviar a OneDrive");
+        return "pending";
       }
+      notice.error("NO se guardó el PDF", e instanceof Error ? e.message : "No se pudo enviar a OneDrive");
+      return "error";
+    }
+  }
+
+  /** Reporte nuevo: revisa que tenga lo mínimo, exporta el PDF a OneDrive, guarda y cierra. */
+  async function finishReport() {
+    if (finishing || closing) return;
+    const f = (lastPayloadRef.current ?? initReport)?.fields ?? {};
+    const company = String(f.companyName || f.makerPayor || liveTitle || titleRef.current || "").trim();
+    if (!String(f.checkNumber ?? "").trim() || !company) {
+      const notice = await noticeOrAlert();
+      notice.error("Falta información", "Escribe el nombre de la compañía y el número de cheque (CHECK NUMBER) antes de terminar el reporte.");
+      return;
+    }
+    setFinishing(true);
+    try {
+      const r = await shareReport();
+      if (r === "ok" || r === "pending") await flushAndClose();
+    } finally {
+      setFinishing(false);
     }
   }
 
@@ -817,13 +844,18 @@ export default function ReportModal({
             {/* Exportar manual a OneDrive */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); void shareReport(); }}
-              title="Exportar este reporte a OneDrive"
+              onClick={(e) => { e.stopPropagation(); void (isNew ? finishReport() : shareReport()); }}
+              disabled={finishing}
+              title={isNew ? "Terminar: exporta el PDF a OneDrive, guarda y cierra" : "Exportar este reporte a OneDrive"}
               data-tour="report-export"
-              className="flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-700"
+              className="flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Exportar
+              {isNew ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              )}
+              {isNew ? (finishing ? "Terminando…" : "Terminar reporte") : "Exportar"}
             </button>
 
             {/* Imprimir */}

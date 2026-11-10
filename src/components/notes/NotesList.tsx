@@ -2132,6 +2132,7 @@ export default function NotesList({
         <ReportModal
           noteId={reportForCompany.id}
           companyTitle={reportForCompany.title}
+          isNew={!!reportForCompany.isNew}
           onCompanyNameChange={(name) => void renameSingleNote(reportForCompany.id, name)}
           onDiscarded={() => { discardedDraftRef.current = reportForCompany.id; }}
           initialReport={(reportForCompany.values as any)?._report?.payload ?? null}
