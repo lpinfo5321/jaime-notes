@@ -238,6 +238,8 @@ export default function Tutorials() {
     let alive = true;
     const t0 = Date.now();
     let scrolled = false;
+    let lastScroll = 0;
+    let popScrolled = false;
     let doneOnce = false;
 
     const advance = () => {
@@ -272,8 +274,9 @@ export default function Tutorials() {
         setMissing(false);
         setLost(false);
         if (f) {
-          if (!scrolled) {
+          if ((!scrolled || Date.now() - lastScroll > 900) && !popScrolled) {
             scrolled = true;
+            lastScroll = Date.now();
             const r = f.el.getBoundingClientRect();
             const winH = f.frame ? f.frame.clientHeight : window.innerHeight;
             const fixed = !f.frame && !!(f.el as HTMLElement).closest('.kn-dock, header, [role="dialog"], .fixed');
@@ -290,8 +293,15 @@ export default function Tutorials() {
             const pop = pops.find((x) => x && visible(x));
             if (pop) {
               const c = pop.getBoundingClientRect();
+              // Si la lista/calendario queda cortado por abajo, se sube el reporte para verlo completo.
+              const limit = Math.min(fr.bottom, window.innerHeight) - 12;
+              if (!popScrolled && c.bottom + fr.top > limit) {
+                popScrolled = true;
+                try { (f.el as HTMLElement).scrollIntoView({ block: "start", behavior: "smooth" }); } catch {}
+              }
               l = c.left + fr.left; t = c.top + fr.top; rr = c.right + fr.left; bb = Math.min(c.bottom + fr.top, window.innerHeight - 8);
             } else {
+              popScrolled = false;
               // Si no, solo la casilla exacta (no toda la fila).
               const ctl = f.el.querySelector("input:not([type=hidden]),.customDropBtn,select,button") as HTMLElement | null;
               if (ctl && visible(ctl)) {
