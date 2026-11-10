@@ -181,8 +181,14 @@ export function DashSettingsPanel({ prefs, onClose }: { prefs: DashPrefs; onClos
             </Sec>
 
             <Sec icon={<Palette className="h-3 w-3" />} title="Color">
+              {[
+                { label: "Modernas", list: PAL_LIST.filter((p) => p.grad) },
+                { label: "Clásicas", list: PAL_LIST.filter((p) => !p.grad) },
+              ].map((g) => (
+              <div key={g.label} className="mb-3 last:mb-0">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-400">{g.label}</p>
               <div className="grid grid-cols-5 gap-2.5">
-                {PAL_LIST.map((p) => {
+                {g.list.map((p) => {
                   const on = prefs.pal === p.id;
                   return (
                     <button
@@ -193,13 +199,15 @@ export function DashSettingsPanel({ prefs, onClose }: { prefs: DashPrefs; onClos
                       aria-pressed={on}
                       onClick={() => setDashPrefs({ pal: p.id })}
                       className={`relative mx-auto grid h-9 w-9 place-items-center rounded-full ring-2 ring-offset-2 ring-offset-white transition active:scale-95 dark:ring-offset-zinc-900 ${on ? "ring-zinc-400" : "ring-transparent hover:ring-zinc-200"}`}
-                      style={{ background: p.sw }}
+                      style={{ background: p.grad ?? p.sw }}
                     >
                       {on ? <Check className="h-4 w-4" strokeWidth={3.5} style={{ color: p.id === "yellow" ? "#111" : "#fff" }} /> : null}
                     </button>
                   );
                 })}
               </div>
+              </div>
+              ))}
             </Sec>
           </>
         ) : null}
@@ -803,6 +811,7 @@ export default function DashboardV2({
     const root = document.documentElement;
     root.classList.add("dash-on", "dash-home");
     root.classList.toggle("dash-night", prefs.pal === "night");
+    root.classList.toggle("dash-grad", !!pal.grad);
     root.style.setProperty("--dash-page", pal.page);
     const header = document.querySelector<HTMLElement>("header.sticky");
     const measure = () => {

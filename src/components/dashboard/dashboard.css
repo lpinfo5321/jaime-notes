@@ -1038,3 +1038,32 @@ html.dash-on { scrollbar-gutter: stable; }
 @media (max-width: 900px) { .co-hero { gap: 12px; margin-bottom: 16px; } .co-folder { min-height: 0; padding: 14px 16px; border-radius: 22px; } .co-note .co-contacts { height: auto; padding: 14px 16px !important; border-radius: 4px 22px 22px 22px !important; } .co-note .co-contacts > div:first-child > button { flex: 1 1 auto; justify-content: center; } .co-note .co-contacts > div:first-child > div { flex: 1 1 100%; } .co-folder-due b { font-size: 30px; } }
 @media (max-width: 420px) { .co-folder .co-back { height: 34px; } .co-folder-due b { font-size: 28px; } }
 html.dash-on .co-detail .co-folder .co-count { background: rgba(255,255,255,.18) !important; color: #fff !important; padding: 5px 12px; border-radius: 99px; }
+
+/* ===== Paletas modernas (degradado) ===== */
+.pal-m-aurora   { --p-bg: #f5f4fb; --p-ink: #14112b; --p-acc: #7c3aed; --p-fb: #8b5cf6; --p-due: #e11d48; --p-grad: linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#ec4899 100%); }
+.pal-m-ocean    { --p-bg: #eef3fb; --p-ink: #0b1630; --p-acc: #2563eb; --p-fb: #3b82f6; --p-due: #e11d48; --p-grad: linear-gradient(135deg,#06b6d4 0%,#2563eb 55%,#4f46e5 100%); }
+.pal-m-sunset   { --p-bg: #fbf3f1; --p-ink: #2a0b12; --p-acc: #f43f5e; --p-fb: #fb7185; --p-due: #b91c1c; --p-grad: linear-gradient(135deg,#f97316 0%,#f43f5e 55%,#d946ef 100%); }
+.pal-m-mint     { --p-bg: #eef7f4; --p-ink: #052e2b; --p-acc: #0d9488; --p-fb: #14b8a6; --p-due: #e11d48; --p-grad: linear-gradient(135deg,#10b981 0%,#0d9488 55%,#0891b2 100%); }
+.pal-m-graphite { --p-bg: #f1f4f8; --p-ink: #0f172a; --p-acc: #1e293b; --p-fb: #334155; --p-due: #e11d48; --p-nav: #0891b2; --p-grad: linear-gradient(135deg,#0f172a 0%,#1e293b 55%,#475569 100%); }
+.pal-m-lavender { --p-bg: #f6f5fe; --p-ink: #1e1846; --p-acc: #7c6cf0; --p-fb: #a78bfa; --p-due: #e11d48; --p-grad: linear-gradient(135deg,#a78bfa 0%,#818cf8 50%,#60a5fa 100%); }
+.pal-m-berry    { --p-bg: #faf3f8; --p-ink: #2a0a22; --p-acc: #a21caf; --p-fb: #c026d3; --p-due: #e11d48; --p-grad: linear-gradient(135deg,#7e22ce 0%,#a21caf 50%,#db2777 100%); }
+.pal-m-mocha    { --p-bg: #f6f1ec; --p-ink: #2a1a10; --p-acc: #8b5a3c; --p-fb: #a47148; --p-due: #c2410c; --p-grad: linear-gradient(135deg,#b07a52 0%,#8b5a3c 55%,#5c3a26 100%); }
+.pal-m-sage     { --p-bg: #f1f4ef; --p-ink: #142019; --p-acc: #4d7c63; --p-fb: #6b8f71; --p-due: #dc2626; --p-grad: linear-gradient(135deg,#84a98c 0%,#52796f 55%,#354f52 100%); }
+
+.pal[class*=" pal-m-"] .kh-h1,
+.pal[class*=" pal-m-"] .kh-h2 .kh-kpi:nth-child(1),
+.pal[class*=" pal-m-"] .kh-h3 .kh-b-title,
+.pal[class*=" pal-m-"] .kh-h5 .kh-kpi:nth-child(2),
+.pal[class*=" pal-m-"] .kh-h6 .kh-split-r,
+.pal[class*=" pal-m-"] .kroot .kh-kpi-ico,
+.pal[class*=" pal-m-"] .kroot .kh-sel,
+.pal[class*=" pal-m-"] .kroot .kn-fab,
+.pal[class*=" pal-m-"] .kroot .kf-av { background: var(--p-grad); }
+.pal[class*=" pal-m-"] .kroot .kf-back::before { background: var(--p-grad); }
+.pal[class*=" pal-m-"] .kh-h1 { box-shadow: 0 24px 50px -30px color-mix(in srgb, var(--p-acc) 70%, transparent); }
+html.dash-on.dash-grad header.sticky { background: var(--dash-bar-bg, var(--dash-bar)) !important; }
+html.dash-on.dash-grad.dash-home header.sticky { background: transparent !important; }
+html.dash-grad .co-folder,
+html.dash-grad .nb-add, html.dash-grad .nb-save,
+html.dash-grad .sn-pager button,
+html.dash-grad .report-shot-foot > button { background: var(--dash-bar-bg, var(--dash-bar)); }

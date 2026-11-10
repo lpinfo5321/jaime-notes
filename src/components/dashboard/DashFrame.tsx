@@ -14,8 +14,8 @@ export default function DashFrame({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     const clear = () => {
-      root.classList.remove("dash-on", "dash-night", "dash-scrolled");
-      ["--dash-page", "--dash-bar", "--dash-bar-fg", "--dash-hfg", "--dash-hbg", "--dash-hdr-h"].forEach((k) =>
+      root.classList.remove("dash-on", "dash-night", "dash-scrolled", "dash-grad");
+      ["--dash-page", "--dash-bar", "--dash-bar-bg", "--dash-bar-fg", "--dash-hfg", "--dash-hbg", "--dash-hdr-h"].forEach((k) =>
         root.style.removeProperty(k),
       );
     };
@@ -30,6 +30,8 @@ export default function DashFrame({ children }: { children: React.ReactNode }) {
     root.classList.toggle("dash-night", prefs.pal === "night");
     root.style.setProperty("--dash-page", pal.page);
     root.style.setProperty("--dash-bar", bar.bar);
+    root.style.setProperty("--dash-bar-bg", bar.bg);
+    root.classList.toggle("dash-grad", !!pal.grad);
     root.style.setProperty("--dash-bar-fg", bar.fg);
     root.style.setProperty("--dash-hbg", bar.bar);
     root.style.setProperty("--dash-hfg", bar.fg);

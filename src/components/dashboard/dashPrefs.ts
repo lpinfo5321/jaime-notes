@@ -14,7 +14,17 @@ export type DashPrefs = {
 
 export const DASH_DEFAULTS: DashPrefs = { design: 8, pal: "blue", hdr: 1, bg: 0, notes: "big" };
 
-export const PAL_LIST: { id: string; name: string; sw: string; page: string }[] = [
+/** grad = paleta moderna con degradado (ids "m-…"). */
+export const PAL_LIST: { id: string; name: string; sw: string; page: string; grad?: string }[] = [
+  { id: "m-aurora", name: "Aurora", sw: "#7c3aed", page: "#f5f4fb", grad: "linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#ec4899 100%)" },
+  { id: "m-ocean", name: "Océano", sw: "#2563eb", page: "#eef3fb", grad: "linear-gradient(135deg,#06b6d4 0%,#2563eb 55%,#4f46e5 100%)" },
+  { id: "m-sunset", name: "Atardecer", sw: "#f43f5e", page: "#fbf3f1", grad: "linear-gradient(135deg,#f97316 0%,#f43f5e 55%,#d946ef 100%)" },
+  { id: "m-mint", name: "Menta", sw: "#0d9488", page: "#eef7f4", grad: "linear-gradient(135deg,#10b981 0%,#0d9488 55%,#0891b2 100%)" },
+  { id: "m-graphite", name: "Grafito", sw: "#1e293b", page: "#f1f4f8", grad: "linear-gradient(135deg,#0f172a 0%,#1e293b 55%,#475569 100%)" },
+  { id: "m-lavender", name: "Lavanda", sw: "#7c6cf0", page: "#f6f5fe", grad: "linear-gradient(135deg,#a78bfa 0%,#818cf8 50%,#60a5fa 100%)" },
+  { id: "m-berry", name: "Mora", sw: "#a21caf", page: "#faf3f8", grad: "linear-gradient(135deg,#7e22ce 0%,#a21caf 50%,#db2777 100%)" },
+  { id: "m-mocha", name: "Mocha", sw: "#8b5a3c", page: "#f6f1ec", grad: "linear-gradient(135deg,#b07a52 0%,#8b5a3c 55%,#5c3a26 100%)" },
+  { id: "m-sage", name: "Salvia", sw: "#4d7c63", page: "#f1f4ef", grad: "linear-gradient(135deg,#84a98c 0%,#52796f 55%,#354f52 100%)" },
   { id: "blue", name: "Azul", sw: "#0a84ff", page: "#f2f2f7" },
   { id: "ink", name: "Negro + lima", sw: "#1c1c1e", page: "#ffffff" },
   { id: "green", name: "Verde", sw: "#12b76a", page: "#f2f6f3" },
@@ -86,10 +96,10 @@ export function useDashPrefs(): DashPrefs {
 }
 
 /** Colores de la barra superior fuera del panel principal. */
-export function palBar(id: string): { bar: string; fg: string } {
-  if (id === "yellow") return { bar: "#ffd60a", fg: "#111111" };
+export function palBar(id: string): { bar: string; fg: string; bg: string } {
+  if (id === "yellow") return { bar: "#ffd60a", fg: "#111111", bg: "#ffd60a" };
   const pal = PAL_LIST.find((p) => p.id === id) ?? PAL_LIST[0];
-  return { bar: pal.sw, fg: "#ffffff" };
+  return { bar: pal.sw, fg: "#ffffff", bg: pal.grad ?? pal.sw };
 }
 
 let settingsNode: ReactNode = null;
