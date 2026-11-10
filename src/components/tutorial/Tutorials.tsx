@@ -282,16 +282,22 @@ export default function Tutorials() {
             }
           }
           let l = f.rect.left, t = f.rect.top, rr = f.rect.right, bb = f.rect.bottom;
-          // Si hay un calendario o una lista desplegable abierta, también se ilumina para poder tocarla.
           if ((step.do === "type" || step.do === "choose") && f.frame) {
             const d = f.frame.contentDocument;
             const fr = f.frame.getBoundingClientRect();
+            // Si hay un calendario o una lista abierta, se ilumina solo eso (es lo que hay que tocar).
             const pops = [d?.getElementById("cp-days")?.parentElement, ...Array.from(d?.querySelectorAll(".customDropList") ?? [])];
-            for (const cal of pops) {
-              if (!cal || !visible(cal)) continue;
-              const c = cal.getBoundingClientRect();
-              l = Math.min(l, c.left + fr.left); t = Math.min(t, c.top + fr.top);
-              rr = Math.max(rr, c.right + fr.left); bb = Math.min(Math.max(bb, c.bottom + fr.top), window.innerHeight - 8);
+            const pop = pops.find((x) => x && visible(x));
+            if (pop) {
+              const c = pop.getBoundingClientRect();
+              l = c.left + fr.left; t = c.top + fr.top; rr = c.right + fr.left; bb = Math.min(c.bottom + fr.top, window.innerHeight - 8);
+            } else {
+              // Si no, solo la casilla exacta (no toda la fila).
+              const ctl = f.el.querySelector("input:not([type=hidden]),.customDropBtn,select,button") as HTMLElement | null;
+              if (ctl && visible(ctl)) {
+                const c = ctl.getBoundingClientRect();
+                l = c.left + fr.left; t = c.top + fr.top; rr = c.right + fr.left; bb = c.bottom + fr.top;
+              }
             }
           }
           setRect(new DOMRect(l - PAD, t - PAD, rr - l + PAD * 2, bb - t + PAD * 2));

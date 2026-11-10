@@ -423,7 +423,7 @@ export const TUTORIALS: Tutorial[] = [
         target: { css: '[data-tour="report-export"]' },
         icon: "✅",
         title: "Terminar reporte",
-        body: "En un reporte nuevo de verdad, al final tocas “Terminar reporte”: guarda el PDF en OneDrive, guarda el reporte y lo cierra, todo de una vez. Si falta la compañía o el número de cheque, te avisa. En esta práctica NO lo toques: vamos a cerrar con el botón Cerrar.",
+        body: "Este es el botón verde que termina todo. En un reporte nuevo dice “Terminar reporte”: guarda el PDF en OneDrive, guarda el reporte y lo cierra, todo de una vez (si falta la compañía o el número de cheque, te avisa). Si el reporte ya existía dice “Exportar”. El botón “Cerrar” solo cierra: guarda lo escrito, pero NO manda el PDF a OneDrive. En esta práctica no lo toques: cierra con “Cerrar”.",
       },
       ...CLOSE_REPORT,
       {
